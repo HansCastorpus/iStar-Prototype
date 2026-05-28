@@ -11,7 +11,6 @@ function nodeBox(node) {
 }
 
 // Liang-Barsky: true if segment p1→p2 passes through the interior of box.
-// Strict t0 < t1 so boundary-only grazes (port exits) are not counted.
 function segmentCrossesBox(p1, p2, box) {
   if (p1.x === p2.x && p1.y === p2.y) return false
   const dx = p2.x - p1.x, dy = p2.y - p1.y
@@ -33,25 +32,53 @@ function firstBlocker(points, nodes, srcId, tgtId) {
   const last = points.length - 1
   for (let i = 0; i < last; i++) {
     for (const node of nodes) {
-      if (i === 0         && node.id === srcId) continue
-      if (i === last - 1  && node.id === tgtId) continue
+      if (i === 0        && node.id === srcId) continue
+      if (i === last - 1 && node.id === tgtId) continue
       if (segmentCrossesBox(points[i], points[i + 1], nodeBox(node))) return node
     }
   }
   return null
 }
 
-// Returns intermediate points between s and t that make the path strictly
-// octilinear. The 45° diagonal is always exact; H or V segments absorb the excess.
+// ── Crossing detection ────────────────────────────────────────────────────────
+
+function cross2D(O, A, B) {
+  return (A.x - O.x) * (B.y - O.y) - (A.y - O.y) * (B.x - O.x)
+}
+
+// True if segments AB and CD properly cross (interior intersection, not touching at endpoints).
+function segmentsProperlyIntersect(A, B, C, D) {
+  const d1 = cross2D(C, D, A), d2 = cross2D(C, D, B)
+  const d3 = cross2D(A, B, C), d4 = cross2D(A, B, D)
+  return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+         ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))
+}
+
+// Count how many times a path crosses a set of existing segments.
+function countCrossings(pts, existingSegs) {
+  let n = 0
+  for (let i = 0; i < pts.length - 1; i++)
+    for (const { p1, p2 } of existingSegs)
+      if (segmentsProperlyIntersect(pts[i], pts[i + 1], p1, p2)) n++
+  return n
+}
+
+// Flatten a point array into segments carrying the link and node IDs.
+function pathToSegs(pts, linkId, srcId, tgtId) {
+  const out = []
+  for (let i = 0; i < pts.length - 1; i++)
+    out.push({ p1: pts[i], p2: pts[i + 1], linkId, srcId, tgtId })
+  return out
+}
+
+// ── Octilinear helpers ────────────────────────────────────────────────────────
+
 function octilinearMid(s, t) {
-  const dx  = t.x - s.x
-  const dy  = t.y - s.y
-  const adx = Math.abs(dx)
-  const ady = Math.abs(dy)
+  const dx  = t.x - s.x, dy  = t.y - s.y
+  const adx = Math.abs(dx),  ady = Math.abs(dy)
   if (adx === 0 || ady === 0) return []
   if (adx === ady)            return []
-  const sx = dx > 0 ? 1 : -1
-  const sy = dy > 0 ? 1 : -1
+  const sx = dx > 0 ? 1 : -1, sy = dy > 0 ? 1 : -1
   if (adx > ady) {
     const half = (adx - ady) / 2
     return [{ x: s.x + half * sx, y: s.y }, { x: t.x - half * sx, y: t.y }]
@@ -61,9 +88,6 @@ function octilinearMid(s, t) {
   }
 }
 
-// Removes any interior point that is collinear with its neighbours (same x or
-// same y throughout). This merges the stub into the first connector segment
-// whenever they run in the same direction, eliminating tiny visual segments.
 function removeCollinear(pts) {
   if (pts.length <= 2) return pts
   const out = [pts[0]]
@@ -78,7 +102,9 @@ function removeCollinear(pts) {
 
 // ── Single-link path ──────────────────────────────────────────────────────────
 
-function buildPath(sourceNode, sourceSlot, targetNode, targetSlot, allNodes) {
+// Builds all obstacle-free candidate paths, then picks the one with fewest
+// crossings against already-routed links. Falls back to detour if all blocked.
+function buildPath(sourceNode, sourceSlot, targetNode, targetSlot, allNodes, existingSegs) {
   const ps = getSlotPosition(sourceNode, sourceSlot.side, sourceSlot.offset)
   const pt = getSlotPosition(targetNode, targetSlot.side, targetSlot.offset)
   const ds = getSideDirection(sourceSlot.side)
@@ -87,76 +113,115 @@ function buildPath(sourceNode, sourceSlot, targetNode, targetSlot, allNodes) {
   const t  = { x: pt.x + dt.dx * STUB, y: pt.y + dt.dy * STUB }
 
   const nodeArr = Object.values(allNodes)
-  const srcId   = sourceNode.id
-  const tgtId   = targetNode.id
-  const clear = (pts) => !firstBlocker(pts, nodeArr, srcId, tgtId)
+  const srcId   = sourceNode.id, tgtId = targetNode.id
+  const clear   = (pts) => !firstBlocker(pts, nodeArr, srcId, tgtId)
+  const score   = (pts) => countCrossings(pts, existingSegs)
 
-  // Primary: octilinear path — all segments at 0°, 45°, or 90°.
-  // The diagonal is always exactly 45°; H/V segments absorb the excess.
-  //   wider than tall  →  H → 45° diagonal → H
-  //   taller than wide →  V → 45° diagonal → V
-  //   equal            →  pure 45° diagonal
-  // Only use the diagonal when its length clears the minimum threshold.
-  // min(|dx|, |dy|) × √2 is the pixel length of the 45° segment.
-  const diagLen = Math.min(Math.abs(t.x - s.x), Math.abs(t.y - s.y)) * Math.SQRT2
+  const dx = t.x - s.x, dy = t.y - s.y
+  const mx = snap((s.x + t.x) / 2), my = snap((s.y + t.y) / 2)
+
+  // Gather all clear candidates.
+  const pool = []
+
+  const diagLen = Math.min(Math.abs(dx), Math.abs(dy)) * Math.SQRT2
   if (diagLen >= MIN_DIAGONAL) {
-    const primary = removeCollinear([ps, s, ...octilinearMid(s, t), t, pt])
-    if (clear(primary)) return primary
+    const p = removeCollinear([ps, s, ...octilinearMid(s, t), t, pt])
+    if (clear(p)) pool.push(p)
   }
 
-  // Fallback: axis-aligned routes when diagonal is too short or blocked.
-  const dx = t.x - s.x
-  const dy = t.y - s.y
-  const mx = snap((s.x + t.x) / 2)
-  const my = snap((s.y + t.y) / 2)
-
-  const candidates = dx === 0 || dy === 0
+  const hvMids = dx === 0 || dy === 0
     ? [[]]
     : [
-        [{ x: mx, y: s.y }, { x: mx, y: t.y }],   // S-bend H→V→H
-        [{ x: s.x, y: my }, { x: t.x, y: my }],   // S-bend V→H→V
-        [{ x: t.x, y: s.y }],                       // L-shape H then V
-        [{ x: s.x, y: t.y }],                       // L-shape V then H
+        [{ x: mx, y: s.y }, { x: mx, y: t.y }],
+        [{ x: s.x, y: my }, { x: t.x, y: my }],
+        [{ x: t.x, y: s.y }],
+        [{ x: s.x, y: t.y }],
       ]
 
-  for (const mid of candidates) {
-    const pts = [ps, s, ...mid, t, pt]
-    if (clear(pts)) return pts
+  for (const mid of hvMids) {
+    const p = [ps, s, ...mid, t, pt]
+    if (clear(p)) pool.push(p)
   }
 
-  // Detour around the first blocker.
-  const referenceMid = candidates[0]
-  const blocker = firstBlocker([ps, s, ...referenceMid, t, pt], nodeArr, srcId, tgtId)
-  if (blocker) {
-    const bx  = blocker.x - DETOUR_PAD
-    const bx2 = blocker.x + blocker.width  + DETOUR_PAD
-    const by  = blocker.y - DETOUR_PAD
-    const by2 = blocker.y + blocker.height + DETOUR_PAD
+  // Helper: add detour candidates around a node's bounding box.
+  const addDetours = (node) => {
+    const bx  = node.x - DETOUR_PAD, bx2 = node.x + node.width  + DETOUR_PAD
+    const by  = node.y - DETOUR_PAD, by2 = node.y + node.height + DETOUR_PAD
     for (const mid of [
       [{ x: s.x, y: by  }, { x: t.x, y: by  }],
       [{ x: s.x, y: by2 }, { x: t.x, y: by2 }],
       [{ x: bx,  y: s.y }, { x: bx,  y: t.y }],
       [{ x: bx2, y: s.y }, { x: bx2, y: t.y }],
     ]) {
-      const pts = [ps, s, ...mid, t, pt]
-      if (clear(pts)) return pts
+      const p = [ps, s, ...mid, t, pt]
+      if (clear(p)) pool.push(p)
     }
+  }
+
+  if (pool.length > 0) {
+    const best = pool.reduce((b, p) => score(p) < score(b) ? p : b)
+    if (score(best) > 0) {
+      const crossedNodeIds = new Set()
+      let cbx = Infinity, cbx2 = -Infinity, cby = Infinity, cby2 = -Infinity
+
+      for (let i = 0; i < best.length - 1; i++) {
+        for (const seg of existingSegs) {
+          if (segmentsProperlyIntersect(best[i], best[i + 1], seg.p1, seg.p2)) {
+            if (seg.srcId) crossedNodeIds.add(seg.srcId)
+            if (seg.tgtId) crossedNodeIds.add(seg.tgtId)
+            cbx  = Math.min(cbx,  seg.p1.x, seg.p2.x)
+            cbx2 = Math.max(cbx2, seg.p1.x, seg.p2.x)
+            cby  = Math.min(cby,  seg.p1.y, seg.p2.y)
+            cby2 = Math.max(cby2, seg.p1.y, seg.p2.y)
+          }
+        }
+      }
+
+      // Detour around endpoint nodes of crossed links.
+      for (const nodeId of crossedNodeIds) {
+        const node = allNodes[nodeId]
+        if (!node || nodeId === srcId || nodeId === tgtId) continue
+        addDetours(node)
+      }
+
+      // Detour around the bounding box of the crossed segments themselves —
+      // more targeted than going around the distant endpoint nodes.
+      if (cbx !== Infinity) {
+        const px  = cbx  - DETOUR_PAD, px2 = cbx2 + DETOUR_PAD
+        const py  = cby  - DETOUR_PAD, py2 = cby2 + DETOUR_PAD
+        for (const mid of [
+          [{ x: s.x, y: py  }, { x: t.x, y: py  }],
+          [{ x: s.x, y: py2 }, { x: t.x, y: py2 }],
+          [{ x: px,  y: s.y }, { x: px,  y: t.y }],
+          [{ x: px2, y: s.y }, { x: px2, y: t.y }],
+        ]) {
+          const p = [ps, s, ...mid, t, pt]
+          if (clear(p)) pool.push(p)
+        }
+      }
+    }
+    return pool.reduce((b, p) => score(p) < score(b) ? p : b)
+  }
+
+  // All simple routes blocked by nodes — try physical detours.
+  const referenceMid = hvMids[0]
+  const blocker = firstBlocker([ps, s, ...referenceMid, t, pt], nodeArr, srcId, tgtId)
+  if (blocker) {
+    addDetours(blocker)
+    if (pool.length > 0)
+      return pool.reduce((b, p) => score(p) < score(b) ? p : b)
   }
 
   return [ps, s, ...referenceMid, t, pt]
 }
 
 // ── Segment-overlap separation ────────────────────────────────────────────────
-// After all paths are built, find pairs of collinear overlapping middle segments
-// (excluding the first and last stub segments) and nudge them apart by SEG_OFFSET.
 
 function segKey(p1, p2) {
   const dx = p2.x - p1.x, dy = p2.y - p1.y
   if (dx === 0) return { axis: 'v',  coord: p1.x,       lo: Math.min(p1.y, p2.y), hi: Math.max(p1.y, p2.y) }
   if (dy === 0) return { axis: 'h',  coord: p1.y,       lo: Math.min(p1.x, p2.x), hi: Math.max(p1.x, p2.x) }
   if (Math.abs(dx) === Math.abs(dy)) {
-    // Exactly 45° diagonal. Use the line's intercept as coord.
-    // +45° (slope +1): y − x = const   −45° (slope −1): y + x = const
     const axis  = dx * dy > 0 ? 'd+' : 'd-'
     const coord = dx * dy > 0 ? p1.y - p1.x : p1.y + p1.x
     return { axis, coord, lo: Math.min(p1.x, p2.x), hi: Math.max(p1.x, p2.x) }
@@ -168,10 +233,7 @@ function overlaps(a, b) {
   return a.axis === b.axis && a.coord === b.coord && a.lo < b.hi && b.lo < a.hi
 }
 
-// Applies perpendicular nudges to middle segments that share a corridor.
-// pathMap: { linkId → points[] }  (mutated in-place)
 function separateOverlaps(pathMap) {
-  // Collect all middle segments (exclude index 0 and last-1, which are stubs).
   const segs = []
   for (const [linkId, pts] of Object.entries(pathMap)) {
     for (let i = 1; i < pts.length - 2; i++) {
@@ -180,7 +242,6 @@ function separateOverlaps(pathMap) {
     }
   }
 
-  // Group by overlapping sets and distribute offsets symmetrically.
   const visited = new Set()
   for (let a = 0; a < segs.length; a++) {
     if (visited.has(a)) continue
@@ -190,15 +251,12 @@ function separateOverlaps(pathMap) {
     }
     if (group.length === 1) continue
 
-    // Distribute: centre the group around the original coordinate.
-    const n     = group.length
-    const total = (n - 1) * SEG_OFFSET
+    const n = group.length, total = (n - 1) * SEG_OFFSET
     group.forEach((idx, pos) => {
       visited.add(idx)
       const { linkId, i, k } = segs[idx]
-      const pts   = pathMap[linkId]
+      const pts  = pathMap[linkId]
       const delta = -total / 2 + pos * SEG_OFFSET
-
       if (k.axis === 'h') {
         pts[i]     = { ...pts[i],     y: pts[i].y     + delta }
         pts[i + 1] = { ...pts[i + 1], y: pts[i + 1].y + delta }
@@ -206,12 +264,10 @@ function separateOverlaps(pathMap) {
         pts[i]     = { ...pts[i],     x: pts[i].x     + delta }
         pts[i + 1] = { ...pts[i + 1], x: pts[i + 1].x + delta }
       } else if (k.axis === 'd+') {
-        // Perpendicular to +45° is (−1, +1)/√2
         const d = delta / Math.SQRT2
         pts[i]     = { x: pts[i].x     - d, y: pts[i].y     + d }
         pts[i + 1] = { x: pts[i + 1].x - d, y: pts[i + 1].y + d }
       } else if (k.axis === 'd-') {
-        // Perpendicular to −45° is (+1, +1)/√2
         const d = delta / Math.SQRT2
         pts[i]     = { x: pts[i].x     + d, y: pts[i].y     + d }
         pts[i + 1] = { x: pts[i + 1].x + d, y: pts[i + 1].y + d }
@@ -222,24 +278,173 @@ function separateOverlaps(pathMap) {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-// Computes routed paths for all links at once, with overlap separation applied.
+// Stub-to-stub Euclidean distance — used to sort links shortest-first.
+function stubDist(nodes, linkSlots, link) {
+  const src = nodes[link.sourceId], tgt = nodes[link.targetId]
+  const slots = linkSlots[link.id]
+  if (!src || !tgt || !slots) return Infinity
+  const ds = getSideDirection(slots.sourceSlot.side)
+  const dt = getSideDirection(slots.targetSlot.side)
+  const ps = getSlotPosition(src, slots.sourceSlot.side, slots.sourceSlot.offset)
+  const pt = getSlotPosition(tgt, slots.targetSlot.side, slots.targetSlot.offset)
+  return Math.hypot(
+    (pt.x + dt.dx * STUB) - (ps.x + ds.dx * STUB),
+    (pt.y + dt.dy * STUB) - (ps.y + ds.dy * STUB)
+  )
+}
+
+// ── Post-routing slot alignment ───────────────────────────────────────────────
+
+// After routing, the actual path shapes tell us the true spatial order of links
+// on each node face. If that order disagrees with the current slot offsets, fix
+// the offsets and re-route the affected links.
+//
+// "Far endpoint" position:
+//   source role → last point of path (on the target node)
+//   target role → first point of path (on the source node)
+// This gives the x/y of wherever the link "comes from or goes to", independent
+// of detours, and is a reliable indicator of which slot it should occupy.
+function alignSlots(nodes, mutableSlots, linkList, pathMap, existingSegs) {
+  const groups = {}
+  for (const link of linkList) {
+    const slots = mutableSlots[link.id]
+    if (!slots) continue
+    const srcKey = `${link.sourceId}/${slots.sourceSlot.side}`
+    const tgtKey = `${link.targetId}/${slots.targetSlot.side}`
+    if (!groups[srcKey]) groups[srcKey] = []
+    groups[srcKey].push({ linkId: link.id, role: 'source' })
+    if (!groups[tgtKey]) groups[tgtKey] = []
+    groups[tgtKey].push({ linkId: link.id, role: 'target' })
+  }
+
+  const changedLinks = new Set()
+
+  for (const [groupKey, refs] of Object.entries(groups)) {
+    if (refs.length < 2) continue
+
+    const side = groupKey.split('/')[1]
+    const horizontal = side === 'top' || side === 'bottom'
+
+    const withPos = refs.map(ref => {
+      const pts = pathMap[ref.linkId]
+      if (!pts || pts.length < 2) return { ref, pos: 0 }
+      const farPt = ref.role === 'source' ? pts[pts.length - 1] : pts[0]
+      return { ref, pos: horizontal ? farPt.x : farPt.y }
+    })
+
+    // Ascending position order (left→right or top→bottom)
+    const byPos = [...withPos].sort((a, b) => a.pos - b.pos)
+
+    // Ascending offset order (most-negative → most-positive)
+    const byOffset = [...refs].sort((a, b) => {
+      const ka = a.role === 'source' ? 'sourceSlot' : 'targetSlot'
+      const kb = b.role === 'source' ? 'sourceSlot' : 'targetSlot'
+      return mutableSlots[a.linkId][ka].offset - mutableSlots[b.linkId][kb].offset
+    })
+
+    // If the two orderings already agree, nothing to do.
+    if (byPos.every((x, i) => x.ref.linkId === byOffset[i].linkId)) continue
+
+    // Re-assign: the i-th smallest far-end position gets the i-th smallest offset.
+    const sortedOffsets = byOffset.map(r => {
+      const k = r.role === 'source' ? 'sourceSlot' : 'targetSlot'
+      return mutableSlots[r.linkId][k].offset
+    })
+
+    byPos.forEach(({ ref }, i) => {
+      const k = ref.role === 'source' ? 'sourceSlot' : 'targetSlot'
+      const newOffset = sortedOffsets[i]
+      if (mutableSlots[ref.linkId][k].offset !== newOffset) {
+        mutableSlots[ref.linkId] = {
+          ...mutableSlots[ref.linkId],
+          [k]: { ...mutableSlots[ref.linkId][k], offset: newOffset },
+        }
+        changedLinks.add(ref.linkId)
+      }
+    })
+  }
+
+  if (changedLinks.size === 0) return false
+
+  // Re-route only the links whose slots changed, in original shortest-first order.
+  for (const link of linkList) {
+    if (!changedLinks.has(link.id)) continue
+    const slots  = mutableSlots[link.id]
+    const others = existingSegs.filter(s => s.linkId !== link.id)
+    const newPts = buildPath(
+      nodes[link.sourceId], slots.sourceSlot,
+      nodes[link.targetId], slots.targetSlot,
+      nodes, others)
+    pathMap[link.id] = newPts
+    const filtered = existingSegs.filter(s => s.linkId !== link.id)
+    existingSegs.length = 0
+    existingSegs.push(...filtered,
+      ...pathToSegs(newPts, link.id, link.sourceId, link.targetId))
+  }
+
+  return true
+}
+
+// Re-route every link that still crosses others, now with full knowledge of all
+// paths. Runs up to 2 passes; shorter links (routed first) keep their direct
+// paths — longer links must detour around them.
+function reroutePass(nodes, mutableSlots, linkList, pathMap, existingSegs) {
+  for (let pass = 0; pass < 2; pass++) {
+    let improved = false
+    for (const link of linkList) {
+      const segsOthers = existingSegs.filter(s => s.linkId !== link.id)
+      const currentCross = countCrossings(pathMap[link.id], segsOthers)
+      if (currentCross === 0) continue
+
+      const slots = mutableSlots[link.id]
+      const newPts = buildPath(
+        nodes[link.sourceId], slots.sourceSlot,
+        nodes[link.targetId], slots.targetSlot,
+        nodes, segsOthers)
+
+      if (countCrossings(newPts, segsOthers) < currentCross) {
+        pathMap[link.id] = newPts
+        const filtered = existingSegs.filter(s => s.linkId !== link.id)
+        existingSegs.length = 0
+        existingSegs.push(...filtered,
+          ...pathToSegs(newPts, link.id, link.sourceId, link.targetId))
+        improved = true
+      }
+    }
+    if (!improved) break
+  }
+}
+
+// Routes all links, shortest first, each one aware of already-routed paths.
 // Returns { linkId → points[] }.
 export function computeAllPaths(nodes, linkSlots, links) {
+  const linkList = Object.values(links)
+    .filter(l => nodes[l.sourceId] && nodes[l.targetId] && linkSlots[l.id])
+    .sort((a, b) => stubDist(nodes, linkSlots, a) - stubDist(nodes, linkSlots, b))
+
+  const mutableSlots = {}
+  for (const link of linkList) mutableSlots[link.id] = linkSlots[link.id]
+
   const pathMap = {}
-  for (const link of Object.values(links)) {
-    const src = nodes[link.sourceId]
-    const tgt = nodes[link.targetId]
-    if (!src || !tgt) continue
-    const slots = linkSlots[link.id]
-    if (!slots) continue
-    pathMap[link.id] = buildPath(src, slots.sourceSlot, tgt, slots.targetSlot, nodes)
+  const existingSegs = []
+
+  for (const link of linkList) {
+    const src   = nodes[link.sourceId], tgt = nodes[link.targetId]
+    const slots = mutableSlots[link.id]
+    const pts   = buildPath(src, slots.sourceSlot, tgt, slots.targetSlot, nodes, existingSegs)
+    pathMap[link.id] = pts
+    existingSegs.push(...pathToSegs(pts, link.id, link.sourceId, link.targetId))
   }
+
+  // Align slot positions to actual path directions; run twice to catch cascades.
+  if (alignSlots(nodes, mutableSlots, linkList, pathMap, existingSegs))
+    alignSlots(nodes, mutableSlots, linkList, pathMap, existingSegs)
+  reroutePass(nodes, mutableSlots, linkList, pathMap, existingSegs)
   separateOverlaps(pathMap)
   return pathMap
 }
 
 // Converts a point array to an SVG path d string with rounded corners.
-// Each interior vertex is replaced by a quadratic bezier of radius CORNER_RADIUS.
 export function pointsToPath(points) {
   if (points.length < 2) return ''
 
@@ -251,7 +456,6 @@ export function pointsToPath(points) {
   }
 
   let d = `M${points[0].x},${points[0].y}`
-
   for (let i = 1; i < points.length - 1; i++) {
     const A = points[i - 1], B = points[i], C = points[i + 1]
     const cr = Math.min(CORNER_RADIUS, Math.hypot(B.x-A.x, B.y-A.y) / 2, Math.hypot(C.x-B.x, C.y-B.y) / 2)
@@ -259,9 +463,7 @@ export function pointsToPath(points) {
     const p2 = approach(B, C, cr)
     d += ` L${p1.x},${p1.y} Q${B.x},${B.y} ${p2.x},${p2.y}`
   }
-
-  const last = points[points.length - 1]
-  d += ` L${last.x},${last.y}`
+  d += ` L${points[points.length - 1].x},${points[points.length - 1].y}`
   return d
 }
 
@@ -275,6 +477,58 @@ export function getMidSegment(points) {
   if (angle >  90) angle -= 180
   if (angle < -90) angle += 180
   return { mid, angle }
+}
+
+function polylineLength(points) {
+  let len = 0
+  for (let i = 1; i < points.length; i++)
+    len += Math.hypot(points[i].x - points[i-1].x, points[i].y - points[i-1].y)
+  return len
+}
+
+// Returns {x, y, angle} at fractional position t (0=source end, 1=target end).
+export function getPointAtT(points, t) {
+  if (points.length < 2) return { x: 0, y: 0, angle: 0 }
+  t = Math.max(0, Math.min(1, t))
+  const total  = polylineLength(points)
+  const target = t * total
+  let walked   = 0
+  for (let i = 1; i < points.length; i++) {
+    const p1 = points[i - 1], p2 = points[i]
+    const seg = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+    if (walked + seg >= target || i === points.length - 1) {
+      const frac = seg === 0 ? 0 : (target - walked) / seg
+      const x = p1.x + (p2.x - p1.x) * frac
+      const y = p1.y + (p2.y - p1.y) * frac
+      let angle = Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180 / Math.PI
+      if (angle >  90) angle -= 180
+      if (angle < -90) angle += 180
+      return { x, y, angle }
+    }
+    walked += seg
+  }
+  const last = points[points.length - 1]
+  return { x: last.x, y: last.y, angle: 0 }
+}
+
+// Project world point (px, py) onto the polyline; returns t ∈ [0.05, 0.95].
+export function projectOntoPath(points, px, py) {
+  if (points.length < 2) return 0.5
+  const total = polylineLength(points)
+  if (total === 0) return 0.5
+  let bestT = 0.5, bestDist = Infinity, walked = 0
+  for (let i = 1; i < points.length; i++) {
+    const p1 = points[i - 1], p2 = points[i]
+    const dx = p2.x - p1.x, dy = p2.y - p1.y
+    const seg = Math.hypot(dx, dy)
+    const frac = seg === 0 ? 0 : Math.max(0, Math.min(1,
+      ((px - p1.x) * dx + (py - p1.y) * dy) / (seg * seg)))
+    const cx = p1.x + dx * frac, cy = p1.y + dy * frac
+    const dist = Math.hypot(px - cx, py - cy)
+    if (dist < bestDist) { bestDist = dist; bestT = (walked + frac * seg) / total }
+    walked += seg
+  }
+  return Math.max(0.05, Math.min(0.95, bestT))
 }
 
 // Preview path while dragging a new connection.

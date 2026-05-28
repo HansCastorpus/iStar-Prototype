@@ -2,12 +2,11 @@ import { useRef } from 'react'
 import useStore from '../store/useStore.js'
 
 const MODES = [
-  { id: 'select',    label: 'Select' },
-  { id: 'add-goal',      label: '+ Goal' },
-  { id: 'add-task',      label: '+ Task' },
-  { id: 'add-softgoal',  label: '+ Softgoal' },
-  { id: 'add-resource',  label: '+ Resource' },
-  { id: 'connect',   label: 'Connect' },
+  { id: 'select',         label: 'Select' },
+  { id: 'add-goal',       label: '+ Goal' },
+  { id: 'add-task',       label: '+ Task' },
+  { id: 'add-softgoal',   label: '+ Softgoal' },
+  { id: 'add-resource',   label: '+ Resource' },
 ]
 
 export default function Toolbar() {

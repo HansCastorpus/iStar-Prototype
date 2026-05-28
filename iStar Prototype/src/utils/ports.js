@@ -1,4 +1,4 @@
-import { GRID } from './grid.js'
+import { GRID, NODE_BADGE_H } from './grid.js'
 
 export const SIDES = ['top', 'right', 'bottom', 'left']
 
@@ -10,7 +10,7 @@ export function getSlotPosition(node, side, offset) {
   const cy = node.y + node.height / 2
   switch (side) {
     case 'top':    return { x: cx + offset * GRID, y: node.y }
-    case 'bottom': return { x: cx + offset * GRID, y: node.y + node.height }
+    case 'bottom': return { x: cx + offset * GRID, y: node.y + node.height + NODE_BADGE_H / 2 }
     case 'left':   return { x: node.x,              y: cy + offset * GRID }
     case 'right':  return { x: node.x + node.width,  y: cy + offset * GRID }
   }

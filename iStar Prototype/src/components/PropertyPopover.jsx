@@ -3,37 +3,57 @@ import useStore from '../store/useStore.js'
 import { useZoom, worldToScreen } from '../contexts/ZoomContext.jsx'
 
 const NODE_TYPES = ['goal', 'task', 'softgoal', 'resource']
+const LINK_TYPES = ['dependency', 'means-end', 'decomposition', 'contribution']
 
 export default function PropertyPopover() {
   const { selectedId, selectedType, nodes, links, actors,
-          updateNode, deleteNode, deleteLink, ensureActor } = useStore()
+    updateNode, updateLink, deleteNode, deleteLink, reverseLink, ensureActor } = useStore()
+  const selectedIds = useStore(s => s.selectedIds)
   const { transform } = useZoom()
   const [confirmDelete, setConfirmDelete] = useState(false)
 
-  if (!selectedId) return null
+  if (!selectedId || selectedIds.length > 1) return null
 
   if (selectedType === 'link') {
     const link = links[selectedId]
     if (!link) return null
+    const src = nodes[link.sourceId], tgt = nodes[link.targetId]
+    if (!src || !tgt) return null
+    const { x: lx, y: ly } = worldToScreen(
+      (src.x + src.width / 2 + tgt.x + tgt.width / 2) / 2,
+      (src.y + src.height / 2 + tgt.y + tgt.height / 2) / 2,
+      transform,
+    )
     return (
-      <div style={popoverStyle(200, 80)}>
-        <div style={{ fontSize: 10, color: '#555', marginBottom: 4 }}>
-          link: <strong>{link.type}</strong>
+      <div style={popoverStyle(lx - 150, ly - 150)}>
+        <label style={labelStyle}>type</label>
+        <select
+          value={link.type}
+          onChange={e => updateLink(selectedId, { type: e.target.value })}
+          style={inputStyle}
+        >
+          {LINK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+
+        <button
+          onClick={() => reverseLink(selectedId)}
+          style={{ ...btnStyle('#555'), marginTop: 4 }}
+        >
+          reverse direction
+        </button>
+
+        <div style={{ marginTop: 4 }}>
+          {confirmDelete ? (
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button onClick={() => deleteLink(selectedId)} style={btnStyle('#c00')}>delete</button>
+              <button onClick={() => setConfirmDelete(false)} style={btnStyle('#888')}>cancel</button>
+            </div>
+          ) : (
+            <button onClick={() => setConfirmDelete(true)} style={btnStyle('#c00')}>
+              delete link
+            </button>
+          )}
         </div>
-        {confirmDelete ? (
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button onClick={() => deleteLink(selectedId)} style={btnStyle('#c00')}>
-              delete
-            </button>
-            <button onClick={() => setConfirmDelete(false)} style={btnStyle('#888')}>
-              cancel
-            </button>
-          </div>
-        ) : (
-          <button onClick={() => setConfirmDelete(true)} style={btnStyle('#c00')}>
-            delete link
-          </button>
-        )}
       </div>
     )
   }
@@ -70,7 +90,7 @@ export default function PropertyPopover() {
 
   return (
     <div style={{
-      ...popoverStyle(sx, sy),
+      ...popoverStyle(sx - 250, sy - 250),
       transform: 'translateX(-50%)',
     }}>
       <label style={labelStyle}>label</label>

@@ -10,6 +10,9 @@ import PropertyPopover from './PropertyPopover.jsx'
 import LinkTypePopup from './LinkTypePopup.jsx'
 import { computeLinkSlots } from '../utils/layout.js'
 import { computeAllPaths } from '../utils/routing.js'
+import { GRID } from '../utils/grid.js'
+
+const MIN_CLEARANCE = GRID * 4
 
 export default function Canvas() {
   const svgRef = useRef(null)
@@ -18,7 +21,7 @@ export default function Canvas() {
   const [cursorWorld, setCursorWorld] = useState({ x: 0, y: 0 })
   const modeRef = useRef('select')
 
-  const { nodes, links, actors, mode, addNode, deselect, clearConnect } = useStore()
+  const { nodes, links, actors, mode, addNode, deselect, clearConnect, draggingNodeId, selectedIds } = useStore()
 
   // Keep refs in sync with reactive values.
   useEffect(() => { modeRef.current = mode }, [mode])
@@ -99,6 +102,25 @@ export default function Canvas() {
           width="100000" height="100000" fill="transparent" />
 
         <g transform={`translate(${x},${y}) scale(${k})`}>
+          {/* Clearance outlines — visible only while dragging a node */}
+          {draggingNodeId && Object.values(nodes)
+            .filter(n => n.id !== draggingNodeId && !selectedIds.includes(n.id))
+            .map(n => (
+              <rect
+                key={n.id}
+                x={n.x - MIN_CLEARANCE}
+                y={n.y - MIN_CLEARANCE}
+                width={n.width  + MIN_CLEARANCE * 2}
+                height={n.height + MIN_CLEARANCE * 2}
+                fill="none"
+                stroke="#94a3b8"
+                strokeWidth={1}
+                strokeDasharray="5 3"
+                style={{ pointerEvents: 'none' }}
+              />
+            ))
+          }
+
           {/* Actors sit below everything */}
           {Object.values(actors).map((actor) => (
             <Actor key={actor.id} actor={actor} />
