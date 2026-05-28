@@ -37,17 +37,6 @@ export default function Link({ link, points }) {
         markerEnd="url(#arrow-default)"
       />
 
-      {/* Link type label */}
-      <text
-        transform={`translate(${mid.x},${mid.y}) rotate(${angle}) translate(0,-6)`}
-        textAnchor="middle"
-        dominantBaseline="auto"
-        fontSize={9}
-        fill={isSelected ? '#0070f3' : '#777'}
-        style={{ pointerEvents: 'none', userSelect: 'none' }}
-      >
-        {link.type}
-      </text>
     </g>
   )
 }

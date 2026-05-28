@@ -1,8 +1,10 @@
 import { GRID, snap } from './grid.js'
 import { getSlotPosition, getSideDirection, STUB } from './ports.js'
 
-const DETOUR_PAD  = GRID * 2
-const SEG_OFFSET  = 15  // px separation between overlapping parallel segments
+const DETOUR_PAD    = GRID * 2
+const SEG_OFFSET    = 15   // px separation between overlapping parallel segments
+const CORNER_RADIUS = 15   // px radius for rounded corners
+const MIN_DIAGONAL  = GRID * 3  // minimum diagonal segment length before falling back to H/V
 
 function nodeBox(node) {
   return { x: node.x, y: node.y, x2: node.x + node.width, y2: node.y + node.height }
@@ -39,6 +41,41 @@ function firstBlocker(points, nodes, srcId, tgtId) {
   return null
 }
 
+// Returns intermediate points between s and t that make the path strictly
+// octilinear. The 45° diagonal is always exact; H or V segments absorb the excess.
+function octilinearMid(s, t) {
+  const dx  = t.x - s.x
+  const dy  = t.y - s.y
+  const adx = Math.abs(dx)
+  const ady = Math.abs(dy)
+  if (adx === 0 || ady === 0) return []
+  if (adx === ady)            return []
+  const sx = dx > 0 ? 1 : -1
+  const sy = dy > 0 ? 1 : -1
+  if (adx > ady) {
+    const half = (adx - ady) / 2
+    return [{ x: s.x + half * sx, y: s.y }, { x: t.x - half * sx, y: t.y }]
+  } else {
+    const half = (ady - adx) / 2
+    return [{ x: s.x, y: s.y + half * sy }, { x: t.x, y: t.y - half * sy }]
+  }
+}
+
+// Removes any interior point that is collinear with its neighbours (same x or
+// same y throughout). This merges the stub into the first connector segment
+// whenever they run in the same direction, eliminating tiny visual segments.
+function removeCollinear(pts) {
+  if (pts.length <= 2) return pts
+  const out = [pts[0]]
+  for (let i = 1; i < pts.length - 1; i++) {
+    const A = pts[i - 1], B = pts[i], C = pts[i + 1]
+    const collinear = (A.x === B.x && B.x === C.x) || (A.y === B.y && B.y === C.y)
+    if (!collinear) out.push(B)
+  }
+  out.push(pts[pts.length - 1])
+  return out
+}
+
 // ── Single-link path ──────────────────────────────────────────────────────────
 
 function buildPath(sourceNode, sourceSlot, targetNode, targetSlot, allNodes) {
@@ -52,18 +89,24 @@ function buildPath(sourceNode, sourceSlot, targetNode, targetSlot, allNodes) {
   const nodeArr = Object.values(allNodes)
   const srcId   = sourceNode.id
   const tgtId   = targetNode.id
-  const dx = t.x - s.x
-  const dy = t.y - s.y
+  const clear = (pts) => !firstBlocker(pts, nodeArr, srcId, tgtId)
 
-  const clear    = (pts) => !firstBlocker(pts, nodeArr, srcId, tgtId)
-  const noUturn  = (mid) => {
-    if (mid.length === 0) return true
-    const first = mid[0], last = mid[mid.length - 1]
-    if ((first.x - s.x) * ds.dx + (first.y - s.y) * ds.dy < 0) return false
-    if ((t.x - last.x)  * dt.dx + (t.y - last.y)  * dt.dy > 0) return false
-    return true
+  // Primary: octilinear path — all segments at 0°, 45°, or 90°.
+  // The diagonal is always exactly 45°; H/V segments absorb the excess.
+  //   wider than tall  →  H → 45° diagonal → H
+  //   taller than wide →  V → 45° diagonal → V
+  //   equal            →  pure 45° diagonal
+  // Only use the diagonal when its length clears the minimum threshold.
+  // min(|dx|, |dy|) × √2 is the pixel length of the 45° segment.
+  const diagLen = Math.min(Math.abs(t.x - s.x), Math.abs(t.y - s.y)) * Math.SQRT2
+  if (diagLen >= MIN_DIAGONAL) {
+    const primary = removeCollinear([ps, s, ...octilinearMid(s, t), t, pt])
+    if (clear(primary)) return primary
   }
 
+  // Fallback: axis-aligned routes when diagonal is too short or blocked.
+  const dx = t.x - s.x
+  const dy = t.y - s.y
   const mx = snap((s.x + t.x) / 2)
   const my = snap((s.y + t.y) / 2)
 
@@ -77,13 +120,12 @@ function buildPath(sourceNode, sourceSlot, targetNode, targetSlot, allNodes) {
       ]
 
   for (const mid of candidates) {
-    if (!noUturn(mid)) continue
     const pts = [ps, s, ...mid, t, pt]
     if (clear(pts)) return pts
   }
 
   // Detour around the first blocker.
-  const referenceMid = candidates.find(m => noUturn(m)) ?? candidates[0]
+  const referenceMid = candidates[0]
   const blocker = firstBlocker([ps, s, ...referenceMid, t, pt], nodeArr, srcId, tgtId)
   if (blocker) {
     const bx  = blocker.x - DETOUR_PAD
@@ -109,8 +151,16 @@ function buildPath(sourceNode, sourceSlot, targetNode, targetSlot, allNodes) {
 // (excluding the first and last stub segments) and nudge them apart by SEG_OFFSET.
 
 function segKey(p1, p2) {
-  if (p1.x === p2.x) return { axis: 'v', coord: p1.x, lo: Math.min(p1.y, p2.y), hi: Math.max(p1.y, p2.y) }
-  if (p1.y === p2.y) return { axis: 'h', coord: p1.y, lo: Math.min(p1.x, p2.x), hi: Math.max(p1.x, p2.x) }
+  const dx = p2.x - p1.x, dy = p2.y - p1.y
+  if (dx === 0) return { axis: 'v',  coord: p1.x,       lo: Math.min(p1.y, p2.y), hi: Math.max(p1.y, p2.y) }
+  if (dy === 0) return { axis: 'h',  coord: p1.y,       lo: Math.min(p1.x, p2.x), hi: Math.max(p1.x, p2.x) }
+  if (Math.abs(dx) === Math.abs(dy)) {
+    // Exactly 45° diagonal. Use the line's intercept as coord.
+    // +45° (slope +1): y − x = const   −45° (slope −1): y + x = const
+    const axis  = dx * dy > 0 ? 'd+' : 'd-'
+    const coord = dx * dy > 0 ? p1.y - p1.x : p1.y + p1.x
+    return { axis, coord, lo: Math.min(p1.x, p2.x), hi: Math.max(p1.x, p2.x) }
+  }
   return null
 }
 
@@ -152,9 +202,19 @@ function separateOverlaps(pathMap) {
       if (k.axis === 'h') {
         pts[i]     = { ...pts[i],     y: pts[i].y     + delta }
         pts[i + 1] = { ...pts[i + 1], y: pts[i + 1].y + delta }
-      } else {
+      } else if (k.axis === 'v') {
         pts[i]     = { ...pts[i],     x: pts[i].x     + delta }
         pts[i + 1] = { ...pts[i + 1], x: pts[i + 1].x + delta }
+      } else if (k.axis === 'd+') {
+        // Perpendicular to +45° is (−1, +1)/√2
+        const d = delta / Math.SQRT2
+        pts[i]     = { x: pts[i].x     - d, y: pts[i].y     + d }
+        pts[i + 1] = { x: pts[i + 1].x - d, y: pts[i + 1].y + d }
+      } else if (k.axis === 'd-') {
+        // Perpendicular to −45° is (+1, +1)/√2
+        const d = delta / Math.SQRT2
+        pts[i]     = { x: pts[i].x     + d, y: pts[i].y     + d }
+        pts[i + 1] = { x: pts[i + 1].x + d, y: pts[i + 1].y + d }
       }
     })
   }
@@ -178,10 +238,31 @@ export function computeAllPaths(nodes, linkSlots, links) {
   return pathMap
 }
 
-// Converts a point array to an SVG path d string.
+// Converts a point array to an SVG path d string with rounded corners.
+// Each interior vertex is replaced by a quadratic bezier of radius CORNER_RADIUS.
 export function pointsToPath(points) {
   if (points.length < 2) return ''
-  return points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')
+
+  function approach(from, to, d) {
+    const dx = to.x - from.x, dy = to.y - from.y
+    const len = Math.hypot(dx, dy)
+    if (len === 0) return from
+    return { x: from.x + dx / len * d, y: from.y + dy / len * d }
+  }
+
+  let d = `M${points[0].x},${points[0].y}`
+
+  for (let i = 1; i < points.length - 1; i++) {
+    const A = points[i - 1], B = points[i], C = points[i + 1]
+    const cr = Math.min(CORNER_RADIUS, Math.hypot(B.x-A.x, B.y-A.y) / 2, Math.hypot(C.x-B.x, C.y-B.y) / 2)
+    const p1 = approach(B, A, cr)
+    const p2 = approach(B, C, cr)
+    d += ` L${p1.x},${p1.y} Q${B.x},${B.y} ${p2.x},${p2.y}`
+  }
+
+  const last = points[points.length - 1]
+  d += ` L${last.x},${last.y}`
+  return d
 }
 
 // Returns the midpoint and angle (degrees) of the middle segment, for label placement.
