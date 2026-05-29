@@ -12,7 +12,7 @@ import { computeLinkSlots } from '../utils/layout.js'
 import { computeAllPaths } from '../utils/routing.js'
 import { GRID } from '../utils/grid.js'
 
-const MIN_CLEARANCE = GRID * 4
+const MIN_CLEARANCE = GRID * 2
 
 export default function Canvas() {
   const svgRef = useRef(null)
@@ -21,7 +21,7 @@ export default function Canvas() {
   const [cursorWorld, setCursorWorld] = useState({ x: 0, y: 0 })
   const modeRef = useRef('select')
 
-  const { nodes, links, actors, mode, addNode, deselect, clearConnect, draggingNodeId, selectedIds } = useStore()
+  const { nodes, links, actors, mode, addNode, deselect, clearConnect, draggingNodeId, selectedIds, selectedId, selectedType } = useStore()
 
   // Keep refs in sync with reactive values.
   useEffect(() => { modeRef.current = mode }, [mode])
@@ -78,6 +78,52 @@ export default function Canvas() {
 
   const linkSlots = useMemo(() => computeLinkSlots(nodes, links), [nodes, links])
   const linkPaths = useMemo(() => computeAllPaths(nodes, linkSlots, links), [nodes, linkSlots, links])
+
+  // AND-bar: group AND links by target+side, compute one spanning perpendicular
+  // bar per group so multiple AND links on the same node face share a continuous line.
+  const AND_ICON_DIST = 17  // ARROW_H(8) + ICON_GAP(4) + ICON_R(5)
+  const AND_BAR_PAD   =  5  // overhang beyond the outermost icon center
+  const andBarMap = useMemo(() => {
+    const groups = {}
+    for (const [id, link] of Object.entries(links)) {
+      if (link.type !== 'and') continue
+      const slots = linkSlots[id]
+      if (!slots) continue
+      const key = `${link.targetId}/${slots.targetSlot.side}`
+      if (!groups[key]) groups[key] = []
+      groups[key].push(id)
+    }
+    const result = {}
+    for (const ids of Object.values(groups)) {
+      const centers = []
+      for (const id of ids) {
+        const path = linkPaths[id]
+        if (!path || path.length < 2) continue
+        const p1 = path[path.length - 2], p2 = path[path.length - 1]
+        const len = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+        if (len === 0) continue
+        const dx = (p2.x - p1.x) / len, dy = (p2.y - p1.y) / len
+        centers.push({ id, x: p2.x - dx * AND_ICON_DIST, y: p2.y - dy * AND_ICON_DIST, dx, dy })
+      }
+      if (centers.length === 0) continue
+      const { dx, dy } = centers[0]
+      if (Math.abs(dy) > Math.abs(dx)) {
+        // Mostly vertical approach → horizontal bar spanning all x positions
+        const minX = Math.min(...centers.map(c => c.x)) - AND_BAR_PAD
+        const maxX = Math.max(...centers.map(c => c.x)) + AND_BAR_PAD
+        const barY = centers.reduce((s, c) => s + c.y, 0) / centers.length
+        for (const { id } of centers) result[id] = { x1: minX, y1: barY, x2: maxX, y2: barY }
+      } else {
+        // Mostly horizontal approach → vertical bar spanning all y positions
+        const minY = Math.min(...centers.map(c => c.y)) - AND_BAR_PAD
+        const maxY = Math.max(...centers.map(c => c.y)) + AND_BAR_PAD
+        const barX = centers.reduce((s, c) => s + c.x, 0) / centers.length
+        for (const { id } of centers) result[id] = { x1: barX, y1: minY, x2: barX, y2: maxY }
+      }
+    }
+    return result
+  }, [links, linkSlots, linkPaths])
+
   const { x, y, k } = transform
 
   return (
@@ -90,13 +136,6 @@ export default function Canvas() {
         onMouseMove={handleMouseMove}
         onClick={handleCanvasClick}
       >
-        <defs>
-          <marker id="arrow-default" markerWidth="8" markerHeight="6"
-            refX="7" refY="3" orient="auto">
-            <path d="M0,0 L0,6 L8,3 z" fill="#555" />
-          </marker>
-        </defs>
-
         {/* Infinite background — pan target */}
         <rect className="canvas-bg" x="-50000" y="-50000"
           width="100000" height="100000" fill="transparent" />
@@ -121,6 +160,36 @@ export default function Canvas() {
             ))
           }
 
+          {/* Port zone overlay — shown when a node is selected */}
+          {selectedType === 'node' && selectedId && nodes[selectedId] && (() => {
+            const n = nodes[selectedId]
+            const cx = n.x + n.width / 2
+            const cy = n.y + n.height / 2
+            const R = 3000
+            const hw = n.height / n.width  // h/w — slope of the zone boundary
+            const zones = [
+              { points: `${cx},${cy} ${cx+R},${cy - R*hw} ${cx+R},${cy + R*hw}`, label: 'right',  lx: cx + R*0.5, ly: cy,         fill: '#3b82f6' },
+              { points: `${cx},${cy} ${cx-R},${cy - R*hw} ${cx-R},${cy + R*hw}`, label: 'left',   lx: cx - R*0.5, ly: cy,         fill: '#22c55e' },
+              { points: `${cx},${cy} ${cx - R/hw},${cy-R} ${cx + R/hw},${cy-R}`, label: 'top',    lx: cx,         ly: cy - R*0.5, fill: '#f97316' },
+              { points: `${cx},${cy} ${cx - R/hw},${cy+R} ${cx + R/hw},${cy+R}`, label: 'bottom', lx: cx,         ly: cy + R*0.5, fill: '#a855f7' },
+            ]
+            return (
+              <g style={{ pointerEvents: 'none' }}>
+                {zones.map(z => (
+                  <polygon key={z.label} points={z.points} fill={z.fill} opacity={0.08} />
+                ))}
+                <line x1={cx-R} y1={cy - R*hw} x2={cx+R} y2={cy + R*hw} stroke="#94a3b8" strokeWidth={1} strokeDasharray="6 3" />
+                <line x1={cx-R} y1={cy + R*hw} x2={cx+R} y2={cy - R*hw} stroke="#94a3b8" strokeWidth={1} strokeDasharray="6 3" />
+                {zones.map(z => (
+                  <text key={z.label} x={z.lx} y={z.ly} textAnchor="middle" dominantBaseline="central"
+                    fontSize={11} fontFamily="sans-serif" fill={z.fill} opacity={0.7}>
+                    {z.label}
+                  </text>
+                ))}
+              </g>
+            )
+          })()}
+
           {/* Actors sit below everything */}
           {Object.values(actors).map((actor) => (
             <Actor key={actor.id} actor={actor} />
@@ -128,7 +197,7 @@ export default function Canvas() {
 
           {/* Links above actors */}
           {Object.values(links).map((link) => (
-            <Link key={link.id} link={link} points={linkPaths[link.id]} />
+            <Link key={link.id} link={link} points={linkPaths[link.id]} andBar={andBarMap[link.id]} />
           ))}
 
           {/* Nodes on top */}

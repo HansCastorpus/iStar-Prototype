@@ -3,18 +3,18 @@ import useStore from '../store/useStore.js'
 import { wrapLabel, NODE_LINE_H, NODE_BADGE_H, NODE_PAD_X, GOAL_PAD_X } from '../utils/grid.js'
 
 const BADGE_CHAR_W = 7.5
-const BADGE_PAD_X  = 10
+const BADGE_PAD_X = 7
 
 const NODE_TYPES = {
-  goal:     { stroke: '#333' },
-  task:     { stroke: '#333' },
+  goal: { stroke: '#333' },
+  task: { stroke: '#333' },
   softgoal: { stroke: '#333' },
   resource: { stroke: '#333' },
 }
 
 // Pick the best source/target sides based on which axis has the larger separation.
 function computeBestPorts(src, tgt) {
-  const dx = (tgt.x + tgt.width  / 2) - (src.x + src.width  / 2)
+  const dx = (tgt.x + tgt.width / 2) - (src.x + src.width / 2)
   const dy = (tgt.y + tgt.height / 2) - (src.y + src.height / 2)
   if (Math.abs(dx) >= Math.abs(dy))
     return dx >= 0 ? { srcSide: 'right', tgtSide: 'left' } : { srcSide: 'left', tgtSide: 'right' }
@@ -22,7 +22,7 @@ function computeBestPorts(src, tgt) {
 }
 
 export default function Node({ node }) {
-  const gRef    = useRef(null)
+  const gRef = useRef(null)
   const nodeRef = useRef(node)
   nodeRef.current = node
 
@@ -119,13 +119,13 @@ export default function Node({ node }) {
   const { stroke } = NODE_TYPES[node.type] ?? NODE_TYPES.goal
 
   const nodePadX = (node.type === 'goal' || node.type === 'task' || node.type === 'softgoal') ? GOAL_PAD_X : NODE_PAD_X
-  const lines    = wrapLabel(node.label || `[${node.type}]`, node.width, nodePadX)
-  const cx       = node.width / 2
+  const lines = wrapLabel(node.label || `[${node.type}]`, node.width, nodePadX)
+  const cx = node.width / 2
   const textAreaH = node.height - NODE_BADGE_H / 2
-  const cy       = textAreaH / 2
+  const cy = textAreaH / 2
 
   const badgeCY = node.height
-  const badgeW  = node.type.length * BADGE_CHAR_W + BADGE_PAD_X * 2
+  const badgeW = node.type.length * BADGE_CHAR_W + BADGE_PAD_X * 2
 
   return (
     <g
@@ -217,8 +217,8 @@ export default function Node({ node }) {
         height={NODE_BADGE_H}
         rx={NODE_BADGE_H / 2}
         fill="white"
-        stroke="#aaa"
-        strokeWidth={1}
+        stroke={isSelected ? '#0070f3' : stroke}
+        strokeWidth={isSelected ? 2 : 1}
         style={{ pointerEvents: 'none' }}
       />
       <text

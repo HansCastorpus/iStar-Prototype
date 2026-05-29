@@ -3,7 +3,12 @@ import useStore from '../store/useStore.js'
 import { useZoom, worldToScreen } from '../contexts/ZoomContext.jsx'
 
 const NODE_TYPES = ['goal', 'task', 'softgoal', 'resource']
-const LINK_TYPES = ['dependency', 'means-end', 'decomposition', 'contribution']
+const LINK_TYPES = [
+  'depends-on',
+  'or', 'xor', 'and',
+  'help', 'hurt', 'make', 'break',
+  'needed-by', 'part-of',
+]
 
 export default function PropertyPopover() {
   const { selectedId, selectedType, nodes, links, actors,

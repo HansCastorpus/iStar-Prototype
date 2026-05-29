@@ -2,10 +2,10 @@ import useStore from '../store/useStore.js'
 import { useZoom, worldToScreen } from '../contexts/ZoomContext.jsx'
 
 const LINK_TYPES = [
-  'dependency',
-  'means-end',
-  'decomposition',
-  'contribution',
+  'depends-on',
+  'or', 'xor', 'and',
+  'help', 'hurt', 'make', 'break',
+  'needed-by', 'part-of',
 ]
 
 export default function LinkTypePopup() {

@@ -2,9 +2,11 @@ import { GRID, snap } from './grid.js'
 import { getSlotPosition, getSideDirection, STUB } from './ports.js'
 
 const DETOUR_PAD    = GRID * 2
-const SEG_OFFSET    = 15   // px separation between overlapping parallel segments
+const SEG_OFFSET    = 8    // px separation between overlapping parallel segments
 const CORNER_RADIUS = 15   // px radius for rounded corners
-const MIN_DIAGONAL  = GRID * 3  // minimum diagonal segment length before falling back to H/V
+// Diagonal route fires only when both dx and dy between stub-ends are at least
+// MIN_DIAGONAL / √2.  Small offsets always use H/V; large diagonal offsets use 45°.
+const MIN_DIAGONAL  = GRID * 6  // 60px — diagonal fires when min(|dx|,|dy|) ≥ ~42px
 
 function nodeBox(node) {
   return { x: node.x, y: node.y, x2: node.x + node.width, y2: node.y + node.height }
@@ -100,6 +102,24 @@ function removeCollinear(pts) {
   return out
 }
 
+const SIMPLIFY_THRESHOLD = 3  // px — drop bends smaller than this (must be < ALIGN_SNAP/2)
+
+function simplifyPoints(pts) {
+  if (pts.length <= 2) return pts
+  const out = [pts[0]]
+  for (let i = 1; i < pts.length - 1; i++) {
+    const A = pts[i - 1], B = pts[i], C = pts[i + 1]
+    const dx = C.x - A.x, dy = C.y - A.y
+    const len = Math.hypot(dx, dy)
+    const dist = len === 0
+      ? Math.hypot(B.x - A.x, B.y - A.y)
+      : Math.abs((B.x - A.x) * dy - (B.y - A.y) * dx) / len
+    if (dist > SIMPLIFY_THRESHOLD) out.push(B)
+  }
+  out.push(pts[pts.length - 1])
+  return out.length < pts.length ? simplifyPoints(out) : out
+}
+
 // ── Single-link path ──────────────────────────────────────────────────────────
 
 // Builds all obstacle-free candidate paths, then picks the one with fewest
@@ -109,8 +129,21 @@ function buildPath(sourceNode, sourceSlot, targetNode, targetSlot, allNodes, exi
   const pt = getSlotPosition(targetNode, targetSlot.side, targetSlot.offset)
   const ds = getSideDirection(sourceSlot.side)
   const dt = getSideDirection(targetSlot.side)
-  const s  = { x: ps.x + ds.dx * STUB, y: ps.y + ds.dy * STUB }
-  const t  = { x: pt.x + dt.dx * STUB, y: pt.y + dt.dy * STUB }
+  let s  = { x: ps.x + ds.dx * STUB, y: ps.y + ds.dy * STUB }
+  let t  = { x: pt.x + dt.dx * STUB, y: pt.y + dt.dy * STUB }
+
+  // When opposing stubs cross (nodes very close), clamp both to the midpoint
+  // between the two ports so the path never folds back on itself.
+  if (ds.dy !== 0 && ds.dy === -dt.dy) {
+    const midY = (ps.y + pt.y) / 2
+    s = { ...s, y: ds.dy > 0 ? Math.min(s.y, midY) : Math.max(s.y, midY) }
+    t = { ...t, y: dt.dy > 0 ? Math.min(t.y, midY) : Math.max(t.y, midY) }
+  }
+  if (ds.dx !== 0 && ds.dx === -dt.dx) {
+    const midX = (ps.x + pt.x) / 2
+    s = { ...s, x: ds.dx > 0 ? Math.min(s.x, midX) : Math.max(s.x, midX) }
+    t = { ...t, x: dt.dx > 0 ? Math.min(t.x, midX) : Math.max(t.x, midX) }
+  }
 
   const nodeArr = Object.values(allNodes)
   const srcId   = sourceNode.id, tgtId = targetNode.id
@@ -129,18 +162,30 @@ function buildPath(sourceNode, sourceSlot, targetNode, targetSlot, allNodes, exi
     if (clear(p)) pool.push(p)
   }
 
-  const hvMids = dx === 0 || dy === 0
-    ? [[]]
-    : [
-        [{ x: mx, y: s.y }, { x: mx, y: t.y }],
-        [{ x: s.x, y: my }, { x: t.x, y: my }],
-        [{ x: t.x, y: s.y }],
-        [{ x: s.x, y: t.y }],
-      ]
+  const lMids = [          // L-shape: 1 bend → 3 segments after simplification
+    [{ x: t.x, y: s.y }],
+    [{ x: s.x, y: t.y }],
+  ]
+  const sMids = [          // S-shape: 2 bends — fallback only
+    [{ x: mx, y: s.y }, { x: mx, y: t.y }],
+    [{ x: s.x, y: my }, { x: t.x, y: my }],
+  ]
+
+  // Below the diagonal threshold use L-shapes only; S-shapes are a last resort.
+  const inCloseZone = dx !== 0 && dy !== 0 && diagLen < MIN_DIAGONAL
+  const hvMids = dx === 0 || dy === 0 ? [[]] : inCloseZone ? lMids : [...lMids, ...sMids]
 
   for (const mid of hvMids) {
     const p = [ps, s, ...mid, t, pt]
     if (clear(p)) pool.push(p)
+  }
+
+  // Close-zone fallback: if both L-shapes are blocked, allow S-shapes.
+  if (inCloseZone && pool.length === 0) {
+    for (const mid of sMids) {
+      const p = [ps, s, ...mid, t, pt]
+      if (clear(p)) pool.push(p)
+    }
   }
 
   // Helper: add detour candidates around a node's bounding box.
@@ -229,8 +274,10 @@ function segKey(p1, p2) {
   return null
 }
 
+const OVERLAP_TOLERANCE = 4  // px — segments within this distance share a line
+
 function overlaps(a, b) {
-  return a.axis === b.axis && a.coord === b.coord && a.lo < b.hi && b.lo < a.hi
+  return a.axis === b.axis && Math.abs(a.coord - b.coord) <= OVERLAP_TOLERANCE && a.lo < b.hi && b.lo < a.hi
 }
 
 function separateOverlaps(pathMap) {
@@ -441,6 +488,7 @@ export function computeAllPaths(nodes, linkSlots, links) {
     alignSlots(nodes, mutableSlots, linkList, pathMap, existingSegs)
   reroutePass(nodes, mutableSlots, linkList, pathMap, existingSegs)
   separateOverlaps(pathMap)
+  for (const id of Object.keys(pathMap)) pathMap[id] = simplifyPoints(pathMap[id])
   return pathMap
 }
 

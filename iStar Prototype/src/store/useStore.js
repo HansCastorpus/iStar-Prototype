@@ -2,9 +2,29 @@ import { create } from 'zustand'
 import { GRID, snap, computeNodeSize } from '../utils/grid.js'
 import { getUsedOffsets, getNextSlot } from '../utils/ports.js'
 
-const MIN_CLEARANCE = GRID * 4
+const MIN_CLEARANCE = GRID * 2
 const ACTOR_GAP = 20
+
+export const ALL_TYPES = [
+  'goal', 'task', 'softgoal', 'resource',
+  'depends-on', 'or', 'xor', 'and', 'help', 'hurt', 'make', 'break', 'needed-by', 'part-of',
+]
 const HULL_PAD = 20  // must match Actor.jsx PAD
+const ALIGN_SNAP = 12  // px — snap to other nodes' center axes within this distance
+
+function alignSnap(x, y, width, height, nodes, excludeId) {
+  const cx = x + width / 2
+  const cy = y + height / 2
+  let nx = x, ny = y
+  for (const other of Object.values(nodes)) {
+    if (other.id === excludeId) continue
+    const ocx = other.x + other.width  / 2
+    const ocy = other.y + other.height / 2
+    if (Math.abs(cx - ocx) < ALIGN_SNAP) nx = ocx - width  / 2
+    if (Math.abs(cy - ocy) < ALIGN_SNAP) ny = ocy - height / 2
+  }
+  return { x: nx, y: ny }
+}
 
 function tooClose(x, y, w, h, nodes, excludeId = null) {
   return Object.values(nodes).some((other) => {
@@ -126,6 +146,11 @@ const useStore = create((set, get) => ({
       if (!found) return null
     }
 
+    // Snap to other nodes' center axes on placement.
+    const aligned = alignSnap(nx, ny, width, height, currentNodes, null)
+    nx = aligned.x
+    ny = aligned.y
+
     set((s) => ({
       nodes: {
         ...s.nodes,
@@ -152,7 +177,7 @@ const useStore = create((set, get) => ({
 
   moveNode: (id, x, y) => set((s) => {
     const node = s.nodes[id]
-    const nx = snap(x), ny = snap(y)
+    const { x: nx, y: ny } = alignSnap(x, y, node.width, node.height, s.nodes, id)
     if (tooClose(nx, ny, node.width, node.height, s.nodes, id)) return {}
 
     if (node.actorId) {
@@ -174,7 +199,7 @@ const useStore = create((set, get) => ({
   moveNodeGroup: (leadId, rawX, rawY, groupIds) => set(s => {
     const lead = s.nodes[leadId]
     if (!lead) return {}
-    const snappedX = snap(rawX), snappedY = snap(rawY)
+    const { x: snappedX, y: snappedY } = alignSnap(rawX, rawY, lead.width, lead.height, s.nodes, leadId)
     const dx = snappedX - lead.x
     const dy = snappedY - lead.y
     if (dx === 0 && dy === 0) return {}

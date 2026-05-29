@@ -3,13 +3,214 @@ import useStore from '../store/useStore.js'
 import { useZoom } from '../contexts/ZoomContext.jsx'
 import { pointsToPath, getPointAtT, projectOntoPath } from '../utils/routing.js'
 
-const PAD_X = 6
+const PAD_X = 10
 const PAD_Y = 3
 const FONT_SIZE = 10
-const CHAR_W = 5.8  // approximate px per char at 10px sans-serif
+const CHAR_W = 5.8
 
-export default function Link({ link, points }) {
-  const labelRef  = useRef(null)
+const ARROW_H  = 8   // triangle height
+const ARROW_HW = 5   // triangle half-base width
+const ICON_GAP = 4   // gap between triangle base and icon centre
+const ICON_R        = ARROW_HW   // default icon radius
+const LARGE_ICON_R  = 8          // larger icons for hurt/help/make/break
+const ICON_STUB     = 3
+const TRIM          = ARROW_H + ICON_GAP + ICON_R       * 2 - ICON_STUB
+const TRIM_LARGE    = ARROW_H + ICON_GAP + LARGE_ICON_R * 2 - ICON_STUB
+const TRIM_DOUBLE   = TRIM       + ICON_R       * 2 + 2
+const TRIM_DOUBLE_L = TRIM_LARGE + LARGE_ICON_R * 2 + 2
+const TRIM_NEEDED   = ARROW_H + ICON_GAP + ICON_R + ARROW_H / 2 - ICON_STUB  // inverse triangle
+
+// Types that also have a source-end decoration (triangle + icon).
+const SOURCE_DECORATED = new Set(['depends-on'])
+
+// Direction + tip at the TARGET end (last segment).
+function getEndArrow(points) {
+  const n = points.length
+  if (n < 2) return null
+  const p1 = points[n - 2], p2 = points[n - 1]
+  const len = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+  if (len === 0) return null
+  return { tip: p2, dx: (p2.x - p1.x) / len, dy: (p2.y - p1.y) / len }
+}
+
+// Direction + tip at the SOURCE end (first segment, pointing into source node).
+function getStartArrow(points) {
+  if (points.length < 2) return null
+  const p1 = points[1], p2 = points[0]
+  const len = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+  if (len === 0) return null
+  return { tip: p2, dx: (p2.x - p1.x) / len, dy: (p2.y - p1.y) / len }
+}
+
+function trimEnd(points, amount) {
+  const n = points.length
+  if (n < 2) return points
+  const p1 = points[n - 2], p2 = points[n - 1]
+  const len = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+  if (len === 0) return trimEnd(points.slice(0, n - 1), amount)
+  if (len < amount) return trimEnd(points.slice(0, n - 1), amount - len)
+  const dx = (p2.x - p1.x) / len, dy = (p2.y - p1.y) / len
+  return [...points.slice(0, n - 1), { x: p2.x - dx * amount, y: p2.y - dy * amount }]
+}
+
+function trimStart(points, amount) {
+  if (points.length < 2) return points
+  const p1 = points[0], p2 = points[1]
+  const len = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+  if (len === 0) return trimStart(points.slice(1), amount)
+  if (len < amount) return trimStart(points.slice(1), amount - len)
+  const dx = (p2.x - p1.x) / len, dy = (p2.y - p1.y) / len
+  return [{ x: p1.x + dx * amount, y: p1.y + dy * amount }, ...points.slice(1)]
+}
+
+function arrowPolygon({ tip, dx, dy }) {
+  const bx = tip.x - dx * ARROW_H, by = tip.y - dy * ARROW_H
+  return [
+    `${tip.x},${tip.y}`,
+    `${bx - dy * ARROW_HW},${by + dx * ARROW_HW}`,
+    `${bx + dy * ARROW_HW},${by - dx * ARROW_HW}`,
+  ].join(' ')
+}
+
+function iconPos({ tip, dx, dy }, r = ICON_R) {
+  const dist = ARROW_H + ICON_GAP + r
+  return { x: tip.x - dx * dist, y: tip.y - dy * dist }
+}
+
+function MinusCircle({ x, y, color, r = ICON_R }) {
+  return (
+    <>
+      <circle cx={x} cy={y} r={r} fill={color} />
+      <rect x={x - r * 0.6} y={y - 1} width={r * 1.2} height={2} fill="white" />
+    </>
+  )
+}
+
+function PlusSign({ x, y, fg, r = ICON_R }) {
+  return (
+    <>
+      <rect x={x - r * 0.6} y={y - 1} width={r * 1.2} height={2} fill={fg} />
+      <rect x={x - 1} y={y - r * 0.6} width={2} height={r * 1.2} fill={fg} />
+    </>
+  )
+}
+
+// Target-end icon (at the arrowhead end)
+function TargetIcon({ type, x, y, dx, dy, color, sw, andBar }) {
+  switch (type) {
+    case 'depends-on':
+      return <rect x={x - ICON_R + sw / 2} y={y - ICON_R + sw / 2}
+        width={(ICON_R - sw / 2) * 2} height={(ICON_R - sw / 2) * 2}
+        fill="white" stroke={color} strokeWidth={sw} style={{ pointerEvents: 'none' }} />
+    case 'hurt':
+      return <g style={{ pointerEvents: 'none' }}><MinusCircle x={x} y={y} color={color} r={LARGE_ICON_R} /></g>
+    case 'help':
+      return (
+        <g style={{ pointerEvents: 'none' }}>
+          <circle cx={x} cy={y} r={LARGE_ICON_R - sw / 2} fill="white" stroke={color} strokeWidth={sw} />
+          <PlusSign x={x} y={y} fg={color} r={LARGE_ICON_R} />
+        </g>
+      )
+    case 'make': {
+      const gap = LARGE_ICON_R * 2 + 2
+      const x2 = x - dx * gap, y2 = y - dy * gap
+      return (
+        <g style={{ pointerEvents: 'none' }}>
+          <circle cx={x2} cy={y2} r={LARGE_ICON_R - sw / 2} fill="white" stroke={color} strokeWidth={sw} />
+          <PlusSign x={x2} y={y2} fg={color} r={LARGE_ICON_R} />
+          <circle cx={x}  cy={y}  r={LARGE_ICON_R - sw / 2} fill="white" stroke={color} strokeWidth={sw} />
+          <PlusSign x={x}  y={y}  fg={color} r={LARGE_ICON_R} />
+        </g>
+      )
+    }
+    case 'break': {
+      const gap = LARGE_ICON_R * 2 + 2
+      const x2 = x - dx * gap, y2 = y - dy * gap
+      return (
+        <g style={{ pointerEvents: 'none' }}>
+          <MinusCircle x={x2} y={y2} color={color} r={LARGE_ICON_R} />
+          <MinusCircle x={x}  y={y}  color={color} r={LARGE_ICON_R} />
+        </g>
+      )
+    }
+    case 'needed-by': {
+      const tipX = x - dx * (ARROW_H / 2), tipY = y - dy * (ARROW_H / 2)
+      const bx = x + dx * (ARROW_H / 2),   by   = y + dy * (ARROW_H / 2)
+      const pts = [
+        `${tipX},${tipY}`,
+        `${bx - dy * ARROW_HW},${by + dx * ARROW_HW}`,
+        `${bx + dy * ARROW_HW},${by - dx * ARROW_HW}`,
+      ].join(' ')
+      const clipId = `nb-${x|0}-${y|0}`
+      return (
+        <g style={{ pointerEvents: 'none' }}>
+          <defs><clipPath id={clipId}><polygon points={pts} /></clipPath></defs>
+          <polygon points={pts} fill="white" stroke={color} strokeWidth={sw * 2} clipPath={`url(#${clipId})`} />
+        </g>
+      )
+    }
+    case 'and': {
+      const bar = andBar ?? {
+        x1: x + dy * ICON_R, y1: y - dx * ICON_R,
+        x2: x - dy * ICON_R, y2: y + dx * ICON_R,
+      }
+      return <line x1={bar.x1} y1={bar.y1} x2={bar.x2} y2={bar.y2}
+        stroke={color} strokeWidth={sw + 0.5} strokeLinecap="round"
+        style={{ pointerEvents: 'none' }} />
+    }
+    case 'xor':
+      return <circle cx={x} cy={y} r={ICON_R} fill={color} style={{ pointerEvents: 'none' }} />
+    case 'or':
+      return <circle cx={x} cy={y} r={ICON_R - sw / 2} fill="white" stroke={color} strokeWidth={sw} style={{ pointerEvents: 'none' }} />
+    case 'part-of': {
+      const r = ICON_R
+      const ah = 3, aw = 1.5
+      const toRad = d => d * Math.PI / 180
+      // Rotate so arc midpoints face the link direction (source → target = dx,dy)
+      const rotation = Math.atan2(-dy, -dx) * 180 / Math.PI - 265
+      return (
+        <g style={{ pointerEvents: 'none' }}>
+          {[[20, 150], [200, 330]].map(([from, to], i) => {
+            const fr = toRad(from + rotation), tr = toRad(to + rotation)
+            const sx = x + r * Math.cos(fr), sy = y + r * Math.sin(fr)
+            const ex = x + r * Math.cos(tr), ey = y + r * Math.sin(tr)
+            const tdx = -Math.sin(tr), tdy = Math.cos(tr)  // clockwise tangent at arc end
+            // Arc end is the arrowhead base; tip protrudes outward so arc never overlaps it
+            const tipX = ex + tdx * ah, tipY = ey + tdy * ah
+            const pts = [
+              `${tipX},${tipY}`,
+              `${ex - tdy * aw},${ey + tdx * aw}`,
+              `${ex + tdy * aw},${ey - tdx * aw}`,
+            ].join(' ')
+            return (
+              <g key={i}>
+                <path d={`M ${sx},${sy} A ${r},${r} 0 0 1 ${ex},${ey}`}
+                  fill="none" stroke={color} strokeWidth={sw} />
+                <polygon points={pts} fill={color} />
+              </g>
+            )
+          })}
+        </g>
+      )
+    }
+    default:
+      return <circle cx={x} cy={y} r={ICON_R - sw / 2} fill="white" stroke={color} strokeWidth={sw} style={{ pointerEvents: 'none' }} />
+  }
+}
+
+// Source-end icon (at the origin end)
+function SourceIcon({ type, x, y, color, sw }) {
+  switch (type) {
+    case 'depends-on':
+      return <rect x={x - ICON_R} y={y - ICON_R} width={ICON_R * 2} height={ICON_R * 2}
+        fill={color} stroke={color} strokeWidth={sw} style={{ pointerEvents: 'none' }} />
+    default:
+      return null
+  }
+}
+
+export default function Link({ link, points, andBar }) {
+  const labelRef   = useRef(null)
   const pointerRef = useRef(null)
   const [dragging, setDragging] = useState(false)
 
@@ -18,10 +219,27 @@ export default function Link({ link, points }) {
 
   if (!points || points.length < 2) return null
 
-  const d   = pointsToPath(points)
-  const t   = link.labelT ?? 0.5
-  const pos = getPointAtT(points, t)
+  const hasSource  = SOURCE_DECORATED.has(link.type)
+  const endArrow   = getEndArrow(points)
+  const startArrow = hasSource ? getStartArrow(points) : null
+
+  const isLarge = ['hurt', 'help', 'make', 'break'].includes(link.type)
+  const ir = isLarge ? LARGE_ICON_R : ICON_R
+  const isDouble = link.type === 'break' || link.type === 'make'
+  const endTrim = link.type === 'needed-by' ? TRIM_NEEDED
+    : link.type === 'and'     ? ARROW_H + ICON_GAP + ICON_R
+    : link.type === 'part-of' ? TRIM + ICON_STUB
+    : isDouble ? (isLarge ? TRIM_DOUBLE_L : TRIM_DOUBLE)
+    : isLarge ? TRIM_LARGE : TRIM
+  let trimmed = endArrow ? trimEnd(points, endTrim) : points
+  if (startArrow) trimmed = trimStart(trimmed, TRIM)
+
+  const d          = pointsToPath(trimmed)
+  const t          = link.labelT ?? 0.5
+  const pos        = getPointAtT(points, t)
   const isSelected = selectedId === link.id
+  const color      = isSelected ? '#0070f3' : '#555'
+  const sw         = isSelected ? 2 : 1.5
 
   const clientToWorld = (cx, cy) => {
     const rect = labelRef.current.ownerSVGElement.getBoundingClientRect()
@@ -67,24 +285,34 @@ export default function Link({ link, points }) {
       deleteLink(link.id)
   }
 
-  const labelText = link.type ?? ''
+  const labelText = (link.type ?? '').toUpperCase()
   const boxW = labelText.length * CHAR_W + PAD_X * 2
   const boxH = FONT_SIZE + PAD_Y * 2
 
   return (
     <g onKeyDown={handleKeyDown} tabIndex={0} style={{ outline: 'none' }}>
-      {/* Wide invisible hit area on path */}
+      {/* Wide invisible hit area */}
       <path d={d} fill="none" stroke="transparent" strokeWidth={10}
         style={{ cursor: 'pointer' }} onClick={handlePathClick} />
 
       {/* Visible path */}
-      <path
-        d={d}
-        fill="none"
-        stroke={isSelected ? '#0070f3' : '#555'}
-        strokeWidth={isSelected ? 2 : 1.5}
-        markerEnd="url(#arrow-default)"
-      />
+      <path d={d} fill="none" stroke={color} strokeWidth={isSelected ? 2 : 1.5} />
+
+      {/* Target end: triangle + icon */}
+      {endArrow && (
+        <>
+          <polygon points={arrowPolygon(endArrow)} fill={color} style={{ pointerEvents: 'none' }} />
+          <TargetIcon type={link.type} {...iconPos(endArrow, ir)} dx={endArrow.dx} dy={endArrow.dy} color={color} sw={sw} andBar={andBar} />
+        </>
+      )}
+
+      {/* Source end: triangle + icon */}
+      {startArrow && (
+        <>
+          <polygon points={arrowPolygon(startArrow)} fill={color} style={{ pointerEvents: 'none' }} />
+          <SourceIcon type={link.type} {...iconPos(startArrow)} color={color} sw={sw} />
+        </>
+      )}
 
       {/* Draggable label badge */}
       <g
@@ -97,21 +325,15 @@ export default function Link({ link, points }) {
         onPointerCancel={onLabelPointerUp}
       >
         <rect
-          x={-boxW / 2}
-          y={-boxH / 2}
-          width={boxW}
-          height={boxH}
-          rx={3}
-          fill="white"
-          stroke={isSelected ? '#0070f3' : '#aaa'}
+          x={-boxW / 2} y={-boxH / 2}
+          width={boxW} height={boxH}
+          rx={boxH / 2} fill="white"
+          stroke={color}
           strokeWidth={1}
         />
         <text
-          textAnchor="middle"
-          dominantBaseline="central"
-          fontSize={FONT_SIZE}
-          fontFamily="sans-serif"
-          fill="#333"
+          textAnchor="middle" dominantBaseline="central"
+          fontSize={FONT_SIZE} fontFamily="sans-serif" fill="#333"
           style={{ pointerEvents: 'none', userSelect: 'none' }}
         >
           {labelText}

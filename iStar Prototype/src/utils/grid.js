@@ -1,5 +1,6 @@
 export const GRID = 20
-export const snap = (v) => Math.round(v / GRID) * GRID
+export const SNAP_TO_GRID = false  // set true to revert to grid-snapped placement
+export const snap = (v) => SNAP_TO_GRID ? Math.round(v / GRID) * GRID : v
 
 // ── Node sizing constants ─────────────────────────────────────────────────────
 export const NODE_MIN_W  = 100   // minimum node width
