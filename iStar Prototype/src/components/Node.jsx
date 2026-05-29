@@ -31,7 +31,10 @@ export default function Node({ node }) {
   const { mode, selectedId, select, moveNode, moveNodeGroup,
     addToSelection, setPendingLink, setDraggingNode } = useStore()
 
-  const isSelected = useStore(s => s.selectedId === node.id || s.selectedIds.includes(node.id))
+  const isSelected   = useStore(s => s.selectedId === node.id || s.selectedIds.includes(node.id))
+  const filterMode   = useStore(s => s.filterMode)
+  const filterTypes  = useStore(s => s.filterTypes)
+  const isDimmed     = filterMode !== 'off' && !!filterTypes && !filterTypes.includes(node.type)
 
   const clientToWorld = (cx, cy) => {
     const pt = gRef.current.ownerSVGElement.createSVGPoint()
@@ -131,7 +134,11 @@ export default function Node({ node }) {
     <g
       ref={gRef}
       transform={`translate(${node.x},${node.y})`}
-      style={{ cursor: 'move', touchAction: 'none' }}
+      style={{
+        cursor: 'move', touchAction: 'none',
+        opacity: isDimmed ? (filterMode === 'isolate' ? 0 : 0.12) : 1,
+        pointerEvents: isDimmed && filterMode === 'isolate' ? 'none' : undefined,
+      }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}

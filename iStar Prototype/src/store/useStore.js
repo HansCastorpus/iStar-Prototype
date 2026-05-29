@@ -91,6 +91,22 @@ const useStore = create((set, get) => ({
   draggingNodeId: null,
   selectedIds: [],    // multi-select node IDs
 
+  // ── Filter ───────────────────────────────────────────────────────────────────
+  filterMode: 'off',    // 'off' | 'highlight' | 'isolate'
+  filterTypes: null,    // null = all active; string[] when a mode is on
+
+  setFilterMode: (mode) => set(s => {
+    if (mode === 'off' || mode === s.filterMode)
+      return { filterMode: 'off', filterTypes: null }
+    return { filterMode: mode, filterTypes: s.filterTypes ?? [...ALL_TYPES] }
+  }),
+
+  toggleFilterType: (type) => set(s => {
+    if (!s.filterTypes) return {}
+    const has = s.filterTypes.includes(type)
+    return { filterTypes: has ? s.filterTypes.filter(t => t !== type) : [...s.filterTypes, type] }
+  }),
+
   // ── Mode ─────────────────────────────────────────────────────────────────────
   setMode: (mode) => set({ mode, connectSource: null, pendingLink: null }),
   setDraggingNode: (id) => set({ draggingNodeId: id }),

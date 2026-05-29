@@ -23,6 +23,13 @@ const TRIM_NEEDED   = ARROW_H + ICON_GAP + ICON_R + ARROW_H / 2 - ICON_STUB  // 
 // Types that also have a source-end decoration (triangle + icon).
 const SOURCE_DECORATED = new Set(['depends-on'])
 
+const HIGHLIGHT_STYLES = {
+  hurt:  { color: '#EE3131', sw: 8 },
+  break: { color: '#EE3131', sw: 8 },
+  help:  { color: '#457DF5', sw: 8 },
+  make:  { color: '#457DF5', sw: 8 },
+}
+
 // Direction + tip at the TARGET end (last segment).
 function getEndArrow(points) {
   const n = points.length
@@ -216,6 +223,9 @@ export default function Link({ link, points, andBar }) {
 
   const { selectedId, select, deleteLink, updateLink } = useStore()
   const { transformRef } = useZoom()
+  const filterMode  = useStore(s => s.filterMode)
+  const filterTypes = useStore(s => s.filterTypes)
+  const isDimmed    = filterMode !== 'off' && !!filterTypes && !filterTypes.includes(link.type)
 
   if (!points || points.length < 2) return null
 
@@ -237,9 +247,11 @@ export default function Link({ link, points, andBar }) {
   const d          = pointsToPath(trimmed)
   const t          = link.labelT ?? 0.5
   const pos        = getPointAtT(points, t)
-  const isSelected = selectedId === link.id
-  const color      = isSelected ? '#0070f3' : '#555'
-  const sw         = isSelected ? 2 : 1.5
+  const isSelected      = selectedId === link.id
+  const isFilterActive  = filterMode === 'highlight' && !!filterTypes && filterTypes.includes(link.type)
+  const hlStyle         = isFilterActive ? HIGHLIGHT_STYLES[link.type] : null
+  const color           = hlStyle?.color ?? (isSelected ? '#0070f3' : '#555')
+  const sw              = hlStyle?.sw    ?? (isSelected ? 2 : 1.5)
 
   const clientToWorld = (cx, cy) => {
     const rect = labelRef.current.ownerSVGElement.getBoundingClientRect()
@@ -290,13 +302,17 @@ export default function Link({ link, points, andBar }) {
   const boxH = FONT_SIZE + PAD_Y * 2
 
   return (
-    <g onKeyDown={handleKeyDown} tabIndex={0} style={{ outline: 'none' }}>
+    <g onKeyDown={handleKeyDown} tabIndex={0} style={{
+      outline: 'none',
+      opacity: isDimmed ? (filterMode === 'isolate' ? 0 : 0.12) : 1,
+      pointerEvents: isDimmed && filterMode === 'isolate' ? 'none' : undefined,
+    }}>
       {/* Wide invisible hit area */}
       <path d={d} fill="none" stroke="transparent" strokeWidth={10}
         style={{ cursor: 'pointer' }} onClick={handlePathClick} />
 
       {/* Visible path */}
-      <path d={d} fill="none" stroke={color} strokeWidth={isSelected ? 2 : 1.5} />
+      <path d={d} fill="none" stroke={color} strokeWidth={sw} />
 
       {/* Target end: triangle + icon */}
       {endArrow && (
