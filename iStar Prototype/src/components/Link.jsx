@@ -24,10 +24,14 @@ const TRIM_NEEDED   = ARROW_H + ICON_GAP + ICON_R + ARROW_H / 2 - ICON_STUB  // 
 const SOURCE_DECORATED = new Set(['depends-on'])
 
 const HIGHLIGHT_STYLES = {
-  hurt:  { color: '#EE3131', sw: 8 },
-  break: { color: '#EE3131', sw: 8 },
-  help:  { color: '#457DF5', sw: 8 },
-  make:  { color: '#457DF5', sw: 8 },
+  hurt:       { color: '#EE3131', sw: 8 },
+  break:      { color: '#EE3131', sw: 8 },
+  help:       { color: '#457DF5', sw: 8 },
+  make:       { color: '#457DF5', sw: 8 },
+  'needed-by':  { color: '#555',    sw: 4, dash: '8 4' },
+  'depends-on': { color: '#555752', sw: 4 },
+  'or':         { color: '#F8B331', sw: 4 },
+  'and':        { color: '#21755D', sw: 4 },
 }
 
 // Direction + tip at the TARGET end (last segment).
@@ -93,11 +97,11 @@ function MinusCircle({ x, y, color, r = ICON_R }) {
   )
 }
 
-function PlusSign({ x, y, fg, r = ICON_R }) {
+function PlusSign({ x, y, r = ICON_R }) {
   return (
     <>
-      <rect x={x - r * 0.6} y={y - 1} width={r * 1.2} height={2} fill={fg} />
-      <rect x={x - 1} y={y - r * 0.6} width={2} height={r * 1.2} fill={fg} />
+      <rect x={x - r * 0.6} y={y - 1} width={r * 1.2} height={2} fill="white" />
+      <rect x={x - 1} y={y - r * 0.6} width={2} height={r * 1.2} fill="white" />
     </>
   )
 }
@@ -106,16 +110,16 @@ function PlusSign({ x, y, fg, r = ICON_R }) {
 function TargetIcon({ type, x, y, dx, dy, color, sw, andBar }) {
   switch (type) {
     case 'depends-on':
-      return <rect x={x - ICON_R + sw / 2} y={y - ICON_R + sw / 2}
-        width={(ICON_R - sw / 2) * 2} height={(ICON_R - sw / 2) * 2}
+      return <rect x={x - LARGE_ICON_R + sw / 2} y={y - LARGE_ICON_R + sw / 2}
+        width={(LARGE_ICON_R - sw / 2) * 2} height={(LARGE_ICON_R - sw / 2) * 2}
         fill="white" stroke={color} strokeWidth={sw} style={{ pointerEvents: 'none' }} />
     case 'hurt':
       return <g style={{ pointerEvents: 'none' }}><MinusCircle x={x} y={y} color={color} r={LARGE_ICON_R} /></g>
     case 'help':
       return (
         <g style={{ pointerEvents: 'none' }}>
-          <circle cx={x} cy={y} r={LARGE_ICON_R - sw / 2} fill="white" stroke={color} strokeWidth={sw} />
-          <PlusSign x={x} y={y} fg={color} r={LARGE_ICON_R} />
+          <circle cx={x} cy={y} r={LARGE_ICON_R} fill={color} />
+          <PlusSign x={x} y={y} r={LARGE_ICON_R} />
         </g>
       )
     case 'make': {
@@ -123,10 +127,10 @@ function TargetIcon({ type, x, y, dx, dy, color, sw, andBar }) {
       const x2 = x - dx * gap, y2 = y - dy * gap
       return (
         <g style={{ pointerEvents: 'none' }}>
-          <circle cx={x2} cy={y2} r={LARGE_ICON_R - sw / 2} fill="white" stroke={color} strokeWidth={sw} />
-          <PlusSign x={x2} y={y2} fg={color} r={LARGE_ICON_R} />
-          <circle cx={x}  cy={y}  r={LARGE_ICON_R - sw / 2} fill="white" stroke={color} strokeWidth={sw} />
-          <PlusSign x={x}  y={y}  fg={color} r={LARGE_ICON_R} />
+          <circle cx={x2} cy={y2} r={LARGE_ICON_R} fill={color} />
+          <PlusSign x={x2} y={y2} r={LARGE_ICON_R} />
+          <circle cx={x}  cy={y}  r={LARGE_ICON_R} fill={color} />
+          <PlusSign x={x}  y={y}  r={LARGE_ICON_R} />
         </g>
       )
     }
@@ -162,13 +166,15 @@ function TargetIcon({ type, x, y, dx, dy, color, sw, andBar }) {
         x2: x - dy * ICON_R, y2: y + dx * ICON_R,
       }
       return <line x1={bar.x1} y1={bar.y1} x2={bar.x2} y2={bar.y2}
-        stroke={color} strokeWidth={sw + 0.5} strokeLinecap="round"
+        stroke={color} strokeWidth={1.5} strokeLinecap="round"
         style={{ pointerEvents: 'none' }} />
     }
     case 'xor':
       return <circle cx={x} cy={y} r={ICON_R} fill={color} style={{ pointerEvents: 'none' }} />
-    case 'or':
-      return <circle cx={x} cy={y} r={ICON_R - sw / 2} fill="white" stroke={color} strokeWidth={sw} style={{ pointerEvents: 'none' }} />
+    case 'or': {
+      const isw = Math.min(sw, 1.5)
+      return <circle cx={x} cy={y} r={ICON_R - isw / 2} fill="white" stroke={color} strokeWidth={isw} style={{ pointerEvents: 'none' }} />
+    }
     case 'part-of': {
       const r = ICON_R
       const ah = 3, aw = 1.5
@@ -209,8 +215,8 @@ function TargetIcon({ type, x, y, dx, dy, color, sw, andBar }) {
 function SourceIcon({ type, x, y, color, sw }) {
   switch (type) {
     case 'depends-on':
-      return <rect x={x - ICON_R} y={y - ICON_R} width={ICON_R * 2} height={ICON_R * 2}
-        fill={color} stroke={color} strokeWidth={sw} style={{ pointerEvents: 'none' }} />
+      return <rect x={x - LARGE_ICON_R} y={y - LARGE_ICON_R} width={LARGE_ICON_R * 2} height={LARGE_ICON_R * 2}
+        fill={color} style={{ pointerEvents: 'none' }} />
     default:
       return null
   }
@@ -233,7 +239,7 @@ export default function Link({ link, points, andBar }) {
   const endArrow   = getEndArrow(points)
   const startArrow = hasSource ? getStartArrow(points) : null
 
-  const isLarge = ['hurt', 'help', 'make', 'break'].includes(link.type)
+  const isLarge = ['hurt', 'help', 'make', 'break', 'depends-on'].includes(link.type)
   const ir = isLarge ? LARGE_ICON_R : ICON_R
   const isDouble = link.type === 'break' || link.type === 'make'
   const endTrim = link.type === 'needed-by' ? TRIM_NEEDED
@@ -242,7 +248,7 @@ export default function Link({ link, points, andBar }) {
     : isDouble ? (isLarge ? TRIM_DOUBLE_L : TRIM_DOUBLE)
     : isLarge ? TRIM_LARGE : TRIM
   let trimmed = endArrow ? trimEnd(points, endTrim) : points
-  if (startArrow) trimmed = trimStart(trimmed, TRIM)
+  if (startArrow) trimmed = trimStart(trimmed, isLarge ? TRIM_LARGE : TRIM)
 
   const d          = pointsToPath(trimmed)
   const t          = link.labelT ?? 0.5
@@ -312,7 +318,7 @@ export default function Link({ link, points, andBar }) {
         style={{ cursor: 'pointer' }} onClick={handlePathClick} />
 
       {/* Visible path */}
-      <path d={d} fill="none" stroke={color} strokeWidth={sw} />
+      <path d={d} fill="none" stroke={color} strokeWidth={sw} strokeDasharray={hlStyle?.dash} />
 
       {/* Target end: triangle + icon */}
       {endArrow && (
@@ -326,7 +332,7 @@ export default function Link({ link, points, andBar }) {
       {startArrow && (
         <>
           <polygon points={arrowPolygon(startArrow)} fill={color} style={{ pointerEvents: 'none' }} />
-          <SourceIcon type={link.type} {...iconPos(startArrow)} color={color} sw={sw} />
+          <SourceIcon type={link.type} {...iconPos(startArrow, ir)} color={color} sw={sw} />
         </>
       )}
 
