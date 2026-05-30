@@ -52,8 +52,10 @@ export default function Toolbar() {
       background: '#fafafa',
       flexShrink: 0,
     }}>
-      {/* Left spacer */}
-      <div style={{ flex: 1 }} />
+      {/* Title */}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+        <span style={{ fontSize: 13, fontFamily: 'monospace', color: '#333' }}>iStar Prototype</span>
+      </div>
 
       {/* Centered mode buttons */}
       <div style={{ display: 'flex', gap: 4 }}>
@@ -78,8 +80,6 @@ export default function Toolbar() {
 
       {/* Right actions */}
       <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', gap: 4, alignItems: 'center' }}>
-        <span style={{ fontSize: 13, fontFamily: 'monospace', color: '#333', marginRight: 8 }}>iStar Prototype</span>
-        <div style={{ width: 1, height: 16, background: '#ddd' }} />
         <button onClick={exportDiagram} style={actionBtn}>Export JSON</button>
         <button onClick={() => exportAsImage('png')} style={actionBtn}>PNG</button>
         <button onClick={() => exportAsImage('jpeg')} style={actionBtn}>JPEG</button>
