@@ -65,9 +65,9 @@ export default function Toolbar() {
               background: mode === id ? '#222' : 'none',
               color: mode === id ? '#fff' : '#333',
               border: '1px solid #ccc',
-              padding: '3px 10px',
+              padding: '5px 14px',
               cursor: 'pointer',
-              fontSize: 11,
+              fontSize: 13,
               fontFamily: 'monospace',
             }}
           >
@@ -78,6 +78,8 @@ export default function Toolbar() {
 
       {/* Right actions */}
       <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', gap: 4, alignItems: 'center' }}>
+        <span style={{ fontSize: 13, fontFamily: 'monospace', color: '#333', marginRight: 8 }}>iStar Prototype</span>
+        <div style={{ width: 1, height: 16, background: '#ddd' }} />
         <button onClick={exportDiagram} style={actionBtn}>Export JSON</button>
         <button onClick={() => exportAsImage('png')} style={actionBtn}>PNG</button>
         <button onClick={() => exportAsImage('jpeg')} style={actionBtn}>JPEG</button>
@@ -91,7 +93,7 @@ export default function Toolbar() {
           <button onClick={armClear} style={actionBtn}>Clear</button>
         ) : (
           <>
-            <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#c00' }}>Wipe canvas?</span>
+            <span style={{ fontSize: 13, fontFamily: 'monospace', color: '#c00' }}>Wipe canvas?</span>
             <button onClick={confirmClear} style={{ ...actionBtn, borderColor: '#c00', color: '#c00' }}>Confirm</button>
             <button onClick={cancelClear} style={actionBtn}>Cancel</button>
           </>
@@ -104,8 +106,8 @@ export default function Toolbar() {
 const actionBtn = {
   background: 'none',
   border: '1px solid #ccc',
-  padding: '3px 10px',
+  padding: '5px 14px',
   cursor: 'pointer',
-  fontSize: 11,
+  fontSize: 13,
   fontFamily: 'monospace',
 }
