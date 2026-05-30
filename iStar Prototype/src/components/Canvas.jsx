@@ -160,8 +160,8 @@ export default function Canvas() {
             ))
           }
 
-          {/* Port zone overlay — shown when a node is selected */}
-          {selectedType === 'node' && selectedId && nodes[selectedId] && (() => {
+          {/* Port zone overlay — hidden; keep for debugging (re-enable by removing `false &&`) */}
+          {false && selectedType === 'node' && selectedId && nodes[selectedId] && (() => {
             const n = nodes[selectedId]
             const cx = n.x + n.width / 2
             const cy = n.y + n.height / 2

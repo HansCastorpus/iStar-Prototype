@@ -2,6 +2,7 @@ import { GRID, snap } from './grid.js'
 import { getSlotPosition, getSideDirection, STUB } from './ports.js'
 
 const DETOUR_PAD    = GRID * 2
+const OUTER_PAD     = 80
 const SEG_OFFSET    = 8    // px separation between overlapping parallel segments
 const CORNER_RADIUS = 15   // px radius for rounded corners
 // Diagonal route fires only when both dx and dy between stub-ends are at least
@@ -260,6 +261,70 @@ function buildPath(sourceNode, sourceSlot, targetNode, targetSlot, allNodes, exi
   return [ps, s, ...referenceMid, t, pt]
 }
 
+// ── Outer-boundary routing ────────────────────────────────────────────────────
+
+// Routes a single link around the outside of all nodes' combined bounding box.
+// Generates 8 candidates (via each outer edge and corner); picks the shortest
+// that doesn't cross any node interior.
+// side: null (auto) | 'left' | 'right' | 'top' | 'bottom'
+function buildOuterPath(sourceNode, sourceSlot, targetNode, targetSlot, allNodes, side = null) {
+  const ps = getSlotPosition(sourceNode, sourceSlot.side, sourceSlot.offset)
+  const pt = getSlotPosition(targetNode, targetSlot.side, targetSlot.offset)
+  const ds = getSideDirection(sourceSlot.side)
+  const dt = getSideDirection(targetSlot.side)
+  const s = { x: ps.x + ds.dx * STUB, y: ps.y + ds.dy * STUB }
+  const t = { x: pt.x + dt.dx * STUB, y: pt.y + dt.dy * STUB }
+
+  const nodeArr = Object.values(allNodes)
+  const xs = nodeArr.flatMap(n => [n.x, n.x + n.width])
+  const ys = nodeArr.flatMap(n => [n.y, n.y + n.height])
+  const bx  = (xs.length ? Math.min(...xs) : Math.min(s.x, t.x)) - OUTER_PAD
+  const bx2 = (xs.length ? Math.max(...xs) : Math.max(s.x, t.x)) + OUTER_PAD
+  const by  = (ys.length ? Math.min(...ys) : Math.min(s.y, t.y)) - OUTER_PAD
+  const by2 = (ys.length ? Math.max(...ys) : Math.max(s.y, t.y)) + OUTER_PAD
+
+  const srcId = sourceNode.id, tgtId = targetNode.id
+
+  const left = [
+    [ps, s, {x:bx,  y:s.y}, {x:bx,  y:t.y}, t, pt],
+    [ps, s, {x:s.x, y:by},  {x:bx,  y:by},  {x:bx,  y:t.y}, t, pt],
+    [ps, s, {x:s.x, y:by2}, {x:bx,  y:by2}, {x:bx,  y:t.y}, t, pt],
+  ]
+  const right = [
+    [ps, s, {x:bx2, y:s.y}, {x:bx2, y:t.y}, t, pt],
+    [ps, s, {x:s.x, y:by},  {x:bx2, y:by},  {x:bx2, y:t.y}, t, pt],
+    [ps, s, {x:s.x, y:by2}, {x:bx2, y:by2}, {x:bx2, y:t.y}, t, pt],
+  ]
+  const top = [
+    [ps, s, {x:s.x, y:by},  {x:t.x, y:by},  t, pt],
+    [ps, s, {x:bx,  y:s.y}, {x:bx,  y:by},  {x:t.x, y:by},  t, pt],
+    [ps, s, {x:bx2, y:s.y}, {x:bx2, y:by},  {x:t.x, y:by},  t, pt],
+  ]
+  const bottom = [
+    [ps, s, {x:s.x, y:by2}, {x:t.x, y:by2}, t, pt],
+    [ps, s, {x:bx,  y:s.y}, {x:bx,  y:by2}, {x:t.x, y:by2}, t, pt],
+    [ps, s, {x:bx2, y:s.y}, {x:bx2, y:by2}, {x:t.x, y:by2}, t, pt],
+  ]
+
+  const candidates = side === 'left'   ? left
+    : side === 'right'  ? right
+    : side === 'top'    ? top
+    : side === 'bottom' ? bottom
+    : [...left, ...right, ...top, ...bottom]
+
+  const pathLen = pts => {
+    let len = 0
+    for (let i = 1; i < pts.length; i++)
+      len += Math.hypot(pts[i].x - pts[i-1].x, pts[i].y - pts[i-1].y)
+    return len
+  }
+
+  const clear = pts => !firstBlocker(pts, nodeArr, srcId, tgtId)
+  const pool = candidates.filter(clear)
+  const best = (pool.length > 0 ? pool : candidates).reduce((b, p) => pathLen(p) < pathLen(b) ? p : b)
+  return removeCollinear(best)
+}
+
 // ── Segment-overlap separation ────────────────────────────────────────────────
 
 function segKey(p1, p2) {
@@ -418,10 +483,9 @@ function alignSlots(nodes, mutableSlots, linkList, pathMap, existingSegs) {
     if (!changedLinks.has(link.id)) continue
     const slots  = mutableSlots[link.id]
     const others = existingSegs.filter(s => s.linkId !== link.id)
-    const newPts = buildPath(
-      nodes[link.sourceId], slots.sourceSlot,
-      nodes[link.targetId], slots.targetSlot,
-      nodes, others)
+    const newPts = link.outerRoute
+      ? buildOuterPath(nodes[link.sourceId], slots.sourceSlot, nodes[link.targetId], slots.targetSlot, nodes, link.outerRouteSide ?? null)
+      : buildPath(nodes[link.sourceId], slots.sourceSlot, nodes[link.targetId], slots.targetSlot, nodes, others)
     pathMap[link.id] = newPts
     const filtered = existingSegs.filter(s => s.linkId !== link.id)
     existingSegs.length = 0
@@ -478,15 +542,20 @@ export function computeAllPaths(nodes, linkSlots, links) {
   for (const link of linkList) {
     const src   = nodes[link.sourceId], tgt = nodes[link.targetId]
     const slots = mutableSlots[link.id]
-    const pts   = buildPath(src, slots.sourceSlot, tgt, slots.targetSlot, nodes, existingSegs)
+    const pts = link.outerRoute
+      ? buildOuterPath(src, slots.sourceSlot, tgt, slots.targetSlot, nodes, link.outerRouteSide ?? null)
+      : buildPath(src, slots.sourceSlot, tgt, slots.targetSlot, nodes, existingSegs)
     pathMap[link.id] = pts
     existingSegs.push(...pathToSegs(pts, link.id, link.sourceId, link.targetId))
   }
 
-  // Align slot positions to actual path directions; run twice to catch cascades.
+  // alignSlots runs on all links so outer-routed links get correct slot ordering too.
+  // reroutePass skips outer-routed links since their path shape is intentionally fixed.
+  const innerLinks = linkList.filter(l => !l.outerRoute)
+
   if (alignSlots(nodes, mutableSlots, linkList, pathMap, existingSegs))
     alignSlots(nodes, mutableSlots, linkList, pathMap, existingSegs)
-  reroutePass(nodes, mutableSlots, linkList, pathMap, existingSegs)
+  reroutePass(nodes, mutableSlots, innerLinks, pathMap, existingSegs)
   separateOverlaps(pathMap)
   for (const id of Object.keys(pathMap)) pathMap[id] = simplifyPoints(pathMap[id])
   return pathMap

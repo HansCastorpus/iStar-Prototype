@@ -110,8 +110,8 @@ function PlusSign({ x, y, r = ICON_R }) {
 function TargetIcon({ type, x, y, dx, dy, color, sw, andBar }) {
   switch (type) {
     case 'depends-on':
-      return <rect x={x - LARGE_ICON_R + sw / 2} y={y - LARGE_ICON_R + sw / 2}
-        width={(LARGE_ICON_R - sw / 2) * 2} height={(LARGE_ICON_R - sw / 2) * 2}
+      return <rect x={x - ICON_R + sw / 2} y={y - ICON_R + sw / 2}
+        width={(ICON_R - sw / 2) * 2} height={(ICON_R - sw / 2) * 2}
         fill="white" stroke={color} strokeWidth={sw} style={{ pointerEvents: 'none' }} />
     case 'hurt':
       return <g style={{ pointerEvents: 'none' }}><MinusCircle x={x} y={y} color={color} r={LARGE_ICON_R} /></g>
@@ -215,7 +215,7 @@ function TargetIcon({ type, x, y, dx, dy, color, sw, andBar }) {
 function SourceIcon({ type, x, y, color, sw }) {
   switch (type) {
     case 'depends-on':
-      return <rect x={x - LARGE_ICON_R} y={y - LARGE_ICON_R} width={LARGE_ICON_R * 2} height={LARGE_ICON_R * 2}
+      return <rect x={x - ICON_R} y={y - ICON_R} width={ICON_R * 2} height={ICON_R * 2}
         fill={color} style={{ pointerEvents: 'none' }} />
     default:
       return null
@@ -229,9 +229,10 @@ export default function Link({ link, points, andBar }) {
 
   const { selectedId, select, deleteLink, updateLink } = useStore()
   const { transformRef } = useZoom()
-  const filterMode  = useStore(s => s.filterMode)
-  const filterTypes = useStore(s => s.filterTypes)
-  const isDimmed    = filterMode !== 'off' && !!filterTypes && !filterTypes.includes(link.type)
+  const highlightTypes = useStore(s => s.highlightTypes)
+  const isolateTypes   = useStore(s => s.isolateTypes)
+
+  const isHidden = !isolateTypes.includes(link.type)
 
   if (!points || points.length < 2) return null
 
@@ -239,7 +240,7 @@ export default function Link({ link, points, andBar }) {
   const endArrow   = getEndArrow(points)
   const startArrow = hasSource ? getStartArrow(points) : null
 
-  const isLarge = ['hurt', 'help', 'make', 'break', 'depends-on'].includes(link.type)
+  const isLarge = ['hurt', 'help', 'make', 'break'].includes(link.type)
   const ir = isLarge ? LARGE_ICON_R : ICON_R
   const isDouble = link.type === 'break' || link.type === 'make'
   const endTrim = link.type === 'needed-by' ? TRIM_NEEDED
@@ -254,7 +255,7 @@ export default function Link({ link, points, andBar }) {
   const t          = link.labelT ?? 0.5
   const pos        = getPointAtT(points, t)
   const isSelected      = selectedId === link.id
-  const isFilterActive  = filterMode === 'highlight' && !!filterTypes && filterTypes.includes(link.type)
+  const isFilterActive  = highlightTypes.length > 0 && highlightTypes.includes(link.type)
   const hlStyle         = isFilterActive ? HIGHLIGHT_STYLES[link.type] : null
   const color           = hlStyle?.color ?? (isSelected ? '#0070f3' : '#555')
   const sw              = hlStyle?.sw    ?? (isSelected ? 2 : 1.5)
@@ -310,8 +311,8 @@ export default function Link({ link, points, andBar }) {
   return (
     <g onKeyDown={handleKeyDown} tabIndex={0} style={{
       outline: 'none',
-      opacity: isDimmed ? (filterMode === 'isolate' ? 0 : 0.12) : 1,
-      pointerEvents: isDimmed && filterMode === 'isolate' ? 'none' : undefined,
+      opacity: isHidden ? 0 : 1,
+      pointerEvents: isHidden ? 'none' : undefined,
     }}>
       {/* Wide invisible hit area */}
       <path d={d} fill="none" stroke="transparent" strokeWidth={10}

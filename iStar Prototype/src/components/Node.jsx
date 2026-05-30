@@ -31,10 +31,16 @@ export default function Node({ node }) {
   const { mode, selectedId, select, moveNode, moveNodeGroup,
     addToSelection, setPendingLink, setDraggingNode } = useStore()
 
-  const isSelected   = useStore(s => s.selectedId === node.id || s.selectedIds.includes(node.id))
-  const filterMode   = useStore(s => s.filterMode)
-  const filterTypes  = useStore(s => s.filterTypes)
-  const isDimmed     = filterMode !== 'off' && !!filterTypes && !filterTypes.includes(node.type)
+  const isSelected = useStore(s => s.selectedId === node.id || s.selectedIds.includes(node.id))
+  const highlightTypes = useStore(s => s.highlightTypes)
+  const isolateTypes = useStore(s => s.isolateTypes)
+
+  const highlightActive = highlightTypes.length > 0
+  const isHidden       = !isolateTypes.includes(node.type)
+  const isHighlighted  = highlightActive && highlightTypes.includes(node.type)
+
+  const HIGHLIGHT_FILLS = { goal: '#d0cabf', task: '#A2BBD9', softgoal: '#e2dfd5', resource: '#AFD2AF' }
+  const hlFill = isHighlighted ? (HIGHLIGHT_FILLS[node.type] ?? 'white') : 'white'
 
   const clientToWorld = (cx, cy) => {
     const pt = gRef.current.ownerSVGElement.createSVGPoint()
@@ -136,8 +142,8 @@ export default function Node({ node }) {
       transform={`translate(${node.x},${node.y})`}
       style={{
         cursor: 'move', touchAction: 'none',
-        opacity: isDimmed ? (filterMode === 'isolate' ? 0 : 0.12) : 1,
-        pointerEvents: isDimmed && filterMode === 'isolate' ? 'none' : undefined,
+        opacity: isHidden ? 0 : 1,
+        pointerEvents: isHidden ? 'none' : undefined,
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -147,7 +153,7 @@ export default function Node({ node }) {
       {node.type === 'task' ? (
         <path
           d={`M ${GOAL_PAD_X},0 L ${node.width - GOAL_PAD_X},0 L ${node.width},${node.height / 2} L ${node.width - GOAL_PAD_X},${node.height} L ${GOAL_PAD_X},${node.height} L 0,${node.height / 2} Z`}
-          fill="white"
+          fill={hlFill}
           stroke={isSelected ? '#0070f3' : stroke}
           strokeWidth={isSelected ? 2 : 1}
         />
@@ -157,7 +163,7 @@ export default function Node({ node }) {
             width={node.width}
             height={node.height}
             rx={(node.type === 'goal' || node.type === 'softgoal') ? node.height / 2 : 0}
-            fill="white"
+            fill={hlFill}
             stroke={isSelected ? '#0070f3' : stroke}
             strokeWidth={isSelected ? 2 : 1}
           />

@@ -92,20 +92,27 @@ const useStore = create((set, get) => ({
   selectedIds: [],    // multi-select node IDs
 
   // ── Filter ───────────────────────────────────────────────────────────────────
-  filterMode: 'off',    // 'off' | 'highlight' | 'isolate'
-  filterTypes: null,    // null = all active; string[] when a mode is on
+  highlightTypes: [],              // types currently highlighted; empty = mode off
+  isolateTypes:   [...ALL_TYPES],  // types currently isolated;   empty = mode off
 
-  setFilterMode: (mode) => set(s => {
-    if (mode === 'off' || mode === s.filterMode)
-      return { filterMode: 'off', filterTypes: null }
-    return { filterMode: mode, filterTypes: s.filterTypes ?? [...ALL_TYPES] }
+  toggleHighlightType: (type) => set(s => {
+    const has = s.highlightTypes.includes(type)
+    return { highlightTypes: has ? s.highlightTypes.filter(t => t !== type) : [...s.highlightTypes, type] }
   }),
 
-  toggleFilterType: (type) => set(s => {
-    if (!s.filterTypes) return {}
-    const has = s.filterTypes.includes(type)
-    return { filterTypes: has ? s.filterTypes.filter(t => t !== type) : [...s.filterTypes, type] }
+  toggleIsolateType: (type) => set(s => {
+    const has = s.isolateTypes.includes(type)
+    return { isolateTypes: has ? s.isolateTypes.filter(t => t !== type) : [...s.isolateTypes, type] }
   }),
+
+  filterSelectAll:  () => set({ highlightTypes: [...ALL_TYPES], isolateTypes: [...ALL_TYPES] }),
+  filterSelectNone: () => set({ highlightTypes: [], isolateTypes: [] }),
+  toggleAllHighlight: () => set(s => ({
+    highlightTypes: s.highlightTypes.length === ALL_TYPES.length ? [] : [...ALL_TYPES],
+  })),
+  toggleAllIsolate: () => set(s => ({
+    isolateTypes: s.isolateTypes.length === ALL_TYPES.length ? [] : [...ALL_TYPES],
+  })),
 
   // ── Mode ─────────────────────────────────────────────────────────────────────
   setMode: (mode) => set({ mode, connectSource: null, pendingLink: null }),
@@ -350,6 +357,62 @@ const useStore = create((set, get) => ({
     a.click()
     URL.revokeObjectURL(url)
   },
+
+  exportAsImage: (format = 'png') => {
+    const { nodes } = get()
+    const svgEl = document.querySelector('svg')
+    if (!svgEl) return
+
+    const nodeList = Object.values(nodes)
+    const PAD = 60
+    const minX = (nodeList.length ? Math.min(...nodeList.map(n => n.x)) : 0) - PAD
+    const minY = (nodeList.length ? Math.min(...nodeList.map(n => n.y)) : 0) - PAD
+    const maxX = (nodeList.length ? Math.max(...nodeList.map(n => n.x + n.width))  : 800) + PAD
+    const maxY = (nodeList.length ? Math.max(...nodeList.map(n => n.y + n.height)) : 600) + PAD
+    const w = maxX - minX
+    const h = maxY - minY
+
+    const clone = svgEl.cloneNode(true)
+    clone.setAttribute('viewBox', `${minX} ${minY} ${w} ${h}`)
+    clone.setAttribute('width', w)
+    clone.setAttribute('height', h)
+    // Remove huge background rect and reset zoom transform
+    clone.querySelector('.canvas-bg')?.remove()
+    const zoomG = clone.querySelector('g[transform*="scale"]')
+    if (zoomG) zoomG.setAttribute('transform', '')
+
+    const svgStr = new XMLSerializer().serializeToString(clone)
+    const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+
+    const img = new Image()
+    img.onload = () => {
+      const scale = 2
+      const canvas = document.createElement('canvas')
+      canvas.width  = w * scale
+      canvas.height = h * scale
+      const ctx = canvas.getContext('2d')
+      ctx.scale(scale, scale)
+      ctx.fillStyle = '#f8f8f8'
+      ctx.fillRect(0, 0, w, h)
+      ctx.drawImage(img, 0, 0, w, h)
+      URL.revokeObjectURL(url)
+
+      const mime    = format === 'jpeg' ? 'image/jpeg' : 'image/png'
+      const quality = format === 'jpeg' ? 0.92 : undefined
+      const a = document.createElement('a')
+      a.href     = canvas.toDataURL(mime, quality)
+      a.download = `istar-diagram.${format}`
+      a.click()
+    }
+    img.src = url
+  },
+
+  clearDiagram: () => set({
+    actors: {}, nodes: {}, links: {},
+    selectedId: null, selectedType: null, selectedIds: [],
+    connectSource: null, pendingLink: null, mode: 'select',
+  }),
 
   importDiagram: (json) => {
     try {

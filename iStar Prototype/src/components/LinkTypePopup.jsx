@@ -35,7 +35,6 @@ export default function LinkTypePopup() {
       flexDirection: 'column',
       gap: '3px',
       zIndex: 100,
-      boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
     }}>
       <div style={{ fontSize: 9, color: '#999', marginBottom: 2 }}>link type</div>
       {LINK_TYPES.map((type) => (

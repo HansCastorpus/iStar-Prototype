@@ -47,6 +47,29 @@ export default function PropertyPopover() {
           reverse direction
         </button>
 
+        <button
+          onClick={() => updateLink(selectedId, { outerRoute: !link.outerRoute, outerRouteSide: null })}
+          style={{ ...btnStyle(link.outerRoute ? '#1a7' : '#555'), marginTop: 2 }}
+        >
+          {link.outerRoute ? 'route: outer [on]' : 'route: outer'}
+        </button>
+
+        {link.outerRoute && (
+          <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+            {['left', 'right', 'top', 'bottom'].map(side => (
+              <button
+                key={side}
+                onClick={() => updateLink(selectedId, {
+                  outerRouteSide: link.outerRouteSide === side ? null : side,
+                })}
+                style={btnStyle(link.outerRouteSide === side ? '#1a7' : '#888')}
+              >
+                {side}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div style={{ marginTop: 4 }}>
           {confirmDelete ? (
             <div style={{ display: 'flex', gap: 4 }}>
@@ -156,7 +179,6 @@ const popoverStyle = (x, y) => ({
   gap: '3px',
   zIndex: 100,
   minWidth: 160,
-  boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
 })
 
 const labelStyle = { fontSize: 9, color: '#999', marginTop: 2 }

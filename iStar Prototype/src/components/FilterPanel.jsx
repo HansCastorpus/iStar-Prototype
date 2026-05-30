@@ -1,112 +1,110 @@
-import useStore, { ALL_TYPES } from '../store/useStore.js'
+import useStore from '../store/useStore.js'
 
 const NODE_TYPES = ['goal', 'task', 'softgoal', 'resource']
 const LINK_TYPES = ['depends-on', 'or', 'xor', 'and', 'help', 'hurt', 'make', 'break', 'needed-by', 'part-of']
 
+const COL_H = 64   // width of Highlight column
+const COL_I = 48   // width of Hide column
+
 export default function FilterPanel() {
-  const filterMode    = useStore(s => s.filterMode)
-  const filterTypes   = useStore(s => s.filterTypes)
-  const setFilterMode = useStore(s => s.setFilterMode)
-  const toggleFilterType = useStore(s => s.toggleFilterType)
-
-  const isActive = (type) => !filterTypes || filterTypes.includes(type)
-
-  const selectAll  = () => useStore.setState({ filterTypes: [...ALL_TYPES] })
-  const selectNone = () => useStore.setState({ filterTypes: [] })
+  const highlightTypes      = useStore(s => s.highlightTypes)
+  const isolateTypes        = useStore(s => s.isolateTypes)
+  const toggleHighlightType = useStore(s => s.toggleHighlightType)
+  const toggleIsolateType   = useStore(s => s.toggleIsolateType)
+  const toggleAllHighlight  = useStore(s => s.toggleAllHighlight)
+  const toggleAllIsolate    = useStore(s => s.toggleAllIsolate)
 
   return (
     <div style={{
-      width: 148,
+      width: 230,
       borderRight: '1px solid #ddd',
       background: '#fafafa',
       display: 'flex',
       flexDirection: 'column',
-      gap: 2,
       flexShrink: 0,
       overflowY: 'auto',
-      padding: '6px 8px',
+      padding: '10px 12px',
+      gap: 4,
     }}>
-      <div style={{ fontSize: 9, color: '#999', fontFamily: 'monospace', textTransform: 'uppercase', marginBottom: 2 }}>
+      <div style={{ fontSize: 11, color: '#999', fontFamily: 'monospace', textTransform: 'uppercase', marginBottom: 4 }}>
         Filter
       </div>
 
-      {/* Mode buttons */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
-        {['highlight', 'isolate'].map(m => (
-          <button
-            key={m}
-            onClick={() => setFilterMode(m)}
-            style={{
-              flex: 1,
-              background: filterMode === m ? '#222' : 'none',
-              color: filterMode === m ? '#fff' : '#555',
-              border: '1px solid #ccc',
-              padding: '3px 4px',
-              cursor: 'pointer',
-              fontSize: 10,
-              fontFamily: 'monospace',
-              textTransform: 'uppercase',
-            }}
-          >
-            {m}
-          </button>
-        ))}
+      {/* Column headers — clickable select-all toggles */}
+      <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 6, borderBottom: '1px solid #eee', marginBottom: 2 }}>
+        <div style={{ width: COL_H, display: 'flex', justifyContent: 'center', borderRight: '1px solid #e0e0e0', paddingRight: 4 }}>
+          <button onClick={toggleAllHighlight} style={colBtn}>Highlight</button>
+        </div>
+        <div style={{ width: COL_I, display: 'flex', justifyContent: 'center', paddingLeft: 4 }}>
+          <button onClick={toggleAllIsolate} style={colBtn}>Hide</button>
+        </div>
       </div>
 
-      {filterMode !== 'off' && (
-        <>
-          {/* Select all / none */}
-          <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
-            <button onClick={selectAll}  style={selBtn}>All</button>
-            <button onClick={selectNone} style={selBtn}>None</button>
-          </div>
+      <Section label="Nodes" types={NODE_TYPES}
+        highlightTypes={highlightTypes} isolateTypes={isolateTypes}
+        onToggleH={toggleHighlightType} onToggleI={toggleIsolateType} />
 
-          <Section label="Nodes" types={NODE_TYPES} isActive={isActive} onToggle={toggleFilterType} />
-          <Section label="Links" types={LINK_TYPES} isActive={isActive} onToggle={toggleFilterType} />
-        </>
-      )}
+      <Section label="Links" types={LINK_TYPES}
+        highlightTypes={highlightTypes} isolateTypes={isolateTypes}
+        onToggleH={toggleHighlightType} onToggleI={toggleIsolateType} />
     </div>
   )
 }
 
-function Section({ label, types, isActive, onToggle }) {
+function Section({ label, types, highlightTypes, isolateTypes, onToggleH, onToggleI }) {
   return (
     <>
-      <div style={{ fontSize: 9, color: '#aaa', fontFamily: 'monospace', textTransform: 'uppercase', marginTop: 6, marginBottom: 2 }}>
+      <div style={{ fontSize: 10, color: '#aaa', fontFamily: 'monospace', textTransform: 'uppercase', marginTop: 10, marginBottom: 4 }}>
         {label}
       </div>
       {types.map(t => (
-        <TypeToggle key={t} label={t} active={isActive(t)} onToggle={() => onToggle(t)} />
+        <TypeRow
+          key={t} label={t}
+          inHighlight={highlightTypes.includes(t)}
+          inIsolate={isolateTypes.includes(t)}
+          onToggleH={() => onToggleH(t)}
+          onToggleI={() => onToggleI(t)}
+        />
       ))}
     </>
   )
 }
 
-function TypeToggle({ label, active, onToggle }) {
+function TypeRow({ label, inHighlight, inIsolate, onToggleH, onToggleI }) {
   return (
-    <div
-      onClick={onToggle}
-      style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', padding: '2px 0' }}
-    >
-      <div style={{
-        width: 10, height: 10, flexShrink: 0,
-        border: '1px solid #888',
-        background: active ? '#222' : 'white',
-      }} />
-      <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#333', userSelect: 'none' }}>
+    <div style={{ display: 'flex', alignItems: 'center', padding: '4px 0' }}>
+      <div style={{ width: COL_H, display: 'flex', justifyContent: 'center',
+        borderRight: '1px solid #e0e0e0', paddingRight: 4 }}>
+        <Square active={inHighlight} onClick={onToggleH} />
+      </div>
+      <div style={{ width: COL_I, display: 'flex', justifyContent: 'center', paddingLeft: 4 }}>
+        <Square active={inIsolate} onClick={onToggleI} />
+      </div>
+      <span style={{ flex: 1, fontSize: 12, fontFamily: 'monospace', color: '#333', userSelect: 'none', paddingLeft: 10 }}>
         {label}
       </span>
     </div>
   )
 }
 
-const selBtn = {
-  flex: 1,
-  background: 'none',
+function Square({ active, onClick }) {
+  return (
+    <div onClick={onClick} style={{
+      width: 14, height: 14, flexShrink: 0,
+      border: '1px solid #888',
+      background: active ? '#222' : 'white',
+      cursor: 'pointer',
+    }} />
+  )
+}
+
+const colBtn = {
+  background: 'white',
   border: '1px solid #ccc',
-  padding: '2px 0',
+  padding: '4px 6px',
   cursor: 'pointer',
-  fontSize: 10,
+  fontSize: 11,
   fontFamily: 'monospace',
-  color: '#555',
+  color: '#333',
+  textAlign: 'center',
 }
