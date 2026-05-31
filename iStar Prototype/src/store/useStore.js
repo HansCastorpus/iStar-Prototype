@@ -94,6 +94,10 @@ const useStore = create((set, get) => ({
   // ── Dark mode ────────────────────────────────────────────────────────────────
   darkMode: false,
   toggleDarkMode: () => set(s => ({ darkMode: !s.darkMode })),
+  legendOpen: false,
+  toggleLegend: () => set(s => ({ legendOpen: !s.legendOpen })),
+  hideTags: false,
+  toggleHideTags: () => set(s => ({ hideTags: !s.hideTags })),
 
   // ── Filter ───────────────────────────────────────────────────────────────────
   highlightTypes: [],              // types currently highlighted; empty = mode off

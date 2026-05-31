@@ -251,6 +251,7 @@ export default function Link({ link, points, andBar }) {
   const highlightTypes = useStore(s => s.highlightTypes)
   const isolateTypes   = useStore(s => s.isolateTypes)
   const focusNodeId    = useStore(s => s.focusNodeId)
+  const hideTags       = useStore(s => s.hideTags)
 
   const isHidden   = !isolateTypes.includes(link.type)
   const isFocused = useStore(s => {
@@ -373,7 +374,7 @@ export default function Link({ link, points, andBar }) {
       )}
 
       {/* Draggable label badge */}
-      <g
+      {!hideTags && <g
         ref={labelRef}
         transform={`translate(${pos.x},${pos.y}) rotate(${pos.angle})`}
         style={{ cursor: dragging ? 'grabbing' : 'grab' }}
@@ -396,7 +397,7 @@ export default function Link({ link, points, andBar }) {
         >
           {labelText}
         </text>
-      </g>
+      </g>}
     </g>
   )
 }

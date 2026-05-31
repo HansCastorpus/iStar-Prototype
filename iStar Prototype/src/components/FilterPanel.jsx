@@ -5,6 +5,7 @@ const LINK_TYPES = ['depends-on', 'or', 'xor', 'and', 'help', 'hurt', 'make', 'b
 
 const COL_H = 64   // width of Highlight column
 const COL_I = 48   // width of Hide column
+const COL_T = 48   // width of Tags column
 
 export default function FilterPanel() {
   const highlightTypes      = useStore(s => s.highlightTypes)
@@ -18,6 +19,11 @@ export default function FilterPanel() {
   const setFocusNode        = useStore(s => s.setFocusNode)
   const selectedId          = useStore(s => s.selectedId)
   const selectedType        = useStore(s => s.selectedType)
+
+  const legendOpen   = useStore(s => s.legendOpen)
+  const toggleLegend = useStore(s => s.toggleLegend)
+  const hideTags     = useStore(s => s.hideTags)
+  const toggleHideTags = useStore(s => s.toggleHideTags)
 
   const canFocus       = selectedType === 'node' && !!selectedId
   const isDirectActive = !!focusNodeId && focusNodeId === selectedId && !focusDeep
@@ -44,8 +50,16 @@ export default function FilterPanel() {
         <div style={{ width: COL_H, display: 'flex', justifyContent: 'center', borderRight: '1px solid var(--border-lt)', paddingRight: 4 }}>
           <button onClick={toggleAllHighlight} style={colBtn}>Highlight</button>
         </div>
-        <div style={{ width: COL_I, display: 'flex', justifyContent: 'center', paddingLeft: 4 }}>
+        <div style={{ width: COL_I, display: 'flex', justifyContent: 'center', borderRight: '1px solid var(--border-lt)', paddingLeft: 4, paddingRight: 4 }}>
           <button onClick={toggleAllIsolate} style={colBtn}>Hide</button>
+        </div>
+        <div style={{ width: COL_T, display: 'flex', justifyContent: 'center', paddingLeft: 4 }}>
+          <button onClick={toggleHideTags} style={{
+            ...colBtn,
+            background: hideTags ? 'var(--text-1)' : 'var(--node-fill)',
+            color: hideTags ? 'var(--bg-popup)' : 'var(--text-1)',
+            border: `1px solid ${hideTags ? 'var(--text-1)' : 'var(--border-md)'}`,
+          }}>Tags</button>
         </div>
       </div>
 
@@ -80,6 +94,34 @@ export default function FilterPanel() {
             ? 'Showing direct dependencies only.'
             : 'Highlight direct or all upstream dependencies of the selected element.'}
         </div>
+      </div>
+
+      {/* Legend button */}
+      <div style={{ borderTop: '1px solid var(--border-lt)', marginTop: 14, paddingTop: 10 }}>
+        <button
+          onClick={toggleLegend}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            background: legendOpen ? 'var(--text-1)' : 'var(--node-fill)',
+            color: legendOpen ? 'var(--bg-popup)' : 'var(--text-1)',
+            border: '1px solid var(--border-md)',
+            padding: '6px 10px',
+            cursor: 'pointer',
+            fontSize: 11,
+            fontFamily: 'monospace',
+            textAlign: 'left',
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <rect x="1" y="2" width="11" height="1.5" rx="0.75" fill="currentColor"/>
+            <rect x="1" y="5.75" width="11" height="1.5" rx="0.75" fill="currentColor"/>
+            <rect x="1" y="9.5" width="11" height="1.5" rx="0.75" fill="currentColor"/>
+          </svg>
+          Legend
+        </button>
       </div>
     </div>
   )

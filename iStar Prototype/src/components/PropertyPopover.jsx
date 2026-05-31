@@ -110,7 +110,15 @@ export default function PropertyPopover() {
       transform,
     )
     return (
-      <div style={popoverStyle(lx - 150, ly - 150)}>
+      <div style={{ ...popoverStyle(lx - 150 + dragOffset.x, ly - 150 + dragOffset.y), paddingTop: 20 }}>
+        <div
+          ref={handleRef}
+          onPointerDown={onDragDown} onPointerMove={onDragMove}
+          onPointerUp={onDragUp} onPointerCancel={onDragUp}
+          style={dragHandleStyle}
+        >
+          <span style={{ fontSize: 8, color: 'var(--text-3)', letterSpacing: 3 }}>• • •</span>
+        </div>
         <label style={labelStyle}>type</label>
         <select
           value={link.type}
@@ -290,7 +298,7 @@ const dragHandleStyle = {
   position: 'absolute', top: 0, left: 0, right: 0, height: 16,
   cursor: 'grab',
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  borderBottom: '1px solid #eee',
+  borderBottom: '1px solid var(--border-lt)',
   userSelect: 'none',
 }
 
