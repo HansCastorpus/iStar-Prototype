@@ -3,6 +3,21 @@ import useStore from '../store/useStore.js'
 import { useZoom } from '../contexts/ZoomContext.jsx'
 import { pointsToPath, getPointAtT, projectOntoPath } from '../utils/routing.js'
 
+function transitiveSourceSet(links, startId) {
+  const visited = new Set([startId])
+  const queue = [startId]
+  while (queue.length > 0) {
+    const cur = queue.shift()
+    for (const l of Object.values(links)) {
+      if (l.targetId === cur && !visited.has(l.sourceId)) {
+        visited.add(l.sourceId)
+        queue.push(l.sourceId)
+      }
+    }
+  }
+  return visited
+}
+
 const PAD_X = 10
 const PAD_Y = 3
 const FONT_SIZE = 10
@@ -24,14 +39,16 @@ const TRIM_NEEDED   = ARROW_H + ICON_GAP + ICON_R + ARROW_H / 2 - ICON_STUB  // 
 const SOURCE_DECORATED = new Set(['depends-on'])
 
 const HIGHLIGHT_STYLES = {
-  hurt:       { color: '#EE3131', sw: 8 },
-  break:      { color: '#EE3131', sw: 8 },
-  help:       { color: '#457DF5', sw: 8 },
-  make:       { color: '#457DF5', sw: 8 },
+  hurt:         { color: '#EE3131', sw: 8 },
+  break:        { color: '#EE3131', sw: 8 },
+  help:         { color: '#457DF5', sw: 8 },
+  make:         { color: '#457DF5', sw: 8 },
   'needed-by':  { color: '#555',    sw: 4, dash: '8 4' },
   'depends-on': { color: '#555752', sw: 4 },
   'or':         { color: '#F8B331', sw: 4 },
+  'xor':        { color: '#E07000', sw: 4 },
   'and':        { color: '#21755D', sw: 4 },
+  'part-of':    { color: '#9333EA', sw: 4 },
 }
 
 // Direction + tip at the TARGET end (last segment).
@@ -231,8 +248,24 @@ export default function Link({ link, points, andBar }) {
   const { transformRef } = useZoom()
   const highlightTypes = useStore(s => s.highlightTypes)
   const isolateTypes   = useStore(s => s.isolateTypes)
+  const focusNodeId    = useStore(s => s.focusNodeId)
 
-  const isHidden = !isolateTypes.includes(link.type)
+  const isHidden   = !isolateTypes.includes(link.type)
+  const isFocused = useStore(s => {
+    if (!s.focusNodeId) return false
+    if (s.focusDeep) {
+      const set = transitiveSourceSet(s.links, s.focusNodeId)
+      return set.has(link.sourceId) && set.has(link.targetId)
+    }
+    if (link.targetId === s.focusNodeId) return true
+    const sources = new Set(
+      Object.values(s.links)
+        .filter(l => l.targetId === s.focusNodeId)
+        .map(l => l.sourceId)
+    )
+    return sources.has(link.sourceId) && sources.has(link.targetId)
+  })
+  const isDimmed = !!focusNodeId && !isFocused
 
   if (!points || points.length < 2) return null
 
@@ -254,11 +287,11 @@ export default function Link({ link, points, andBar }) {
   const d          = pointsToPath(trimmed)
   const t          = link.labelT ?? 0.5
   const pos        = getPointAtT(points, t)
-  const isSelected      = selectedId === link.id
-  const isFilterActive  = highlightTypes.length > 0 && highlightTypes.includes(link.type)
-  const hlStyle         = isFilterActive ? HIGHLIGHT_STYLES[link.type] : null
-  const color           = hlStyle?.color ?? (isSelected ? '#0070f3' : '#555')
-  const sw              = hlStyle?.sw    ?? (isSelected ? 2 : 1.5)
+  const isSelected     = selectedId === link.id
+  const isFilterActive = (highlightTypes.length > 0 && highlightTypes.includes(link.type)) || isFocused
+  const hlStyle        = isFilterActive ? HIGHLIGHT_STYLES[link.type] : null
+  const color          = hlStyle?.color ?? (isSelected ? '#0070f3' : '#555')
+  const sw             = hlStyle?.sw    ?? (isSelected ? 2 : 1.5)
 
   const clientToWorld = (cx, cy) => {
     const rect = labelRef.current.ownerSVGElement.getBoundingClientRect()
@@ -311,7 +344,7 @@ export default function Link({ link, points, andBar }) {
   return (
     <g onKeyDown={handleKeyDown} tabIndex={0} style={{
       outline: 'none',
-      opacity: isHidden ? 0 : 1,
+      opacity: isHidden ? 0 : isDimmed ? 0.12 : 1,
       pointerEvents: isHidden ? 'none' : undefined,
     }}>
       {/* Wide invisible hit area */}

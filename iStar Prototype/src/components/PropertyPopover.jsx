@@ -12,7 +12,7 @@ const LINK_TYPES = [
 
 export default function PropertyPopover() {
   const { selectedId, selectedType, nodes, links, actors,
-    updateNode, updateLink, deleteNode, deleteLink, reverseLink, ensureActor } = useStore()
+    updateNode, updateLink, deleteNode, deleteLink, reverseLink, ensureActor, deselect } = useStore()
   const selectedIds = useStore(s => s.selectedIds)
   const { transform } = useZoom()
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -89,9 +89,10 @@ export default function PropertyPopover() {
   const node = nodes[selectedId]
   if (!node) return null
 
+  const GAP = 20
   const { x: sx, y: sy } = worldToScreen(
     node.x + node.width / 2,
-    node.y + node.height + 8,
+    node.y,
     transform,
   )
 
@@ -118,9 +119,15 @@ export default function PropertyPopover() {
 
   return (
     <div style={{
-      ...popoverStyle(sx - 250, sy - 250),
-      transform: 'translateX(-50%)',
+      ...popoverStyle(sx - GAP, sy - GAP),
+      transform: 'translate(-100%, -100%)',
+      paddingTop: 20,
     }}>
+      <button onClick={deselect} style={closeBtnStyle}>×</button>
+      <svg style={{ position: 'absolute', bottom: 0, right: 0, width: 0, height: 0, overflow: 'visible', pointerEvents: 'none' }}>
+        <line x1={0} y1={0} x2={GAP} y2={GAP} stroke="#bbb" strokeWidth={1} />
+        <circle cx={GAP} cy={GAP} r={2} fill="#aaa" />
+      </svg>
       <label style={labelStyle}>label</label>
       <input
         autoFocus
@@ -189,6 +196,19 @@ const inputStyle = {
   border: '1px solid #ddd',
   padding: '2px 4px',
   width: '100%',
+}
+
+const closeBtnStyle = {
+  position: 'absolute',
+  top: 4,
+  right: 6,
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  fontSize: 13,
+  color: '#999',
+  lineHeight: 1,
+  padding: 0,
 }
 
 const btnStyle = (color) => ({

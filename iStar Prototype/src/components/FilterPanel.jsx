@@ -13,6 +13,15 @@ export default function FilterPanel() {
   const toggleIsolateType   = useStore(s => s.toggleIsolateType)
   const toggleAllHighlight  = useStore(s => s.toggleAllHighlight)
   const toggleAllIsolate    = useStore(s => s.toggleAllIsolate)
+  const focusNodeId         = useStore(s => s.focusNodeId)
+  const focusDeep           = useStore(s => s.focusDeep)
+  const setFocusNode        = useStore(s => s.setFocusNode)
+  const selectedId          = useStore(s => s.selectedId)
+  const selectedType        = useStore(s => s.selectedType)
+
+  const canFocus       = selectedType === 'node' && !!selectedId
+  const isDirectActive = !!focusNodeId && focusNodeId === selectedId && !focusDeep
+  const isDeepActive   = !!focusNodeId && focusNodeId === selectedId && focusDeep
 
   return (
     <div style={{
@@ -47,6 +56,31 @@ export default function FilterPanel() {
       <Section label="Links" types={LINK_TYPES}
         highlightTypes={highlightTypes} isolateTypes={isolateTypes}
         onToggleH={toggleHighlightType} onToggleI={toggleIsolateType} />
+
+      {/* Focus section */}
+      <div style={{ borderTop: '1px solid #eee', marginTop: 14, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <button
+          onClick={() => canFocus && setFocusNode(selectedId, false)}
+          style={focusBtnStyle(isDirectActive, canFocus)}
+        >
+          {isDirectActive ? 'Clear focus' : 'Highlight relationships'}
+        </button>
+        <button
+          onClick={() => canFocus && setFocusNode(selectedId, true)}
+          style={focusBtnStyle(isDeepActive, canFocus)}
+        >
+          {isDeepActive ? 'Clear focus' : 'Highlight all dependencies'}
+        </button>
+        <div style={{ fontSize: 10, color: '#aaa', fontFamily: 'monospace', marginTop: 2, lineHeight: 1.5 }}>
+          {!canFocus
+            ? 'Select an element to explore its dependencies.'
+            : isDeepActive
+            ? 'Showing full upstream dependency chain.'
+            : isDirectActive
+            ? 'Showing direct dependencies only.'
+            : 'Highlight direct or all upstream dependencies of the selected element.'}
+        </div>
+      </div>
     </div>
   )
 }
@@ -108,3 +142,15 @@ const colBtn = {
   color: '#333',
   textAlign: 'center',
 }
+
+const focusBtnStyle = (active, enabled) => ({
+  width: '100%',
+  background: active ? '#222' : enabled ? 'white' : '#f5f5f5',
+  color: active ? 'white' : enabled ? '#333' : '#bbb',
+  border: `1px solid ${active ? '#222' : enabled ? '#bbb' : '#ddd'}`,
+  padding: '6px 10px',
+  cursor: enabled ? 'pointer' : 'default',
+  fontSize: 11,
+  fontFamily: 'monospace',
+  textAlign: 'left',
+})

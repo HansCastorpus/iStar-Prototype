@@ -94,6 +94,8 @@ const useStore = create((set, get) => ({
   // ── Filter ───────────────────────────────────────────────────────────────────
   highlightTypes: [],              // types currently highlighted; empty = mode off
   isolateTypes:   [...ALL_TYPES],  // types currently isolated;   empty = mode off
+  focusNodeId:    null,            // when set, dims all links not connected to this node
+  focusDeep:      false,           // when true, use transitive closure instead of direct links only
 
   toggleHighlightType: (type) => set(s => {
     const has = s.highlightTypes.includes(type)
@@ -114,13 +116,18 @@ const useStore = create((set, get) => ({
     isolateTypes: s.isolateTypes.length === ALL_TYPES.length ? [] : [...ALL_TYPES],
   })),
 
+  setFocusNode: (id, deep = false) => set(s => {
+    const same = s.focusNodeId === id && s.focusDeep === deep
+    return { focusNodeId: same ? null : id, focusDeep: same ? false : deep }
+  }),
+
   // ── Mode ─────────────────────────────────────────────────────────────────────
   setMode: (mode) => set({ mode, connectSource: null, pendingLink: null }),
   setDraggingNode: (id) => set({ draggingNodeId: id }),
 
   // ── Selection ────────────────────────────────────────────────────────────────
   select: (id, type) => set({ selectedId: id, selectedType: type, selectedIds: [] }),
-  deselect: () => set({ selectedId: null, selectedType: null, selectedIds: [] }),
+  deselect: () => set({ selectedId: null, selectedType: null, selectedIds: [], focusNodeId: null, focusDeep: false }),
 
   addToSelection: (id) => set(s => {
     const has = s.selectedIds.includes(id)
@@ -411,7 +418,7 @@ const useStore = create((set, get) => ({
   clearDiagram: () => set({
     actors: {}, nodes: {}, links: {},
     selectedId: null, selectedType: null, selectedIds: [],
-    connectSource: null, pendingLink: null, mode: 'select',
+    connectSource: null, pendingLink: null, mode: 'select', focusNodeId: null, focusDeep: false,
   }),
 
   importDiagram: (json) => {

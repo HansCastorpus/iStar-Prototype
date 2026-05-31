@@ -2,6 +2,21 @@ import { useRef } from 'react'
 import useStore from '../store/useStore.js'
 import { wrapLabel, NODE_LINE_H, NODE_BADGE_H, NODE_PAD_X, GOAL_PAD_X } from '../utils/grid.js'
 
+function transitiveSourceSet(links, startId) {
+  const visited = new Set([startId])
+  const queue = [startId]
+  while (queue.length > 0) {
+    const cur = queue.shift()
+    for (const l of Object.values(links)) {
+      if (l.targetId === cur && !visited.has(l.sourceId)) {
+        visited.add(l.sourceId)
+        queue.push(l.sourceId)
+      }
+    }
+  }
+  return visited
+}
+
 const BADGE_CHAR_W = 7.5
 const BADGE_PAD_X = 7
 
@@ -39,8 +54,23 @@ export default function Node({ node }) {
   const isHidden       = !isolateTypes.includes(node.type)
   const isHighlighted  = highlightActive && highlightTypes.includes(node.type)
 
+  // 'none' | 'focus' (the selected node) | 'connected' (in dependency set) | 'dimmed'
+  const focusStatus = useStore(s => {
+    if (!s.focusNodeId) return 'none'
+    if (node.id === s.focusNodeId) return 'focus'
+    if (s.focusDeep) {
+      const set = transitiveSourceSet(s.links, s.focusNodeId)
+      return set.has(node.id) ? 'connected' : 'dimmed'
+    }
+    const connected = Object.values(s.links).some(
+      l => l.sourceId === node.id && l.targetId === s.focusNodeId
+    )
+    return connected ? 'connected' : 'dimmed'
+  })
+
   const HIGHLIGHT_FILLS = { goal: '#d0cabf', task: '#A2BBD9', softgoal: '#e2dfd5', resource: '#AFD2AF' }
-  const hlFill = isHighlighted ? (HIGHLIGHT_FILLS[node.type] ?? 'white') : 'white'
+  const isFillHighlighted = isHighlighted || focusStatus === 'focus' || focusStatus === 'connected'
+  const hlFill = isFillHighlighted ? (HIGHLIGHT_FILLS[node.type] ?? 'white') : 'white'
 
   const clientToWorld = (cx, cy) => {
     const pt = gRef.current.ownerSVGElement.createSVGPoint()
@@ -142,7 +172,7 @@ export default function Node({ node }) {
       transform={`translate(${node.x},${node.y})`}
       style={{
         cursor: 'move', touchAction: 'none',
-        opacity: isHidden ? 0 : 1,
+        opacity: isHidden ? 0 : focusStatus === 'dimmed' ? 0.15 : 1,
         pointerEvents: isHidden ? 'none' : undefined,
       }}
       onPointerDown={onPointerDown}

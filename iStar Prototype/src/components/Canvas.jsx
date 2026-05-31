@@ -69,9 +69,8 @@ export default function Canvas() {
 
     if (modeRef.current.startsWith('add-')) {
       addNode(modeRef.current.replace('add-', ''), world.x, world.y)
-    } else if (modeRef.current === 'connect') {
-      clearConnect()
     } else {
+      clearConnect()
       deselect()
     }
   }
