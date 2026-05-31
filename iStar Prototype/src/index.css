@@ -1,3 +1,69 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body, #root { width: 100%; height: 100%; overflow: hidden; }
 body { font-family: monospace; font-size: 12px; }
+
+/* ── Light theme (default) ─────────────────────────────────────────────────── */
+:root {
+  --bg-canvas:  #f8f8f8;
+  --bg-panel:   #fafafa;
+  --bg-popup:   #ffffff;
+  --text-1:     #333;
+  --text-2:     #999;
+  --text-3:     #aaa;
+  --text-node:  #222;
+  --border:     #ddd;
+  --border-lt:  #eee;
+  --border-md:  #ccc;
+  --border-ck:  #888;
+  --node-fill:  white;
+  --node-stroke:#333;
+  --node-text:  #222;
+  --link-def:   #555;
+  /* node highlight fills */
+  --hl-goal:      #eae7e3;
+  --hl-task:      #A2BBD9;
+  --hl-softgoal:  #e2dfd5;
+  --hl-resource:  #AFD2AF;
+  /* link highlight colors */
+  --hl-hurt:      #EE3131;
+  --hl-help:      #457DF5;
+  --hl-needed-by: #555;
+  --hl-depends-on:#555752;
+  --hl-or:        #F8B331;
+  --hl-xor:       #E07000;
+  --hl-and:       #21755D;
+  --hl-part-of:   #2b15a6;
+}
+
+/* ── Dark theme ─────────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  --bg-canvas:  #1a1a1a;
+  --bg-panel:   #212121;
+  --bg-popup:   #2a2a2a;
+  --text-1:     #ddd;
+  --text-2:     #777;
+  --text-3:     #555;
+  --text-node:  #ddd;
+  --border:     #3a3a3a;
+  --border-lt:  #2e2e2e;
+  --border-md:  #4a4a4a;
+  --border-ck:  #666;
+  --node-fill:  #2a2a2a;
+  --node-stroke:#888;
+  --node-text:  #ddd;
+  --link-def:   #999;
+  /* node highlight fills – muted, visible on dark bg */
+  --hl-goal:      #434b55;
+  --hl-task:      #562c2c;
+  --hl-softgoal:  #395475;
+  --hl-resource:  #2d4a2d;
+  /* link highlight colors – lightened */
+  --hl-hurt:      #d63737;
+  --hl-help:      #508df0;
+  --hl-needed-by: #aaa;
+  --hl-depends-on:#bbb;
+  --hl-or:        #ffd166;
+  --hl-xor:       #ff9f43;
+  --hl-and:       #30a423;
+  --hl-part-of:   #c34cb1;
+}

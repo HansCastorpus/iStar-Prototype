@@ -132,7 +132,7 @@ export default function Canvas() {
       <LinkTypePopup />
       <svg
         ref={svgRef}
-        style={{ width: '100%', height: '100%', display: 'block', background: '#f8f8f8' }}
+        style={{ width: '100%', height: '100%', display: 'block', background: 'var(--bg-canvas)' }}
         onMouseMove={handleMouseMove}
         onClick={handleCanvasClick}
       >

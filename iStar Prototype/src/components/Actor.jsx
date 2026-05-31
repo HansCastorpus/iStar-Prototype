@@ -191,7 +191,7 @@ export default function Actor({ actor }) {
     dragRef.current = null
   }
 
-  const hullStroke = isSelected ? '#0070f3' : '#aaa'
+  const hullStroke = isSelected ? '#0070f3' : 'var(--text-3)'
 
   return (
     <g ref={gRef}
@@ -210,17 +210,17 @@ export default function Actor({ actor }) {
       <line
         x1={anchorCorner.x} y1={anchorCorner.y}
         x2={lineEndX}       y2={lineEndY}
-        stroke="#333" strokeWidth={1} style={{ pointerEvents: 'none' }}
+        stroke="var(--node-stroke)" strokeWidth={1} style={{ pointerEvents: 'none' }}
       />
       <circle cx={circleCx} cy={circleCy} r={circleR}
-        fill="white" stroke="#333" strokeWidth={1}
+        fill="var(--node-fill)" stroke="var(--node-stroke)" strokeWidth={1}
         style={{ cursor: 'move' }}
         onPointerDown={onPointerDown}
       />
       <text
         x={circleCx} y={circleCy}
         textAnchor="middle" dominantBaseline="central"
-        fontSize={FONT_SIZE} fontFamily="sans-serif" fill="#222"
+        fontSize={FONT_SIZE} fontFamily="sans-serif" fill="var(--node-text)"
         style={{ pointerEvents: 'none', userSelect: 'none' }}
       >
         {name}

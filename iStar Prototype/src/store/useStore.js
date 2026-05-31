@@ -91,6 +91,10 @@ const useStore = create((set, get) => ({
   draggingNodeId: null,
   selectedIds: [],    // multi-select node IDs
 
+  // ── Dark mode ────────────────────────────────────────────────────────────────
+  darkMode: false,
+  toggleDarkMode: () => set(s => ({ darkMode: !s.darkMode })),
+
   // ── Filter ───────────────────────────────────────────────────────────────────
   highlightTypes: [],              // types currently highlighted; empty = mode off
   isolateTypes:   [...ALL_TYPES],  // types currently isolated;   empty = mode off

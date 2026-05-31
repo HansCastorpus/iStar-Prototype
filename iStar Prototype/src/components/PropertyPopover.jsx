@@ -264,8 +264,8 @@ const popoverStyle = (x, y) => ({
   position: 'absolute',
   left: x,
   top: y,
-  background: '#fff',
-  border: '1px solid #ccc',
+  background: 'var(--bg-popup)',
+  border: '1px solid var(--border-md)',
   padding: '8px',
   display: 'flex',
   flexDirection: 'column',
@@ -274,14 +274,16 @@ const popoverStyle = (x, y) => ({
   minWidth: 160,
 })
 
-const labelStyle = { fontSize: 9, color: '#999', marginTop: 2 }
+const labelStyle = { fontSize: 9, color: 'var(--text-2)', marginTop: 2 }
 
 const inputStyle = {
   font: 'inherit',
   fontSize: 11,
-  border: '1px solid #ddd',
+  border: '1px solid var(--border)',
   padding: '2px 4px',
   width: '100%',
+  background: 'var(--node-fill)',
+  color: 'var(--text-1)',
 }
 
 const dragHandleStyle = {
@@ -300,7 +302,7 @@ const closeBtnStyle = {
   border: 'none',
   cursor: 'pointer',
   fontSize: 13,
-  color: '#999',
+  color: 'var(--text-2)',
   lineHeight: 1,
   padding: 0,
 }
@@ -312,4 +314,5 @@ const btnStyle = (color) => ({
   padding: '2px 6px',
   cursor: 'pointer',
   fontSize: 10,
+  fontFamily: 'monospace',
 })

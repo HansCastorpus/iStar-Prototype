@@ -1,8 +1,16 @@
+import { useEffect } from 'react'
 import Canvas from './components/Canvas.jsx'
 import Toolbar from './components/Toolbar.jsx'
 import FilterPanel from './components/FilterPanel.jsx'
+import useStore from './store/useStore.js'
 
 export default function App() {
+  const darkMode = useStore(s => s.darkMode)
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light')
+  }, [darkMode])
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
       <Toolbar />

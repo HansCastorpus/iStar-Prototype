@@ -39,16 +39,16 @@ const TRIM_NEEDED   = ARROW_H + ICON_GAP + ICON_R + ARROW_H / 2 - ICON_STUB  // 
 const SOURCE_DECORATED = new Set(['depends-on'])
 
 const HIGHLIGHT_STYLES = {
-  hurt:         { color: '#EE3131', sw: 8 },
-  break:        { color: '#EE3131', sw: 8 },
-  help:         { color: '#457DF5', sw: 8 },
-  make:         { color: '#457DF5', sw: 8 },
-  'needed-by':  { color: '#555',    sw: 6, dash: '8 4' },
-  'depends-on': { color: '#555752', sw: 6 },
-  'or':         { color: '#F8B331', sw: 6 },
-  'xor':        { color: '#E07000', sw: 6 },
-  'and':        { color: '#21755D', sw: 6 },
-  'part-of':    { color: '#9333EA', sw: 6 },
+  hurt:         { color: 'var(--hl-hurt)',       sw: 8 },
+  break:        { color: 'var(--hl-hurt)',        sw: 8 },
+  help:         { color: 'var(--hl-help)',        sw: 8 },
+  make:         { color: 'var(--hl-help)',        sw: 8 },
+  'needed-by':  { color: 'var(--hl-needed-by)',  sw: 6, dash: '8 4' },
+  'depends-on': { color: 'var(--hl-depends-on)', sw: 6 },
+  'or':         { color: 'var(--hl-or)',          sw: 6 },
+  'xor':        { color: 'var(--hl-xor)',         sw: 6 },
+  'and':        { color: 'var(--hl-and)',         sw: 6 },
+  'part-of':    { color: 'var(--hl-part-of)',     sw: 6 },
 }
 
 // Direction + tip at the TARGET end (last segment).
@@ -114,11 +114,11 @@ function MinusCircle({ x, y, color, r = ICON_R }) {
   )
 }
 
-function PlusSign({ x, y, r = ICON_R }) {
+function PlusSign({ x, y, r = ICON_R, color = 'currentColor' }) {
   return (
     <>
-      <rect x={x - r * 0.6} y={y - 1} width={r * 1.2} height={2} fill="white" />
-      <rect x={x - 1} y={y - r * 0.6} width={2} height={r * 1.2} fill="white" />
+      <rect x={x - r * 0.6} y={y - 1} width={r * 1.2} height={2} fill={color} />
+      <rect x={x - 1} y={y - r * 0.6} width={2} height={r * 1.2} fill={color} />
     </>
   )
 }
@@ -137,8 +137,8 @@ function TargetIcon({ type, x, y, dx, dy, color, sw, andBar }) {
     case 'help':
       return (
         <g style={{ pointerEvents: 'none' }}>
-          <circle cx={x} cy={y} r={LARGE_ICON_R} fill={color} />
-          <PlusSign x={x} y={y} r={LARGE_ICON_R} />
+          <circle cx={x} cy={y} r={LARGE_ICON_R} fill="var(--node-fill)" stroke={color} strokeWidth={1.5} />
+          <PlusSign x={x} y={y} r={LARGE_ICON_R} color={color} />
         </g>
       )
     case 'make': {
@@ -146,10 +146,10 @@ function TargetIcon({ type, x, y, dx, dy, color, sw, andBar }) {
       const x2 = x - dx * gap, y2 = y - dy * gap
       return (
         <g style={{ pointerEvents: 'none' }}>
-          <circle cx={x2} cy={y2} r={LARGE_ICON_R} fill={color} />
-          <PlusSign x={x2} y={y2} r={LARGE_ICON_R} />
-          <circle cx={x}  cy={y}  r={LARGE_ICON_R} fill={color} />
-          <PlusSign x={x}  y={y}  r={LARGE_ICON_R} />
+          <circle cx={x2} cy={y2} r={LARGE_ICON_R} fill="var(--node-fill)" stroke={color} strokeWidth={1.5} />
+          <PlusSign x={x2} y={y2} r={LARGE_ICON_R} color={color} />
+          <circle cx={x}  cy={y}  r={LARGE_ICON_R} fill="var(--node-fill)" stroke={color} strokeWidth={1.5} />
+          <PlusSign x={x}  y={y}  r={LARGE_ICON_R} color={color} />
         </g>
       )
     }
@@ -292,7 +292,7 @@ export default function Link({ link, points, andBar }) {
   const isSelected     = selectedId === link.id
   const isFilterActive = (highlightTypes.length > 0 && highlightTypes.includes(link.type)) || isFocused
   const hlStyle        = isFilterActive ? HIGHLIGHT_STYLES[link.type] : null
-  const color          = hlStyle?.color ?? (isSelected ? '#0070f3' : '#555')
+  const color          = hlStyle?.color ?? (isSelected ? '#0070f3' : 'var(--link-def)')
   const sw             = hlStyle?.sw    ?? (isSelected ? 2 : 1.5)
 
   const clientToWorld = (cx, cy) => {
@@ -385,13 +385,13 @@ export default function Link({ link, points, andBar }) {
         <rect
           x={-boxW / 2} y={-boxH / 2}
           width={boxW} height={boxH}
-          rx={boxH / 2} fill="white"
+          rx={boxH / 2} fill="var(--node-fill)"
           stroke={color}
           strokeWidth={1}
         />
         <text
           textAnchor="middle" dominantBaseline="central"
-          fontSize={FONT_SIZE} fontFamily="sans-serif" fill="#333"
+          fontSize={FONT_SIZE} fontFamily="sans-serif" fill="var(--node-text)"
           style={{ pointerEvents: 'none', userSelect: 'none' }}
         >
           {labelText}

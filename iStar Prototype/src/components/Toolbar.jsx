@@ -45,7 +45,7 @@ const STEPS = [
 ]
 
 export default function Toolbar() {
-  const { mode, setMode, exportDiagram, importDiagram, clearDiagram, exportAsImage } = useStore()
+  const { mode, setMode, exportDiagram, importDiagram, clearDiagram, exportAsImage, darkMode, toggleDarkMode } = useStore()
   const fileRef  = useRef(null)
   const helpRef  = useRef(null)
   const timerRef = useRef(null)
@@ -83,28 +83,26 @@ export default function Toolbar() {
     <div style={{
       display: 'flex',
       alignItems: 'center',
-      gap: 4,
+      gap: 8,
       padding: '4px 8px',
-      borderBottom: '1px solid #ddd',
-      background: '#fafafa',
+      borderBottom: '1px solid var(--border)',
+      background: 'var(--bg-panel)',
       flexShrink: 0,
     }}>
       {/* Title */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-        <span style={{ fontSize: 13, fontFamily: 'monospace', color: '#333' }}>iStar Prototype</span>
-      </div>
+      <span style={{ flex: 1, fontSize: 13, fontFamily: 'monospace', color: 'var(--text-1)', whiteSpace: 'nowrap' }}>
+        iStar Prototype
+      </span>
 
-      {/* Centered mode buttons */}
+      {/* Mode buttons */}
       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-
-        {/* Help button */}
         <div ref={helpRef} style={{ position: 'relative' }}>
           <button
             onClick={() => setHelpOpen(v => !v)}
             style={{
-              background: helpOpen ? '#222' : 'none',
-              color: helpOpen ? '#fff' : '#333',
-              border: '1px solid #ccc',
+              background: helpOpen ? 'var(--text-1)' : 'none',
+              color: helpOpen ? 'var(--bg-popup)' : 'var(--text-1)',
+              border: '1px solid var(--border-md)',
               padding: '5px 9px',
               cursor: 'pointer',
               display: 'flex',
@@ -124,30 +122,23 @@ export default function Toolbar() {
               position: 'absolute',
               top: 'calc(100% + 6px)',
               left: 0,
-              background: 'white',
-              border: '1px solid #ccc',
+              background: 'var(--bg-popup)',
+              border: '1px solid var(--border-md)',
               padding: '14px 18px',
               paddingTop: 10,
               zIndex: 300,
               width: 380,
               fontFamily: 'monospace',
               fontSize: 12,
-              color: '#333',
+              color: 'var(--text-1)',
               lineHeight: 1.7,
             }}>
               <button
                 onClick={() => setHelpOpen(false)}
                 style={{
-                  position: 'absolute',
-                  top: 6,
-                  right: 8,
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: 14,
-                  color: '#999',
-                  lineHeight: 1,
-                  padding: '2px 4px',
+                  position: 'absolute', top: 6, right: 8,
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: 14, color: 'var(--text-2)', lineHeight: 1, padding: '2px 4px',
                 }}
               >×</button>
               <ol style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -162,13 +153,14 @@ export default function Toolbar() {
             key={id}
             onClick={() => setMode(id)}
             style={{
-              background: mode === id ? '#222' : 'none',
-              color: mode === id ? '#fff' : '#333',
-              border: '1px solid #ccc',
+              background: mode === id ? 'var(--text-1)' : 'none',
+              color: mode === id ? 'var(--bg-popup)' : 'var(--text-1)',
+              border: '1px solid var(--border-md)',
               padding: '5px 14px',
               cursor: 'pointer',
               fontSize: 13,
               fontFamily: 'monospace',
+              whiteSpace: 'nowrap',
             }}
           >
             {label}
@@ -176,22 +168,28 @@ export default function Toolbar() {
         ))}
       </div>
 
-      {/* Right actions */}
-      <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', gap: 4, alignItems: 'center' }}>
+      <div style={separator} />
+
+      {/* Export / Import */}
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
         <button onClick={exportDiagram} style={actionBtn}>Export JSON</button>
         <button onClick={() => exportAsImage('png')} style={actionBtn}>PNG</button>
         <button onClick={() => exportAsImage('jpeg')} style={actionBtn}>JPEG</button>
         <button onClick={() => fileRef.current.click()} style={actionBtn}>Import</button>
         <input ref={fileRef} type="file" accept=".json"
           style={{ display: 'none' }} onChange={handleImport} />
+      </div>
 
-        <div style={{ width: 1, height: 16, background: '#ddd', margin: '0 4px' }} />
+      <div style={separator} />
 
+      {/* Dark mode + Clear */}
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        <button onClick={toggleDarkMode} style={actionBtn}>{darkMode ? '☀ Light' : '☾ Dark'}</button>
         {!armed ? (
           <button onClick={armClear} style={actionBtn}>Clear</button>
         ) : (
           <>
-            <span style={{ fontSize: 13, fontFamily: 'monospace', color: '#c00' }}>Wipe canvas?</span>
+            <span style={{ fontSize: 13, fontFamily: 'monospace', color: '#c00', whiteSpace: 'nowrap' }}>Wipe canvas?</span>
             <button onClick={confirmClear} style={{ ...actionBtn, borderColor: '#c00', color: '#c00' }}>Confirm</button>
             <button onClick={cancelClear} style={actionBtn}>Cancel</button>
           </>
@@ -201,9 +199,14 @@ export default function Toolbar() {
   )
 }
 
+const separator = {
+  width: 1, height: 16, background: 'var(--border)', margin: '0 2px', flexShrink: 0,
+}
+
 const actionBtn = {
   background: 'none',
-  border: '1px solid #ccc',
+  border: '1px solid var(--border-md)',
+  color: 'var(--text-1)',
   padding: '5px 14px',
   cursor: 'pointer',
   fontSize: 13,

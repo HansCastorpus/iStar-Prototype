@@ -21,10 +21,10 @@ const BADGE_CHAR_W = 7.5
 const BADGE_PAD_X = 7
 
 const NODE_TYPES = {
-  goal: { stroke: '#333' },
-  task: { stroke: '#333' },
-  softgoal: { stroke: '#333' },
-  resource: { stroke: '#333' },
+  goal: { stroke: 'var(--node-stroke)' },
+  task: { stroke: 'var(--node-stroke)' },
+  softgoal: { stroke: 'var(--node-stroke)' },
+  resource: { stroke: 'var(--node-stroke)' },
 }
 
 // Pick the best source/target sides based on which axis has the larger separation.
@@ -68,9 +68,9 @@ export default function Node({ node }) {
     return connected ? 'connected' : 'dimmed'
   })
 
-  const HIGHLIGHT_FILLS = { goal: '#e1d9d0', task: '#bdd9e4', softgoal: '#c7c1b6', resource: '#c9dfc4' }
+  const HIGHLIGHT_FILLS = { goal: 'var(--hl-goal)', task: 'var(--hl-task)', softgoal: 'var(--hl-softgoal)', resource: 'var(--hl-resource)' }
   const isFillHighlighted = isHighlighted || focusStatus === 'focus' || focusStatus === 'connected'
-  const hlFill = isFillHighlighted ? (HIGHLIGHT_FILLS[node.type] ?? 'white') : 'white'
+  const hlFill = isFillHighlighted ? (HIGHLIGHT_FILLS[node.type] ?? 'var(--node-fill)') : 'var(--node-fill)'
 
   const clientToWorld = (cx, cy) => {
     const pt = gRef.current.ownerSVGElement.createSVGPoint()
@@ -238,7 +238,7 @@ export default function Node({ node }) {
         dominantBaseline="central"
         fontSize={11}
         fontFamily="sans-serif"
-        fill="#222"
+        fill="var(--node-text)"
         style={{ pointerEvents: 'none', userSelect: 'none' }}
       >
         {lines.map((line, i) => (
@@ -259,7 +259,7 @@ export default function Node({ node }) {
         width={badgeW}
         height={NODE_BADGE_H}
         rx={NODE_BADGE_H / 2}
-        fill="white"
+        fill="var(--node-fill)"
         stroke={isSelected ? '#0070f3' : stroke}
         strokeWidth={isSelected ? 2 : 1}
         style={{ pointerEvents: 'none' }}
@@ -271,7 +271,7 @@ export default function Node({ node }) {
         dominantBaseline="central"
         fontSize={10}
         fontFamily="sans-serif"
-        fill="#333"
+        fill="var(--node-text)"
         style={{ pointerEvents: 'none', userSelect: 'none' }}
       >
         {node.type.toUpperCase()}
