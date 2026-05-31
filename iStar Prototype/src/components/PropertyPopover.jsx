@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import useStore from '../store/useStore.js'
 import { useZoom, worldToScreen } from '../contexts/ZoomContext.jsx'
 
@@ -16,8 +16,88 @@ export default function PropertyPopover() {
   const selectedIds = useStore(s => s.selectedIds)
   const { transform } = useZoom()
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+  const handleRef = useRef(null)
+  const dragStateRef = useRef(null)
 
-  if (!selectedId || selectedIds.length > 1) return null
+  useEffect(() => { setDragOffset({ x: 0, y: 0 }) }, [selectedId, selectedIds.length])
+
+  const onDragDown = (e) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    handleRef.current.setPointerCapture(e.pointerId)
+    dragStateRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX - dragOffset.x,
+      startY: e.clientY - dragOffset.y,
+    }
+  }
+  const onDragMove = (e) => {
+    if (!dragStateRef.current || e.pointerId !== dragStateRef.current.pointerId) return
+    setDragOffset({ x: e.clientX - dragStateRef.current.startX, y: e.clientY - dragStateRef.current.startY })
+  }
+  const onDragUp = (e) => {
+    if (!dragStateRef.current || e.pointerId !== dragStateRef.current.pointerId) return
+    handleRef.current.releasePointerCapture(e.pointerId)
+    dragStateRef.current = null
+  }
+
+  if (!selectedId && selectedIds.length === 0) return null
+
+  // ── Multi-select popup ───────────────────────────────────────────────────────
+  if (selectedIds.length > 1) {
+    const selectedNodes = selectedIds.map(id => nodes[id]).filter(Boolean)
+    if (selectedNodes.length === 0) return null
+
+    const minX = Math.min(...selectedNodes.map(n => n.x))
+    const maxX = Math.max(...selectedNodes.map(n => n.x + n.width))
+    const minY = Math.min(...selectedNodes.map(n => n.y))
+    const maxY = Math.max(...selectedNodes.map(n => n.y + n.height))
+    const { x: cx, y: cy } = worldToScreen((minX + maxX) / 2, (minY + maxY) / 2, transform)
+
+    const actorIds = [...new Set(selectedNodes.map(n => n.actorId))]
+    const commonActorName = actorIds.length === 1 && actorIds[0]
+      ? actors[actorIds[0]]?.name ?? '' : ''
+    const actorNames = Object.values(actors).map(a => a.name)
+
+    const handleMultiActorChange = (e) => {
+      const name = e.target.value.trim()
+      const actorId = name ? ensureActor(name) : null
+      for (const id of selectedIds) updateNode(id, { actorId })
+    }
+
+    return (
+      <div style={{
+        ...popoverStyle(cx + dragOffset.x, cy + dragOffset.y),
+        transform: 'translate(-50%, -50%)',
+        paddingTop: 20,
+      }}>
+        <div
+          ref={handleRef}
+          onPointerDown={onDragDown} onPointerMove={onDragMove}
+          onPointerUp={onDragUp} onPointerCancel={onDragUp}
+          style={dragHandleStyle}
+        >
+          <span style={{ fontSize: 8, color: '#ccc', letterSpacing: 3 }}>• • •</span>
+        </div>
+        <div style={{ fontSize: 9, color: '#aaa', marginBottom: 2, fontFamily: 'monospace' }}>
+          {selectedIds.length} elements selected
+        </div>
+        <label style={labelStyle}>actor</label>
+        <input
+          key={selectedIds.join(',')}
+          list="actor-list-multi"
+          defaultValue={commonActorName}
+          onBlur={handleMultiActorChange}
+          style={inputStyle}
+          placeholder={actorIds.length > 1 ? 'mixed…' : 'actor name…'}
+        />
+        <datalist id="actor-list-multi">
+          {actorNames.map(n => <option key={n} value={n} />)}
+        </datalist>
+      </div>
+    )
+  }
 
   if (selectedType === 'link') {
     const link = links[selectedId]
@@ -90,11 +170,9 @@ export default function PropertyPopover() {
   if (!node) return null
 
   const GAP = 20
-  const { x: sx, y: sy } = worldToScreen(
-    node.x + node.width / 2,
-    node.y,
-    transform,
-  )
+  const { x: sx, y: sy } = worldToScreen(node.x + node.width / 2, node.y, transform)
+  const connDx = GAP - dragOffset.x
+  const connDy = GAP - dragOffset.y
 
   const actorName = node.actorId ? actors[node.actorId]?.name ?? '' : ''
   const actorNames = Object.values(actors).map((a) => a.name)
@@ -119,14 +197,22 @@ export default function PropertyPopover() {
 
   return (
     <div style={{
-      ...popoverStyle(sx - GAP, sy - GAP),
+      ...popoverStyle(sx - GAP + dragOffset.x, sy - GAP + dragOffset.y),
       transform: 'translate(-100%, -100%)',
       paddingTop: 20,
     }}>
-      <button onClick={deselect} style={closeBtnStyle}>×</button>
+      <div
+        ref={handleRef}
+        onPointerDown={onDragDown} onPointerMove={onDragMove}
+        onPointerUp={onDragUp} onPointerCancel={onDragUp}
+        style={dragHandleStyle}
+      >
+        <span style={{ fontSize: 8, color: '#ccc', letterSpacing: 3 }}>• • •</span>
+      </div>
+      <button onClick={deselect} onPointerDown={e => e.stopPropagation()} style={closeBtnStyle}>×</button>
       <svg style={{ position: 'absolute', bottom: 0, right: 0, width: 0, height: 0, overflow: 'visible', pointerEvents: 'none' }}>
-        <line x1={0} y1={0} x2={GAP} y2={GAP} stroke="#bbb" strokeWidth={1} />
-        <circle cx={GAP} cy={GAP} r={2} fill="#aaa" />
+        <line x1={0} y1={0} x2={connDx} y2={connDy} stroke="#bbb" strokeWidth={1} />
+        <circle cx={connDx} cy={connDy} r={2} fill="#aaa" />
       </svg>
       <label style={labelStyle}>label</label>
       <input
@@ -196,6 +282,14 @@ const inputStyle = {
   border: '1px solid #ddd',
   padding: '2px 4px',
   width: '100%',
+}
+
+const dragHandleStyle = {
+  position: 'absolute', top: 0, left: 0, right: 0, height: 16,
+  cursor: 'grab',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  borderBottom: '1px solid #eee',
+  userSelect: 'none',
 }
 
 const closeBtnStyle = {

@@ -130,10 +130,11 @@ const useStore = create((set, get) => ({
   deselect: () => set({ selectedId: null, selectedType: null, selectedIds: [], focusNodeId: null, focusDeep: false }),
 
   addToSelection: (id) => set(s => {
-    const has = s.selectedIds.includes(id)
-    const selectedIds = has
-      ? s.selectedIds.filter(x => x !== id)
-      : [...s.selectedIds, id]
+    const base = (s.selectedIds.length === 0 && s.selectedId && s.selectedType === 'node')
+      ? [s.selectedId]
+      : s.selectedIds
+    const has = base.includes(id)
+    const selectedIds = has ? base.filter(x => x !== id) : [...base, id]
     return {
       selectedIds,
       selectedId: selectedIds.length ? (has ? selectedIds[selectedIds.length - 1] ?? null : id) : null,

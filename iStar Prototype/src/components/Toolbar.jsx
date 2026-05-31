@@ -41,6 +41,7 @@ const STEPS = [
   <>Select two intentional elements <GoalShape /> to choose the link <ArrowIcon /> that defines their relationship. The order of the selection defines the direction of the link <ArrowIcon />. You can change the link's type and direction by clicking on the link <ArrowIcon />.</>,
   <>For the links <ArrowIcon />, the path is created along an octilinear grid.</>,
   <>You can slide the information tags <TagIcon /> on the link to improve readability.</>,
+  <>If a long link <ArrowIcon /> is having trouble drawing a clean path, you can click on the link <ArrowIcon /> and enable an outer path from the popup. A direction (left, right, top, bottom) can also be set to control which side of the diagram the path goes around.</>,
 ]
 
 export default function Toolbar() {

@@ -70,8 +70,9 @@ export default function Canvas() {
     if (modeRef.current.startsWith('add-')) {
       addNode(modeRef.current.replace('add-', ''), world.x, world.y)
     } else {
+      const hadPendingLink = !!useStore.getState().pendingLink
       clearConnect()
-      deselect()
+      if (!hadPendingLink) deselect()
     }
   }
 
