@@ -51,8 +51,8 @@ export default function Node({ node }) {
   const isolateTypes = useStore(s => s.isolateTypes)
 
   const highlightActive = highlightTypes.length > 0
-  const isHidden       = !isolateTypes.includes(node.type)
-  const isHighlighted  = highlightActive && highlightTypes.includes(node.type)
+  const isHidden = !isolateTypes.includes(node.type)
+  const isHighlighted = highlightActive && highlightTypes.includes(node.type)
 
   // 'none' | 'focus' (the selected node) | 'connected' (in dependency set) | 'dimmed'
   const focusStatus = useStore(s => {
@@ -68,7 +68,7 @@ export default function Node({ node }) {
     return connected ? 'connected' : 'dimmed'
   })
 
-  const HIGHLIGHT_FILLS = { goal: '#d0cabf', task: '#A2BBD9', softgoal: '#e2dfd5', resource: '#AFD2AF' }
+  const HIGHLIGHT_FILLS = { goal: '#e1d9d0', task: '#bdd9e4', softgoal: '#c7c1b6', resource: '#c9dfc4' }
   const isFillHighlighted = isHighlighted || focusStatus === 'focus' || focusStatus === 'connected'
   const hlFill = isFillHighlighted ? (HIGHLIGHT_FILLS[node.type] ?? 'white') : 'white'
 

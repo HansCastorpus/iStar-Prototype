@@ -43,12 +43,12 @@ const HIGHLIGHT_STYLES = {
   break:        { color: '#EE3131', sw: 8 },
   help:         { color: '#457DF5', sw: 8 },
   make:         { color: '#457DF5', sw: 8 },
-  'needed-by':  { color: '#555',    sw: 4, dash: '8 4' },
-  'depends-on': { color: '#555752', sw: 4 },
-  'or':         { color: '#F8B331', sw: 4 },
-  'xor':        { color: '#E07000', sw: 4 },
-  'and':        { color: '#21755D', sw: 4 },
-  'part-of':    { color: '#9333EA', sw: 4 },
+  'needed-by':  { color: '#555',    sw: 6, dash: '8 4' },
+  'depends-on': { color: '#555752', sw: 6 },
+  'or':         { color: '#F8B331', sw: 6 },
+  'xor':        { color: '#E07000', sw: 6 },
+  'and':        { color: '#21755D', sw: 6 },
+  'part-of':    { color: '#9333EA', sw: 6 },
 }
 
 // Direction + tip at the TARGET end (last segment).
@@ -126,10 +126,12 @@ function PlusSign({ x, y, r = ICON_R }) {
 // Target-end icon (at the arrowhead end)
 function TargetIcon({ type, x, y, dx, dy, color, sw, andBar }) {
   switch (type) {
-    case 'depends-on':
-      return <rect x={x - ICON_R + sw / 2} y={y - ICON_R + sw / 2}
-        width={(ICON_R - sw / 2) * 2} height={(ICON_R - sw / 2) * 2}
-        fill="white" stroke={color} strokeWidth={sw} style={{ pointerEvents: 'none' }} />
+    case 'depends-on': {
+      const isw = 3
+      return <rect x={x - ICON_R + isw / 2} y={y - ICON_R + isw / 2}
+        width={(ICON_R - isw / 2) * 2} height={(ICON_R - isw / 2) * 2}
+        fill="white" stroke={color} strokeWidth={isw} style={{ pointerEvents: 'none' }} />
+    }
     case 'hurt':
       return <g style={{ pointerEvents: 'none' }}><MinusCircle x={x} y={y} color={color} r={LARGE_ICON_R} /></g>
     case 'help':
