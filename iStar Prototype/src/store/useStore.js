@@ -392,14 +392,29 @@ const useStore = create((set, get) => ({
     clone.setAttribute('viewBox', `${minX} ${minY} ${w} ${h}`)
     clone.setAttribute('width', w)
     clone.setAttribute('height', h)
-    // Remove huge background rect and reset zoom transform
     clone.querySelector('.canvas-bg')?.remove()
     const zoomG = clone.querySelector('g[transform*="scale"]')
-    if (zoomG) zoomG.setAttribute('transform', '')
+    if (zoomG) zoomG.removeAttribute('transform')
 
-    const svgStr = new XMLSerializer().serializeToString(clone)
+    // Resolve CSS custom properties — they are not available in a standalone SVG image
+    const cs = getComputedStyle(document.documentElement)
+    const cssVars = [
+      '--bg-canvas', '--bg-panel', '--bg-popup',
+      '--text-1', '--text-2', '--text-3', '--text-node',
+      '--border', '--border-lt', '--border-md', '--border-ck',
+      '--node-fill', '--node-stroke', '--node-text', '--link-def',
+      '--hl-goal', '--hl-task', '--hl-softgoal', '--hl-resource',
+      '--hl-hurt', '--hl-help', '--hl-needed-by', '--hl-depends-on',
+      '--hl-or', '--hl-xor', '--hl-and', '--hl-part-of',
+    ]
+    let svgStr = new XMLSerializer().serializeToString(clone)
+    for (const v of cssVars) {
+      svgStr = svgStr.replaceAll(`var(${v})`, cs.getPropertyValue(v).trim())
+    }
+
     const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' })
     const url = URL.createObjectURL(blob)
+    const bgColor = cs.getPropertyValue('--bg-canvas').trim() || '#f8f8f8'
 
     const img = new Image()
     img.onload = () => {
@@ -409,7 +424,7 @@ const useStore = create((set, get) => ({
       canvas.height = h * scale
       const ctx = canvas.getContext('2d')
       ctx.scale(scale, scale)
-      ctx.fillStyle = '#f8f8f8'
+      ctx.fillStyle = bgColor
       ctx.fillRect(0, 0, w, h)
       ctx.drawImage(img, 0, 0, w, h)
       URL.revokeObjectURL(url)
