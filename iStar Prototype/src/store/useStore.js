@@ -376,7 +376,7 @@ const useStore = create((set, get) => ({
 
   exportAsImage: (format = 'png') => {
     const { nodes } = get()
-    const svgEl = document.querySelector('svg')
+    const svgEl = document.querySelector('#diagram-canvas')
     if (!svgEl) return
 
     const nodeList = Object.values(nodes)
@@ -392,8 +392,11 @@ const useStore = create((set, get) => ({
     clone.setAttribute('viewBox', `${minX} ${minY} ${w} ${h}`)
     clone.setAttribute('width', w)
     clone.setAttribute('height', h)
+    // Remove `width:100%;height:100%` inline style — in a standalone image context
+    // those percentages have no containing block and collapse the SVG to 0×0.
+    clone.removeAttribute('style')
     clone.querySelector('.canvas-bg')?.remove()
-    const zoomG = clone.querySelector('g[transform*="scale"]')
+    const zoomG = clone.querySelector('g')
     if (zoomG) zoomG.removeAttribute('transform')
 
     // Resolve CSS custom properties — they are not available in a standalone SVG image
