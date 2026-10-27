@@ -3,6 +3,16 @@ import useStore from '../store/useStore.js'
 
 const PAD = 20
 const LINE_LEN = 15
+const LABEL_PAD_X = 10
+const LABEL_PAD_Y = 6
+const LABEL_RADIUS = 6
+
+let measureCtx = null
+function measureText(text, font) {
+  if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d')
+  measureCtx.font = font
+  return measureCtx.measureText(text).width
+}
 
 function octilinearHull(points) {
   if (!points.length) return []
@@ -138,12 +148,18 @@ export default function Actor({ actor }) {
 
   const name = actor.name || ''
   const FONT_SIZE = 11
-  const circleR = Math.max(18, name.length * FONT_SIZE * 0.32 + 8)
+  const labelW = Math.max(36, measureText(name, `${FONT_SIZE}px sans-serif`) + 2 * LABEL_PAD_X)
+  const labelH = FONT_SIZE + 2 * LABEL_PAD_Y
 
   const lineEndX = anchorCorner.x + LINE_LEN * lineDir.x
   const lineEndY = anchorCorner.y + LINE_LEN * lineDir.y
-  const circleCx = anchorCorner.x + (LINE_LEN + circleR) * lineDir.x
-  const circleCy = anchorCorner.y + (LINE_LEN + circleR) * lineDir.y
+  // Distance from the label centre to its edge along lineDir, so the line meets the border
+  const edgeDist = Math.min(
+    Math.abs(lineDir.x) > 1e-6 ? (labelW / 2) / Math.abs(lineDir.x) : Infinity,
+    Math.abs(lineDir.y) > 1e-6 ? (labelH / 2) / Math.abs(lineDir.y) : Infinity,
+  )
+  const labelCx = lineEndX + edgeDist * lineDir.x
+  const labelCy = lineEndY + edgeDist * lineDir.y
 
   const clientToWorld = (cx, cy) => {
     const pt = gRef.current.ownerSVGElement.createSVGPoint()
@@ -212,13 +228,15 @@ export default function Actor({ actor }) {
         x2={lineEndX}       y2={lineEndY}
         stroke="var(--node-stroke)" strokeWidth={1} style={{ pointerEvents: 'none' }}
       />
-      <circle cx={circleCx} cy={circleCy} r={circleR}
+      <rect
+        x={labelCx - labelW / 2} y={labelCy - labelH / 2}
+        width={labelW} height={labelH} rx={LABEL_RADIUS} ry={LABEL_RADIUS}
         fill="var(--node-fill)" stroke="var(--node-stroke)" strokeWidth={1}
         style={{ cursor: 'move' }}
         onPointerDown={onPointerDown}
       />
       <text
-        x={circleCx} y={circleCy}
+        x={labelCx} y={labelCy}
         textAnchor="middle" dominantBaseline="central"
         fontSize={FONT_SIZE} fontFamily="sans-serif" fill="var(--node-text)"
         style={{ pointerEvents: 'none', userSelect: 'none' }}
