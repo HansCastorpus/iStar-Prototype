@@ -1,5 +1,6 @@
 import { useRef, useMemo } from 'react'
 import useStore from '../store/useStore.js'
+import { upstreamSet, focusLayers } from '../utils/dependencies.js'
 
 const PAD = 20
 const LINE_LEN = 15
@@ -105,8 +106,14 @@ export default function Actor({ actor }) {
   // Hidden/highlighted for all actors (type row) or just this one (per-actor row) in the filter panel
   const isHidden = useStore(s => !s.isolateTypes.includes('actor') || s.hiddenActorIds.includes(actor.id))
   // Clicking the actor toggles the same per-actor highlight as the filter panel, so the two always agree
+  // Lit up while a dependency view (Dependencies section) includes any of its elements
+  const inDependencyView = useStore(s => {
+    if (!s.focusNodeId) return false
+    const set = upstreamSet(s.links, s.focusNodeId, focusLayers(s))
+    return Object.values(s.nodes).some(n => n.actorId === actor.id && set.has(n.id))
+  })
   const isHighlighted = useStore(s =>
-    s.highlightTypes.includes('actor') || s.highlightedActorIds.includes(actor.id))
+    s.highlightTypes.includes('actor') || s.highlightedActorIds.includes(actor.id)) || inDependencyView
   const { moveNodeGroup, toggleActorHighlight } = useStore()
 
   const gRef = useRef(null)
