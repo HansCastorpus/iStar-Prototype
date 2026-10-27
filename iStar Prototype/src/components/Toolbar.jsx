@@ -37,10 +37,11 @@ function ArrowIcon({ dashed = false, color = 'var(--node-stroke)' }) {
 }
 
 function TagIcon() {
+  const t = useT()
   return (
     <svg width="32" height="14" viewBox="0 0 32 14" style={iconStyle}>
       <rect x="0.5" y="0.5" width="31" height="13" rx="6.5" fill="var(--node-fill)" stroke="var(--node-stroke)" strokeWidth="1"/>
-      <text x="16" y="7.5" textAnchor="middle" dominantBaseline="middle" fontSize="7" fontFamily="sans-serif" fill="var(--node-text)">AND</text>
+      <text x="16" y="7.5" textAnchor="middle" dominantBaseline="middle" fontSize="7" fontFamily="sans-serif" fill="var(--node-text)">{t('type.and').toUpperCase()}</text>
     </svg>
   )
 }
