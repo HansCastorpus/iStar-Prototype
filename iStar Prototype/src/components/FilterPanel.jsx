@@ -95,6 +95,14 @@ export default function FilterPanel() {
 
   const [actorPanelOpen, setActorPanelOpen] = useState(false)
 
+  // Pressing anywhere on the diagram canvas closes the actor panel
+  useEffect(() => {
+    if (!actorPanelOpen) return
+    const onDown = (e) => { if (e.target.closest?.('#diagram-canvas')) setActorPanelOpen(false) }
+    document.addEventListener('pointerdown', onDown, true)  // capture: canvas items stop propagation
+    return () => document.removeEventListener('pointerdown', onDown, true)
+  }, [actorPanelOpen])
+
   // Track whether the panel's content is taller than the panel (i.e. a scrollbar is showing)
   const [panelEl, setPanelEl] = useState(null)
   const [overflows, setOverflows] = useState(false)
