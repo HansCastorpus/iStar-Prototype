@@ -334,8 +334,11 @@ function Section({ label, first, legend, types, highlightTypes, isolateTypes, on
 
 // legendType: which sample to show when the legend is on (null = blank space, keeps checkboxes aligned)
 // wrap: let long labels run onto several lines instead of being cut off with "…"
-function TypeRow({ label, legendType = label, wrap = false, legend, inHighlight, inIsolate, onToggleH, onToggleI }) {
-  const { colI, colH } = useColumns()
+// cols: { i, h } styles to use instead of the filter panel's columns (the actor panel's are narrower)
+function TypeRow({ label, legendType = label, wrap = false, cols, legend, inHighlight, inIsolate, onToggleH, onToggleI }) {
+  const panelCols = useColumns()
+  const iStyle = cols?.i ?? panelCols.colI(legend)
+  const hStyle = cols?.h ?? panelCols.colH(legend)
   const slot = (highlighted) => !legend ? null
     : legendType ? <LegendSlot type={legendType} highlighted={highlighted} />
     : <div style={{ width: LEGEND_W, flexShrink: 0 }} />
@@ -347,11 +350,11 @@ function TypeRow({ label, legendType = label, wrap = false, legend, inHighlight,
           : { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }) }}>
         {label}
       </span>
-      <div style={{ ...colI(legend), display: 'flex', justifyContent: 'center', alignItems: 'center', gap: LEGEND_GAP }}>
+      <div style={{ ...iStyle, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: LEGEND_GAP }}>
         <Square active={inIsolate} onClick={onToggleI} />
         {slot(false)}
       </div>
-      <div style={{ ...colH(legend), display: 'flex', justifyContent: 'center', alignItems: 'center', gap: LEGEND_GAP }}>
+      <div style={{ ...hStyle, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: LEGEND_GAP }}>
         <Square active={inHighlight} onClick={onToggleH} />
         {slot(true)}
       </div>
@@ -375,12 +378,14 @@ function ActorListToggle({ open, onToggle }) {
   )
 }
 
-const ACTOR_PANEL_W = 340
+const ACTOR_PANEL_W = 280
+// Narrow checkbox columns for the actor panel: just the checkbox and its small column label
+const ACTOR_COL = { width: 56, flexShrink: 0, borderLeft: '1px solid var(--border-lt)', padding: '0 2px' }
+const ACTOR_COLS = { i: ACTOR_COL, h: ACTOR_COL }
 
 // Side panel next to the filter panel: every actor with its own hide / highlight checkboxes
 function ActorPanel({ left, onClose }) {
   const t = useT()
-  const { colI, colH } = useColumns()
   const actors              = useStore(s => s.actors)
   const hiddenActorIds      = useStore(s => s.hiddenActorIds)
   const highlightedActorIds = useStore(s => s.highlightedActorIds)
@@ -411,8 +416,8 @@ function ActorPanel({ left, onClose }) {
         {/* Column labels, aligned with the checkbox columns */}
         <div style={{ display: 'flex', alignItems: 'center', marginTop: 8, paddingBottom: 4, borderBottom: '1px solid var(--border-lt)' }}>
           <div style={{ flex: 1 }} />
-          <div style={{ ...colI(false), ...colLabel }}>{t('actors.visible')}</div>
-          <div style={{ ...colH(false), ...colLabel }}>{t('actors.highlight')}</div>
+          <div style={{ ...ACTOR_COL, ...colLabel }}>{t('actors.visible')}</div>
+          <div style={{ ...ACTOR_COL, ...colLabel }}>{t('actors.highlight')}</div>
         </div>
 
         {list.length === 0 && (
@@ -420,7 +425,7 @@ function ActorPanel({ left, onClose }) {
         )}
         {list.map(a => (
           <TypeRow
-            key={a.id} label={a.name || t('actors.unnamed')} legendType={null} legend={false} wrap
+            key={a.id} label={a.name || t('actors.unnamed')} legendType={null} legend={false} wrap cols={ACTOR_COLS}
             inIsolate={actorsVisible && !hiddenActorIds.includes(a.id)}
             inHighlight={actorsHighlighted || highlightedActorIds.includes(a.id)}
             onToggleI={() => toggleActorHidden(a.id)}
