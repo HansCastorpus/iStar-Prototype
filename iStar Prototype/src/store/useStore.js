@@ -94,7 +94,23 @@ function hullsSeparated(e1, e2, gap) {
   )
 }
 
+// ── Undo / redo history ────────────────────────────────────────────────────────
+// Snapshots of the diagram (nodes, links, actors) taken just before each change; view state
+// (filters, selection, theme…) is not part of it. Changes inside a batch (a drag, a label edit)
+// collapse into one step.
+const HISTORY_LIMIT = 100
+const history = { past: [], future: [], batch: 0, batchRecorded: false, restoring: false }
+const snapshot = (s) => ({ nodes: s.nodes, links: s.links, actors: s.actors })
+
 const useStore = create((set, get) => ({
+  // ── History ──────────────────────────────────────────────────────────────────
+  canUndo: false,
+  canRedo: false,
+  beginBatch: () => { if (history.batch++ === 0) history.batchRecorded = false },
+  endBatch:   () => { history.batch = Math.max(0, history.batch - 1) },
+  undo: () => restore(history.past, history.future),
+  redo: () => restore(history.future, history.past),
+
   // ── Diagram data ────────────────────────────────────────────────────────────
   actors: {},
   nodes: {},
@@ -212,7 +228,8 @@ const useStore = create((set, get) => ({
 
   // ── Selection ────────────────────────────────────────────────────────────────
   select: (id, type) => set({ selectedId: id, selectedType: type, selectedIds: [], selectedActorId: null }),
-  deselect: () => set({ selectedId: null, selectedType: null, selectedIds: [], selectedActorId: null, focusNodeId: null, focusDeep: false }),
+  deselect: () => set({ selectedId: null, selectedType: null, selectedIds: [], selectedActorId: null, focusNodeId: null, focusDeep: false,
+    editingActorId: null, editingActorTag: null }),
 
   addToSelection: (id) => set(s => {
     const base = (s.selectedIds.length === 0 && s.selectedId && s.selectedType === 'node')
@@ -370,6 +387,47 @@ const useStore = create((set, get) => ({
 
   // ── Actors ───────────────────────────────────────────────────────────────────
   // Creates an actor if the name is new; returns the id either way.
+  // Actor edit popup (opened from the actor's name tag)
+  editingActorId:  null,
+  editingActorTag: null,   // world-space rect of that actor's name tag, for placing the popup
+  openActorEditor:  (id) => set({ editingActorId: id }),
+  closeActorEditor: () => set({ editingActorId: null, editingActorTag: null }),
+  setEditingActorTag: (rect) => set({ editingActorTag: rect }),
+
+  // Rename; using another actor's name merges this actor into that one
+  renameActor: (id, rawName) => set(s => {
+    const name = rawName.trim()
+    const actor = s.actors[id]
+    if (!actor || !name || name === actor.name) return {}
+    const other = Object.values(s.actors).find(a => a.id !== id && a.name === name)
+    if (!other) return { actors: { ...s.actors, [id]: { ...actor, name } } }
+    const actors = { ...s.actors }
+    delete actors[id]
+    const nodes = Object.fromEntries(Object.entries(s.nodes).map(([k, n]) =>
+      [k, n.actorId === id ? { ...n, actorId: other.id } : n]))
+    const swap = list => [...new Set(list.map(x => x === id ? other.id : x))]
+    return {
+      actors, nodes,
+      hiddenActorIds: swap(s.hiddenActorIds),
+      highlightedActorIds: swap(s.highlightedActorIds),
+      editingActorId: s.editingActorId === id ? other.id : s.editingActorId,
+    }
+  }),
+
+  // Remove the actor but keep its elements (they just leave the group)
+  ungroupActor: (id) => set(s => {
+    const actors = { ...s.actors }
+    delete actors[id]
+    const nodes = Object.fromEntries(Object.entries(s.nodes).map(([k, n]) =>
+      [k, n.actorId === id ? { ...n, actorId: null } : n]))
+    return {
+      actors, nodes,
+      hiddenActorIds: s.hiddenActorIds.filter(x => x !== id),
+      highlightedActorIds: s.highlightedActorIds.filter(x => x !== id),
+      ...(s.editingActorId === id && { editingActorId: null, editingActorTag: null }),
+    }
+  }),
+
   ensureActor: (name, type = 'agent') => {
     const existing = Object.values(get().actors).find((a) => a.name === name)
     if (existing) return existing.id
@@ -558,6 +616,39 @@ const useStore = create((set, get) => ({
 }))
 
 // Auto-save diagram data on every change.
+// Move one snapshot from `from` to the diagram, saving the current diagram onto `to`
+function restore(from, to) {
+  if (!from.length) return
+  const s = useStore.getState()
+  to.push(snapshot(s))
+  const next = from.pop()
+  history.restoring = true
+  useStore.setState({
+    ...next,
+    // Drop references to things that no longer exist after the jump
+    ...(s.selectedId && !next.nodes[s.selectedId] && !next.links[s.selectedId] && { selectedId: null, selectedType: null }),
+    selectedIds: s.selectedIds.filter(id => next.nodes[id]),
+    ...(s.focusNodeId && !next.nodes[s.focusNodeId] && { focusNodeId: null, focusDeep: false }),
+    ...(s.editingActorId && !next.actors[s.editingActorId] && { editingActorId: null, editingActorTag: null }),
+    pendingLink: null, connectSource: null,
+    canUndo: history.past.length > 0,
+    canRedo: history.future.length > 0,
+  })
+  history.restoring = false
+}
+
+// Record the diagram before every change (once per batch)
+useStore.subscribe((s, prev) => {
+  if (history.restoring) return
+  if (s.nodes === prev.nodes && s.links === prev.links && s.actors === prev.actors) return
+  if (history.batch && history.batchRecorded) return
+  if (history.batch) history.batchRecorded = true
+  history.past.push(snapshot(prev))
+  if (history.past.length > HISTORY_LIMIT) history.past.shift()
+  history.future = []
+  useStore.setState({ canUndo: true, canRedo: false })
+})
+
 useStore.subscribe((s) => {
   localStorage.setItem('istar-diagram', JSON.stringify({
     actors: s.actors, nodes: s.nodes, links: s.links,

@@ -125,6 +125,7 @@ en: [
       <>Click an element to select it: it gets a <B>blue</B> outline <BlueShape /> and a popup opens to edit its label, type and actor. Press <B>Enter</B> to confirm what you typed.</>,
       <>Click the selected element again to deselect it.</>,
       <>The popup places itself so it covers as little of the diagram as possible. Drag it by its top bar, or use <B>hide</B> / <B>show</B> to minimise it.</>,
+      <><B>Ctrl/⌘+Z</B> undoes your last change and <B>Shift+Ctrl/⌘+Z</B> redoes it, or use <B>↶</B> / <B>↷</B> in the header. A whole drag counts as one step.</>,
     ],
   },
   {
@@ -172,6 +173,7 @@ fr: [
       <>Cliquez sur un élément pour le sélectionner : il prend un contour <B>bleu</B> <BlueShape /> et une fenêtre s'ouvre pour modifier son libellé, son type et son acteur. Appuyez sur <B>Entrée</B> pour valider la saisie.</>,
       <>Cliquez à nouveau sur l'élément sélectionné pour le désélectionner.</>,
       <>La fenêtre se place d'elle-même pour couvrir le moins possible le diagramme. Déplacez-la par sa barre du haut, ou utilisez <B>masquer</B> / <B>afficher</B> pour la réduire.</>,
+      <><B>Ctrl/⌘+Z</B> annule votre dernière modification et <B>Maj+Ctrl/⌘+Z</B> la rétablit, ou utilisez <B>↶</B> / <B>↷</B> dans l'en-tête. Un déplacement complet compte pour une seule étape.</>,
     ],
   },
   {
@@ -219,6 +221,10 @@ export default function Toolbar() {
   const lang = useStore(s => s.lang)
   const setLang = useStore(s => s.setLang)
   const t = useT()
+  const canUndo = useStore(s => s.canUndo)
+  const canRedo = useStore(s => s.canRedo)
+  const undo = useStore(s => s.undo)
+  const redo = useStore(s => s.redo)
   const fileRef  = useRef(null)
   const helpRef  = useRef(null)
   const timerRef = useRef(null)
@@ -404,8 +410,12 @@ export default function Toolbar() {
 
       <OrConnector />
 
-      {/* Language + Dark mode + Clear */}
+      {/* Undo / Redo + Language + Dark mode + Clear */}
       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        <button onClick={undo} disabled={!canUndo} title={t('toolbar.undo')} aria-label={t('toolbar.undo')}
+          style={historyBtn(canUndo)}>↶</button>
+        <button onClick={redo} disabled={!canRedo} title={t('toolbar.redo')} aria-label={t('toolbar.redo')}
+          style={historyBtn(canRedo)}>↷</button>
         <div role="group" aria-label={t('toolbar.language')} style={{ display: 'flex' }}>
           {LANGS.map((l, i) => (
             <button key={l} onClick={() => setLang(l)} aria-pressed={lang === l} style={{
@@ -442,3 +452,9 @@ const actionBtn = {
   fontSize: 13,
   fontFamily: 'monospace',
 }
+
+const historyBtn = (enabled) => ({
+  ...actionBtn,
+  padding: '5px 10px',
+  ...(!enabled && { color: 'var(--text-3)', borderColor: 'var(--border)', cursor: 'default' }),
+})

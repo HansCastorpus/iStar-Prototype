@@ -289,6 +289,7 @@ export default function Link({ link, points, andBar }) {
     if (e.button !== 0) return
     e.stopPropagation()
     labelRef.current.setPointerCapture(e.pointerId)
+    useStore.getState().beginBatch()  // sliding the tag is one undo step
     pointerRef.current = { pointerId: e.pointerId, moved: false }
     setDragging(true)
   }
@@ -305,6 +306,7 @@ export default function Link({ link, points, andBar }) {
     const ps = pointerRef.current
     if (!ps || e.pointerId !== ps.pointerId) return
     labelRef.current.releasePointerCapture(e.pointerId)
+    useStore.getState().endBatch()
     pointerRef.current = null
     setDragging(false)
     if (!ps.moved) select(link.id, 'link')

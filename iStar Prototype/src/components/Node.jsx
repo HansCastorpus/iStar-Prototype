@@ -82,6 +82,7 @@ export default function Node({ node }) {
     }
 
     gRef.current.setPointerCapture(e.pointerId)
+    useStore.getState().beginBatch()  // the whole drag is one undo step
 
     const startWorld = clientToWorld(e.clientX, e.clientY)
     const { selectedIds } = useStore.getState()
@@ -124,6 +125,7 @@ export default function Node({ node }) {
 
     gRef.current.releasePointerCapture(e.pointerId)
     setDraggingNode(null)
+    useStore.getState().endBatch()
 
     if (!ps.hasMoved) {
       const state = useStore.getState()

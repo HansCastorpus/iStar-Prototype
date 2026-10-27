@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import useStore from '../store/useStore.js'
 import { useZoom, worldToScreen } from '../contexts/ZoomContext.jsx'
 import { usePopupPlacement, screenBounds, diagramObstacles } from '../utils/usePopupPlacement.js'
 import { useT } from '../i18n.js'
-import PopupConnector, { POPUP_Z } from './PopupConnector.jsx'
+import PopupConnector from './PopupConnector.jsx'
+import PopoverHeader from './PopoverHeader.jsx'
+import { HEADER_H, popoverStyle, labelStyle, inputStyle, summaryStyle, btnStyle, confirmOnEnter } from './popupStyles.js'
 
 const NODE_TYPES = ['goal', 'task', 'softgoal', 'resource']
 const LINK_TYPES = [
@@ -62,6 +64,21 @@ export default function PropertyPopover({ linkPaths = {} }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [collapsed, setCollapsed] = useState(false)  // kept across selections so a minimized popup stays out of the way
 
+  // Label edits are one undo step per editing session. The session also ends if the popup switches
+  // element or closes while the field is focused (blur isn't guaranteed when the field is removed).
+  const labelBatchOpen = useRef(false)
+  const startLabelEdit = () => {
+    if (labelBatchOpen.current) return
+    labelBatchOpen.current = true
+    useStore.getState().beginBatch()
+  }
+  const endLabelEdit = () => {
+    if (!labelBatchOpen.current) return
+    labelBatchOpen.current = false
+    useStore.getState().endBatch()
+  }
+  useEffect(() => endLabelEdit, [selectedId])
+
   const anchor = selectionAnchor({ selectedId, selectedIds, selectedType, nodes, links, linkPaths, transform })
   const { pos, popRef, handleRef, dragProps, connector } = usePopupPlacement({
     id: 'properties',
@@ -104,8 +121,11 @@ export default function PropertyPopover({ linkPaths = {} }) {
 
     const handleMultiActorChange = (e) => {
       const name = e.target.value.trim()
+      const { beginBatch, endBatch } = useStore.getState()
+      beginBatch()  // creating the actor + assigning every element is one undo step
       const actorId = name ? ensureActor(name) : null
       for (const id of selectedIds) updateNode(id, { actorId })
+      endBatch()
     }
 
     return frame(<>
@@ -214,8 +234,11 @@ export default function PropertyPopover({ linkPaths = {} }) {
       updateNode(node.id, { actorId: null })
       return
     }
+    const { beginBatch, endBatch } = useStore.getState()
+    beginBatch()  // creating the actor + assigning it is one undo step
     const actorId = ensureActor(name)
     updateNode(node.id, { actorId })
+    endBatch()
   }
 
   return frame(<>
@@ -228,6 +251,8 @@ export default function PropertyPopover({ linkPaths = {} }) {
         autoFocus
         value={node.label}
         onChange={handleLabelChange}
+        onFocus={startLabelEdit}
+        onBlur={endLabelEdit}
         onKeyDown={confirmOnEnter}
         style={inputStyle}
         placeholder={t('popup.labelPlaceholder')}
@@ -270,107 +295,3 @@ export default function PropertyPopover({ linkPaths = {} }) {
       </>}
   </>)
 }
-
-// Enter confirms a text field by leaving it (actor fields save on blur; labels save as you type).
-// Deferred so a highlighted autocomplete suggestion is filled in first; skipped mid-IME composition.
-function confirmOnEnter(e) {
-  if (e.key !== 'Enter' || e.nativeEvent.isComposing) return
-  const el = e.currentTarget
-  setTimeout(() => el.blur())
-}
-
-const popoverStyle = (x, y) => ({
-  position: 'absolute',
-  left: x,
-  top: y,
-  background: 'var(--bg-popup)',
-  border: '1px solid var(--border-md)',
-  padding: '8px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '3px',
-  zIndex: POPUP_Z,
-  minWidth: 160,
-})
-
-const labelStyle = { fontSize: 9, color: 'var(--text-2)', marginTop: 2 }
-
-const inputStyle = {
-  font: 'inherit',
-  fontSize: 11,
-  border: '1px solid var(--border)',
-  padding: '2px 4px',
-  width: '100%',
-  background: 'var(--node-fill)',
-  color: 'var(--text-1)',
-}
-
-const HEADER_H = 22
-
-// Header bar: drag handle across the top, with a hide/show toggle (and optional ×) on the right
-function PopoverHeader({ handleRef, dragProps, collapsed, onToggle, onClose }) {
-  const t = useT()
-  const stop = e => e.stopPropagation()
-  return (
-    <>
-      <div ref={handleRef} {...dragProps} style={dragHandleStyle}>
-        <span style={{ fontSize: 8, color: 'var(--text-3)', letterSpacing: 3 }}>• • •</span>
-      </div>
-      <div style={headerActionsStyle}>
-        <button onClick={onToggle} onPointerDown={stop} style={toggleBtnStyle}>
-          {collapsed ? t('popup.show') : t('popup.hide')}
-        </button>
-        {onClose && <button onClick={onClose} onPointerDown={stop} aria-label={t('popup.close')} style={closeBtnStyle}>×</button>}
-      </div>
-    </>
-  )
-}
-
-const headerActionsStyle = {
-  position: 'absolute', top: 0, right: 4, height: HEADER_H,
-  display: 'flex', alignItems: 'center', gap: 6,
-}
-
-const toggleBtnStyle = {
-  background: 'var(--node-fill)',
-  border: '1px solid var(--border-md)',
-  color: 'var(--text-1)',
-  padding: '1px 6px',
-  cursor: 'pointer',
-  fontSize: 9,
-  fontFamily: 'monospace',
-  lineHeight: 1.3,
-}
-
-const summaryStyle = {
-  fontSize: 10, color: 'var(--text-1)', fontFamily: 'monospace',
-  maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-}
-
-const dragHandleStyle = {
-  position: 'absolute', top: 0, left: 0, right: 0, height: HEADER_H,
-  cursor: 'grab',
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  borderBottom: '1px solid var(--border-lt)',
-  userSelect: 'none',
-}
-
-const closeBtnStyle = {
-  background: 'none',
-  border: 'none',
-  cursor: 'pointer',
-  fontSize: 13,
-  color: 'var(--text-2)',
-  lineHeight: 1,
-  padding: 0,
-}
-
-const btnStyle = (color) => ({
-  background: 'none',
-  border: `1px solid ${color}`,
-  color,
-  padding: '2px 6px',
-  cursor: 'pointer',
-  fontSize: 10,
-  fontFamily: 'monospace',
-})

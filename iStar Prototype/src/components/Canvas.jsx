@@ -8,6 +8,7 @@ import Actor from './Actor.jsx'
 import LinkPreview from './LinkPreview.jsx'
 import PropertyPopover from './PropertyPopover.jsx'
 import LinkTypePopup from './LinkTypePopup.jsx'
+import ActorPopover from './ActorPopover.jsx'
 import { computeLinkSlots } from '../utils/layout.js'
 import { computeAllPaths } from '../utils/routing.js'
 import { GRID } from '../utils/grid.js'
@@ -130,6 +131,7 @@ export default function Canvas() {
     <ZoomContext.Provider value={{ transform, transformRef }}>
       <PropertyPopover linkPaths={linkPaths} />
       <LinkTypePopup linkPaths={linkPaths} />
+      <ActorPopover linkPaths={linkPaths} />
       <svg
         ref={svgRef}
         id="diagram-canvas"

@@ -40,6 +40,8 @@ export const STRINGS = {
     'toolbar.cancel': 'Cancel',
     'toolbar.closeHelp': 'Close help',
     'toolbar.language': 'Language',
+    'toolbar.undo': 'Undo (Ctrl/⌘+Z)',
+    'toolbar.redo': 'Redo (Shift+Ctrl/⌘+Z)',
 
     // Filter card
     'filter.title': 'Filter',
@@ -107,6 +109,16 @@ export const STRINGS = {
     // Link type list (after picking two elements)
     'linkType.title': 'link type',
     'linkType.cancel': 'cancel',
+
+    // Actor edit popup
+    'actorPopup.title': 'actor',
+    'actorPopup.element': '1 element',
+    'actorPopup.elements': '{n} elements',
+    'actorPopup.name': 'name',
+    'actorPopup.mergeHint': 'Merges into the existing actor “{name}”.',
+    'actorPopup.ungroup': 'ungroup actor',
+    'actorPopup.ungroupHint': 'Remove this actor; its elements stay on the diagram',
+    'actorPopup.confirmUngroup': 'confirm ungroup',
   },
 
   fr: {
@@ -142,6 +154,8 @@ export const STRINGS = {
     'toolbar.cancel': 'Annuler',
     'toolbar.closeHelp': "Fermer l'aide",
     'toolbar.language': 'Langue',
+    'toolbar.undo': 'Annuler (Ctrl/⌘+Z)',
+    'toolbar.redo': 'Rétablir (Maj+Ctrl/⌘+Z)',
 
     'filter.title': 'Filtres',
     'filter.showLegend': 'Afficher la légende',
@@ -204,6 +218,15 @@ export const STRINGS = {
 
     'linkType.title': 'type de lien',
     'linkType.cancel': 'annuler',
+
+    'actorPopup.title': 'acteur',
+    'actorPopup.element': '1 élément',
+    'actorPopup.elements': '{n} éléments',
+    'actorPopup.name': 'nom',
+    'actorPopup.mergeHint': "Fusionne avec l'acteur existant « {name} ».",
+    'actorPopup.ungroup': "dissoudre l'acteur",
+    'actorPopup.ungroupHint': 'Supprime cet acteur ; ses éléments restent sur le diagramme',
+    'actorPopup.confirmUngroup': 'confirmer',
   },
 }
 

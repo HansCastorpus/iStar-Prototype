@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, useEffect } from 'react'
 import useStore from '../store/useStore.js'
 import { upstreamSet, focusLayers } from '../utils/dependencies.js'
 
@@ -22,28 +22,28 @@ function octilinearHull(points) {
   if (!points.length) return []
 
   let a = -Infinity, b = -Infinity, c = -Infinity, d = -Infinity
-  let e = -Infinity, f = -Infinity, g = -Infinity, h = -Infinity
+  let e = -Infinity, f = -Infißnity, g = -Infinity, h = -Infinity
 
   for (const { x, y } of points) {
-    if (x       > a) a = x
-    if (x + y   > b) b = x + y
-    if (y       > c) c = y
-    if (-x + y  > d) d = -x + y
-    if (-x      > e) e = -x
-    if (-x - y  > f) f = -x - y
-    if (-y      > g) g = -y
-    if (x - y   > h) h = x - y
+    if (x > a) a = x
+    if (x + y > b) b = x + y
+    if (y > c) c = y
+    if (-x + y > d) d = -x + y
+    if (-x > e) e = -x
+    if (-x - y > f) f = -x - y
+    if (-y > g) g = -y
+    if (x - y > h) h = x - y
   }
 
   const raw = [
-    { x: a,     y: b - a },
-    { x: b - c, y: c     },
-    { x: c - d, y: c     },
-    { x: -e,    y: d - e },
-    { x: -e,    y: e - f },
-    { x: g - f, y: -g    },
-    { x: h - g, y: -g    },
-    { x: a,     y: a - h },
+    { x: a, y: b - a },
+    { x: b - c, y: c },
+    { x: c - d, y: c },
+    { x: -e, y: d - e },
+    { x: -e, y: e - f },
+    { x: g - f, y: -g },
+    { x: h - g, y: -g },
+    { x: a, y: a - h },
   ]
 
   const eps = 0.01
@@ -55,8 +55,8 @@ function octilinearHull(points) {
   }
   const last = verts[verts.length - 1], first = verts[0]
   if (verts.length > 1 &&
-      Math.abs(last.x - first.x) < eps &&
-      Math.abs(last.y - first.y) < eps)
+    Math.abs(last.x - first.x) < eps &&
+    Math.abs(last.y - first.y) < eps)
     verts.pop()
 
   return verts
@@ -64,9 +64,9 @@ function octilinearHull(points) {
 
 function paddedCorners(members) {
   return members.flatMap(n => [
-    { x: n.x - PAD,           y: n.y - PAD            },
-    { x: n.x + n.width + PAD, y: n.y - PAD            },
-    { x: n.x - PAD,           y: n.y + n.height + PAD },
+    { x: n.x - PAD, y: n.y - PAD },
+    { x: n.x + n.width + PAD, y: n.y - PAD },
+    { x: n.x - PAD, y: n.y + n.height + PAD },
     { x: n.x + n.width + PAD, y: n.y + n.height + PAD },
   ])
 }
@@ -101,6 +101,27 @@ function buildHullPath(verts, r = 15) {
   return { d: d + ' Z', cornerMid }
 }
 
+// Name tag geometry (world coords): the tag sits LINE_LEN out from the hull corner along lineDir,
+// with its border meeting the connector line
+function nameTag(name, highlighted, anchorCorner, lineDir) {
+  const fontSize = highlighted ? FONT_SIZE_HL : FONT_SIZE
+  const fontWeight = highlighted ? 'bold' : 'normal'
+  const labelW = Math.max(36, measureText(name, `${fontWeight} ${fontSize}px sans-serif`) + 2 * LABEL_PAD_X)
+  const labelH = fontSize + 2 * LABEL_PAD_Y
+  const lineEndX = anchorCorner.x + LINE_LEN * lineDir.x
+  const lineEndY = anchorCorner.y + LINE_LEN * lineDir.y
+  // Distance from the label centre to its edge along lineDir, so the line meets the border
+  const edgeDist = Math.min(
+    Math.abs(lineDir.x) > 1e-6 ? (labelW / 2) / Math.abs(lineDir.x) : Infinity,
+    Math.abs(lineDir.y) > 1e-6 ? (labelH / 2) / Math.abs(lineDir.y) : Infinity,
+  )
+  return {
+    fontSize, fontWeight, labelW, labelH, lineEndX, lineEndY,
+    labelCx: lineEndX + edgeDist * lineDir.x,
+    labelCy: lineEndY + edgeDist * lineDir.y,
+  }
+}
+
 export default function Actor({ actor }) {
   const nodes = useStore(s => s.nodes)
   // Hidden/highlighted for all actors (type row) or just this one (per-actor row) in the filter panel
@@ -116,7 +137,8 @@ export default function Actor({ actor }) {
   })
   const isHighlighted = useStore(s =>
     s.highlightTypes.includes('actor') || s.highlightedActorIds.includes(actor.id)) || inDependencyView
-  const { moveNodeGroup, toggleActorHighlight } = useStore()
+  const { moveNodeGroup, toggleActorHighlight, openActorEditor, closeActorEditor, setEditingActorTag } = useStore()
+  const isEditing = useStore(s => s.editingActorId === actor.id)
 
   const gRef = useRef(null)
   const dragRef = useRef(null)
@@ -158,23 +180,19 @@ export default function Actor({ actor }) {
     }
   }, [nodes, actor.id])
 
-  if (!d || !anchorCorner || isHidden) return null
-
   const name = actor.name || ''
-  const fontSize = isHighlighted ? FONT_SIZE_HL : FONT_SIZE
-  const fontWeight = isHighlighted ? 'bold' : 'normal'
-  const labelW = Math.max(36, measureText(name, `${fontWeight} ${fontSize}px sans-serif`) + 2 * LABEL_PAD_X)
-  const labelH = fontSize + 2 * LABEL_PAD_Y
+  const tag = anchorCorner ? nameTag(name, isHighlighted, anchorCorner, lineDir) : null
 
-  const lineEndX = anchorCorner.x + LINE_LEN * lineDir.x
-  const lineEndY = anchorCorner.y + LINE_LEN * lineDir.y
-  // Distance from the label centre to its edge along lineDir, so the line meets the border
-  const edgeDist = Math.min(
-    Math.abs(lineDir.x) > 1e-6 ? (labelW / 2) / Math.abs(lineDir.x) : Infinity,
-    Math.abs(lineDir.y) > 1e-6 ? (labelH / 2) / Math.abs(lineDir.y) : Infinity,
-  )
-  const labelCx = lineEndX + edgeDist * lineDir.x
-  const labelCy = lineEndY + edgeDist * lineDir.y
+  // While this actor's edit popup is open, report where its name tag is so the popup can anchor to it
+  const tagX = tag && tag.labelCx - tag.labelW / 2, tagY = tag && tag.labelCy - tag.labelH / 2
+  const tagW = tag?.labelW, tagH = tag?.labelH
+  useEffect(() => {
+    if (isEditing) setEditingActorTag(tag && !isHidden ? { x: tagX, y: tagY, w: tagW, h: tagH } : null)
+  }, [isEditing, isHidden, tagX, tagY, tagW, tagH]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!d || !tag || isHidden) return null
+
+  const { fontSize, fontWeight, labelW, labelH, lineEndX, lineEndY, labelCx, labelCy } = tag
 
   const clientToWorld = (cx, cy) => {
     const pt = gRef.current.ownerSVGElement.createSVGPoint()
@@ -193,6 +211,7 @@ export default function Actor({ actor }) {
     e.stopPropagation()
 
     gRef.current.setPointerCapture(e.pointerId)
+    useStore.getState().beginBatch()  // the whole drag is one undo step
 
     const world = clientToWorld(e.clientX, e.clientY)
     const leadNode = useStore.getState().nodes[memberIds[0]]
@@ -223,8 +242,16 @@ export default function Actor({ actor }) {
     if (!ds || e.pointerId !== ds.pointerId) return
     gRef.current.releasePointerCapture(e.pointerId)
     dragRef.current = null
-    // A plain click on the name tag toggles the highlight; dragging only moves the group
-    if (ds.fromName && !ds.hasMoved) toggleActorHighlight(actor.id)
+    useStore.getState().endBatch()
+    // A plain click on the name tag toggles the highlight and opens / closes the edit popup with it;
+    // dragging only moves the group
+    if (ds.fromName && !ds.hasMoved) {
+      toggleActorHighlight(actor.id)
+      const s = useStore.getState()
+      const lit = s.highlightTypes.includes('actor') || s.highlightedActorIds.includes(actor.id)
+      if (lit) openActorEditor(actor.id)
+      else if (s.editingActorId === actor.id) closeActorEditor()
+    }
   }
 
   // Highlighted (incl. selected): solid line matching the name tag's stroke
@@ -260,7 +287,7 @@ export default function Actor({ actor }) {
         strokeDasharray={isHighlighted ? undefined : '6 3'} style={{ pointerEvents: 'none' }} />
       <line
         x1={anchorCorner.x} y1={anchorCorner.y}
-        x2={lineEndX}       y2={lineEndY}
+        x2={lineEndX} y2={lineEndY}
         stroke="var(--node-stroke)" strokeWidth={isHighlighted ? 2 : 1} style={{ pointerEvents: 'none' }}
       />
       <rect

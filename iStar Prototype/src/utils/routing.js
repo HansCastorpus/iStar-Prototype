@@ -1,4 +1,4 @@
-import { GRID, snap } from './grid.js'
+import { GRID, snap, GOAL_PAD_X } from './grid.js'
 import { getSlotPosition, getSideDirection, STUB } from './ports.js'
 
 const DETOUR_PAD    = GRID * 2
@@ -558,7 +558,60 @@ export function computeAllPaths(nodes, linkSlots, links) {
   reroutePass(nodes, mutableSlots, innerLinks, pathMap, existingSegs)
   separateOverlaps(pathMap)
   for (const id of Object.keys(pathMap)) pathMap[id] = simplifyPoints(pathMap[id])
+  for (const link of linkList) {
+    const pts = pathMap[link.id]
+    if (pts) pathMap[link.id] = snapEndsToShape(pts, nodes[link.sourceId], nodes[link.targetId])
+  }
   return pathMap
+}
+
+// ── Shape-exact link ends ───────────────────────────────────────────────────────
+// Routing attaches links to the node's bounding box, but tasks have pointed ends and goals /
+// softgoals rounded ones, so off-centre links would start in the empty corner in front of the
+// shape. Slide each end along its (straight) end segment until it touches the drawn outline.
+// Mirrors the shapes in Node.jsx: task ends inset by GOAL_PAD_X, goal / softgoal ends of radius H/2.
+
+// How far inside the bounding box the outline is, `d` px from the middle (left/right sides)
+// or from the end of the straight top edge (top side)
+function outlineInset(node, d, alongSide) {
+  const r = node.height / 2
+  if (node.type === 'task') {
+    // left/right: the point's sides slope GOAL_PAD_X across a half-height; top: the reverse
+    return alongSide ? GOAL_PAD_X * Math.min(d / r, 1) : r * Math.min(d / GOAL_PAD_X, 1)
+  }
+  if (node.type === 'goal' || node.type === 'softgoal') {
+    const dd = Math.min(d, r)
+    return r - Math.sqrt(r * r - dd * dd)
+  }
+  return 0
+}
+
+// Never slides past the next corner, so a short end segment can't flip direction
+function snapEnd(node, end, next) {
+  if (!node || !end || !next) return end
+  const eps = 0.5
+  const { x, y, width: w, height: h } = node
+  const horizontal = Math.abs(end.y - next.y) < eps
+  const vertical   = Math.abs(end.x - next.x) < eps
+  if (horizontal && (Math.abs(end.x - x) < eps || Math.abs(end.x - (x + w)) < eps)) {
+    const inset = Math.min(outlineInset(node, Math.abs(end.y - (y + h / 2)), true), Math.abs(next.x - end.x) - 1)
+    return { ...end, x: Math.abs(end.x - x) < eps ? end.x + inset : end.x - inset }
+  }
+  if (vertical && Math.abs(end.y - y) < eps) {
+    // Top edge: straight between the two ends, sloped / curved beyond them
+    const flat = node.type === 'task' ? GOAL_PAD_X : h / 2
+    const d = Math.max(x + flat - end.x, end.x - (x + w - flat), 0)
+    return { ...end, y: end.y + Math.min(outlineInset(node, d, false), Math.abs(next.y - end.y) - 1) }
+  }
+  return end  // bottom ports start under the type badge, which is drawn as a flat pill
+}
+
+function snapEndsToShape(pts, src, tgt) {
+  if (pts.length < 2) return pts
+  const out = [...pts]
+  out[0] = snapEnd(src, pts[0], pts[1])
+  out[out.length - 1] = snapEnd(tgt, pts[pts.length - 1], pts[pts.length - 2])
+  return out
 }
 
 // Converts a point array to an SVG path d string with rounded corners.

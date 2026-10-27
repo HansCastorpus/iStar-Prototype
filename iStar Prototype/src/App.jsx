@@ -14,6 +14,21 @@ export default function App() {
   const lang = useStore(s => s.lang)
   useEffect(() => { document.documentElement.lang = lang }, [lang])
 
+  // Ctrl/Cmd+Z undo, Shift+Ctrl/Cmd+Z or Ctrl+Y redo. Text fields keep their own native undo.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return
+      const el = e.target
+      if (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) return
+      const key = e.key.toLowerCase()
+      const { undo, redo } = useStore.getState()
+      if (key === 'z') { e.preventDefault(); (e.shiftKey ? redo : undo)() }
+      else if (key === 'y' && !e.shiftKey) { e.preventDefault(); redo() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
       <Toolbar />
