@@ -1,21 +1,7 @@
 import { useRef } from 'react'
 import useStore from '../store/useStore.js'
+import { upstreamSet, focusLayers } from '../utils/dependencies.js'
 import { wrapLabel, NODE_LINE_H, NODE_BADGE_H, NODE_PAD_X, GOAL_PAD_X } from '../utils/grid.js'
-
-function transitiveSourceSet(links, startId) {
-  const visited = new Set([startId])
-  const queue = [startId]
-  while (queue.length > 0) {
-    const cur = queue.shift()
-    for (const l of Object.values(links)) {
-      if (l.targetId === cur && !visited.has(l.sourceId)) {
-        visited.add(l.sourceId)
-        queue.push(l.sourceId)
-      }
-    }
-  }
-  return visited
-}
 
 const SELECTED_COLOR = '#0070f3'
 const PENDING_TARGET_COLOR = '#16a34a'
@@ -58,6 +44,7 @@ export default function Node({ node }) {
   const accent = isPendingTarget ? PENDING_TARGET_COLOR : isSelected ? SELECTED_COLOR : null
   const highlightTypes = useStore(s => s.highlightTypes)
   const isolateTypes = useStore(s => s.isolateTypes)
+  const hideTags = useStore(s => s.hideTags)
 
   const highlightActive = highlightTypes.length > 0
   const isHidden = !isolateTypes.includes(node.type)
@@ -67,14 +54,7 @@ export default function Node({ node }) {
   const focusStatus = useStore(s => {
     if (!s.focusNodeId) return 'none'
     if (node.id === s.focusNodeId) return 'focus'
-    if (s.focusDeep) {
-      const set = transitiveSourceSet(s.links, s.focusNodeId)
-      return set.has(node.id) ? 'connected' : 'dimmed'
-    }
-    const connected = Object.values(s.links).some(
-      l => l.sourceId === node.id && l.targetId === s.focusNodeId
-    )
-    return connected ? 'connected' : 'dimmed'
+    return upstreamSet(s.links, s.focusNodeId, focusLayers(s)).has(node.id) ? 'connected' : 'dimmed'
   })
 
   const HIGHLIGHT_FILLS = { goal: 'var(--hl-goal)', task: 'var(--hl-task)', softgoal: 'var(--hl-softgoal)', resource: 'var(--hl-resource)' }
@@ -268,7 +248,8 @@ export default function Node({ node }) {
         ))}
       </text>
 
-      {/* Type badge — centred on the bottom edge */}
+      {/* Type badge — centred on the bottom edge; hidden with "Hide tags" */}
+      {!hideTags && <>
       <rect
         x={cx - badgeW / 2}
         y={badgeCY - NODE_BADGE_H / 2}
@@ -292,6 +273,7 @@ export default function Node({ node }) {
       >
         {node.type.toUpperCase()}
       </text>
+      </>}
     </g>
   )
 }

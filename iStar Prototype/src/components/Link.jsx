@@ -1,22 +1,8 @@
 import { useRef, useState } from 'react'
 import useStore from '../store/useStore.js'
+import { upstreamSet, focusLayers } from '../utils/dependencies.js'
 import { useZoom } from '../contexts/ZoomContext.jsx'
 import { pointsToPath, getPointAtT, projectOntoPath } from '../utils/routing.js'
-
-function transitiveSourceSet(links, startId) {
-  const visited = new Set([startId])
-  const queue = [startId]
-  while (queue.length > 0) {
-    const cur = queue.shift()
-    for (const l of Object.values(links)) {
-      if (l.targetId === cur && !visited.has(l.sourceId)) {
-        visited.add(l.sourceId)
-        queue.push(l.sourceId)
-      }
-    }
-  }
-  return visited
-}
 
 const PAD_X = 10
 const PAD_Y = 3
@@ -256,17 +242,9 @@ export default function Link({ link, points, andBar }) {
   const isHidden   = !isolateTypes.includes(link.type)
   const isFocused = useStore(s => {
     if (!s.focusNodeId) return false
-    if (s.focusDeep) {
-      const set = transitiveSourceSet(s.links, s.focusNodeId)
-      return set.has(link.sourceId) && set.has(link.targetId)
-    }
-    if (link.targetId === s.focusNodeId) return true
-    const sources = new Set(
-      Object.values(s.links)
-        .filter(l => l.targetId === s.focusNodeId)
-        .map(l => l.sourceId)
-    )
-    return sources.has(link.sourceId) && sources.has(link.targetId)
+    // A link is part of the view when both of its ends are
+    const set = upstreamSet(s.links, s.focusNodeId, focusLayers(s))
+    return set.has(link.sourceId) && set.has(link.targetId)
   })
   const isDimmed = !!focusNodeId && !isFocused
 

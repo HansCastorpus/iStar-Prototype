@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { flushSync } from 'react-dom'
 import useStore, { ALL_TYPES } from '../store/useStore.js'
 import { LegendIcon, LEGEND_W } from './LegendIcons.jsx'
+import { upstreamLayerCount } from '../utils/dependencies.js'
 
 const NODE_TYPES = ['goal', 'task', 'softgoal', 'resource']
 const LINK_TYPES = ['depends-on', 'or', 'xor', 'and', 'help', 'hurt', 'make', 'break', 'needed-by', 'part-of']
@@ -46,17 +47,27 @@ export default function FilterPanel() {
   const focusNodeId         = useStore(s => s.focusNodeId)
   const focusDeep           = useStore(s => s.focusDeep)
   const setFocusNode        = useStore(s => s.setFocusNode)
+  const focusDepth          = useStore(s => s.focusDepth)
+  const setFocusDepth       = useStore(s => s.setFocusDepth)
   const selectedId          = useStore(s => s.selectedId)
   const selectedType        = useStore(s => s.selectedType)
 
   const legendOpen   = useStore(s => s.legendOpen)
   const toggleLegend = useStore(s => s.toggleLegend)
   const hideTags     = useStore(s => s.hideTags)
-  const toggleHideTags = useStore(s => s.toggleHideTags)
+  const setHideTags    = useStore(s => s.setHideTags)
 
   const canFocus       = selectedType === 'node' && !!selectedId
   const isDirectActive = !!focusNodeId && focusNodeId === selectedId && !focusDeep
   const isDeepActive   = !!focusNodeId && focusNodeId === selectedId && focusDeep
+
+  // Layers that actually exist upstream of the selected element (the stepper's upper bound)
+  const maxLayers = useStore(s => canFocus ? upstreamLayerCount(s.links, selectedId) : 0)
+  const layers = maxLayers ? Math.min(focusDepth, maxLayers) : focusDepth
+  const changeLayers = (n) => {
+    setFocusDepth(n)
+    if (!isDirectActive) setFocusNode(selectedId, false)  // adjusting layers switches the view on
+  }
 
   const [actorPanelOpen, setActorPanelOpen] = useState(false)
 
@@ -133,8 +144,12 @@ export default function FilterPanel() {
 
         {/* Column headers */}
         <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-          <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
-            <button onClick={toggleHideTags} style={{ ...colBtnStyle(hideTags), width: 'auto' }}>Tags</button>
+          {/* Show / hide tags, stacked like the column buttons on the right */}
+          <div style={{ flex: 1, minWidth: 0, paddingRight: 8, display: 'flex', alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <button onClick={() => setHideTags(false)} style={colBtnStyle(!hideTags)}>Show tags</button>
+              <button onClick={() => setHideTags(true)} style={colBtnStyle(hideTags)}>Hide tags</button>
+            </div>
           </div>
           <div style={{ ...colI(legendOpen), display: 'flex', flexDirection: 'column', gap: 4 }}>
             <button onClick={() => setAllIsolate(true)} style={colBtnStyle(allVisible)}>Show all</button>
@@ -165,6 +180,9 @@ export default function FilterPanel() {
         <div style={cardTitle}>
           Dependencies
         </div>
+        <div style={infoText}>
+          <strong style={{ color: 'var(--text-1)' }}>Select an element.</strong> Choose whether you want to see specific relationships or all its dependencies.
+        </div>
         <button
           onClick={() => canFocus && setFocusNode(selectedId, false)}
           disabled={!canFocus}
@@ -172,6 +190,12 @@ export default function FilterPanel() {
         >
           {isDirectActive ? 'Clear focus' : 'Highlight relationships'}
         </button>
+        <LayerStepper
+          value={layers}
+          max={maxLayers}
+          enabled={canFocus && maxLayers > 0}
+          onChange={changeLayers}
+        />
         <button
           onClick={() => canFocus && setFocusNode(selectedId, true)}
           disabled={!canFocus}
@@ -179,15 +203,16 @@ export default function FilterPanel() {
         >
           {isDeepActive ? 'Clear focus' : 'Highlight all dependencies'}
         </button>
-        <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'monospace', marginTop: 2, lineHeight: 1.5 }}>
-          {!canFocus
-            ? 'Select an element to explore its dependencies.'
-            : isDeepActive
-            ? 'Showing full upstream dependency chain.'
-            : isDirectActive
-            ? 'Showing direct dependencies only.'
-            : 'Highlight direct or all upstream dependencies of the selected element.'}
-        </div>
+        {/* Current status */}
+        {(!canFocus || isDirectActive || isDeepActive) && (
+          <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'monospace', marginTop: 2, lineHeight: 1.5 }}>
+            {!canFocus
+              ? 'No element selected.'
+              : isDeepActive
+              ? 'Showing the full dependency chain.'
+              : `Showing ${layers} ${layers === 1 ? 'layer' : 'layers'} of relationships.`}
+          </div>
+        )}
       </div>
 
     </div>
@@ -196,9 +221,46 @@ export default function FilterPanel() {
   )
 }
 
+// "Layers  − 2 / 4 +" control for how far back "Highlight relationships" reaches
+function LayerStepper({ value, max, enabled, onChange }) {
+  // Same look as the other panel buttons (incl. their disabled state), just sized to the symbol
+  const stepBtn = (disabled) => ({ ...focusBtnStyle(false, !disabled), width: 'auto', minWidth: 30 })
+  const canDec = enabled && value > 1
+  const canInc = enabled && value < max
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 2,
+      fontSize: 10, fontFamily: 'monospace', color: enabled ? 'var(--text-2)' : 'var(--text-3)' }}>
+      <span style={{ whiteSpace: 'nowrap' }}>Layers of dependency</span>
+      {/* Arrow from the label to the buttons, stretching across the free space */}
+      <span aria-hidden style={{ flex: 1, minWidth: 16, display: 'flex', alignItems: 'center' }}>
+        <span style={{ flex: 1, height: 1, background: 'currentColor' }} />
+        <svg width="5" height="8" viewBox="0 0 5 8" style={{ flexShrink: 0, display: 'block' }}>
+          <path d="M0,0 L5,4 L0,8 Z" fill="currentColor" />
+        </svg>
+      </span>
+      <button onClick={() => onChange(value - 1)} disabled={!canDec} aria-label="Fewer layers" style={stepBtn(!canDec)}><StepIcon /></button>
+      <span style={{ minWidth: 36, textAlign: 'center', color: enabled ? 'var(--text-1)' : 'var(--text-3)' }}>
+        {enabled ? `${value} / ${max}` : '–'}
+      </span>
+      <button onClick={() => onChange(value + 1)} disabled={!canInc} aria-label="More layers" style={stepBtn(!canInc)}><StepIcon plus /></button>
+    </div>
+  )
+}
+
+// − / + drawn as a 10px icon: bigger than the 10px text glyph, without making the button taller
+function StepIcon({ plus = false }) {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden style={{ verticalAlign: 'middle' }}>
+      <line x1="1" y1="5" x2="9" y2="5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      {plus && <line x1="5" y1="1" x2="5" y2="9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />}
+    </svg>
+  )
+}
+
 function SectionLabel({ first, children }) {
   return (
-    <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'monospace', textTransform: 'uppercase', marginTop: first ? 4 : 10, marginBottom: 4 }}>
+    <div style={{ fontSize: 12, fontWeight: 'bold', color: 'var(--text-1)', fontFamily: 'monospace', textTransform: 'uppercase', marginTop: first ? 6 : 12, marginBottom: 4,
+      paddingBottom: 4, borderBottom: '1px solid var(--text-1)' }}>
       {children}
     </div>
   )
@@ -271,6 +333,9 @@ function ActorPanel({ left, onClose }) {
   const highlightedActorIds = useStore(s => s.highlightedActorIds)
   const toggleActorHidden    = useStore(s => s.toggleActorHidden)
   const toggleActorHighlight = useStore(s => s.toggleActorHighlight)
+  // The "actor" type row applies to every actor, so the per-actor boxes show the combined state
+  const actorsVisible       = useStore(s => s.isolateTypes.includes('actor'))
+  const actorsHighlighted   = useStore(s => s.highlightTypes.includes('actor'))
 
   const list = Object.values(actors).sort((a, b) => (a.name || '').localeCompare(b.name || ''))
   const colLabel = { fontSize: 9, color: 'var(--text-3)', fontFamily: 'monospace', textAlign: 'center' }
@@ -303,8 +368,8 @@ function ActorPanel({ left, onClose }) {
         {list.map(a => (
           <TypeRow
             key={a.id} label={a.name || '(unnamed)'} legendType={null} legend={false} wrap
-            inIsolate={!hiddenActorIds.includes(a.id)}
-            inHighlight={highlightedActorIds.includes(a.id)}
+            inIsolate={actorsVisible && !hiddenActorIds.includes(a.id)}
+            inHighlight={actorsHighlighted || highlightedActorIds.includes(a.id)}
             onToggleI={() => toggleActorHidden(a.id)}
             onToggleH={() => toggleActorHighlight(a.id)}
           />
@@ -354,8 +419,12 @@ const cardStyle = {
   border: '1px solid var(--border)',
 }
 
+const infoText = {
+  fontSize: 10, color: 'var(--text-2)', fontFamily: 'monospace', lineHeight: 1.5, marginBottom: 6,
+}
+
 const cardTitle = {
-  fontSize: 11, color: 'var(--text-2)', fontFamily: 'monospace', textTransform: 'uppercase', marginBottom: 4,
+  fontSize: 13, fontWeight: 'bold', color: 'var(--text-1)', fontFamily: 'monospace', textTransform: 'uppercase', marginBottom: 6,
 }
 
 const colBtn = {

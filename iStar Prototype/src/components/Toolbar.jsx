@@ -9,39 +9,95 @@ const MODES = [
   { id: 'add-resource',   label: '+ Resource' },
 ]
 
-function GoalShape() {
+const iconStyle = { display: 'inline', verticalAlign: 'middle', margin: '0 2px' }
+
+// stroke: outline colour, e.g. the blue / green selection outlines
+function GoalShape({ stroke = 'var(--node-stroke)', strokeWidth = 1 }) {
   return (
-    <svg width="24" height="14" viewBox="0 0 24 14" style={{ display: 'inline', verticalAlign: 'middle', margin: '0 2px' }}>
-      <rect x="0.5" y="0.5" width="23" height="13" rx="6.5" fill="white" stroke="#333" strokeWidth="1"/>
+    <svg width="24" height="14" viewBox="0 0 24 14" style={iconStyle}>
+      <rect x="1" y="1" width="22" height="12" rx="6" fill="var(--node-fill)" stroke={stroke} strokeWidth={strokeWidth}/>
     </svg>
   )
 }
 
-function ArrowIcon() {
+const BlueShape  = () => <GoalShape stroke="#0070f3" strokeWidth={2} />
+const GreenShape = () => <GoalShape stroke="#16a34a" strokeWidth={2} />
+
+function ArrowIcon({ dashed = false, color = 'var(--node-stroke)' }) {
   return (
-    <svg width="24" height="14" viewBox="0 0 24 14" style={{ display: 'inline', verticalAlign: 'middle', margin: '0 2px' }}>
-      <line x1="2" y1="7" x2="17" y2="7" stroke="#333" strokeWidth="1.2"/>
-      <polygon points="17,4 22,7 17,10" fill="#333"/>
+    <svg width="24" height="14" viewBox="0 0 24 14" style={iconStyle}>
+      <line x1="2" y1="7" x2="17" y2="7" stroke={color} strokeWidth="1.2" strokeDasharray={dashed ? '3 2' : undefined}/>
+      <polygon points="17,4 22,7 17,10" fill={color}/>
     </svg>
   )
 }
 
 function TagIcon() {
   return (
-    <svg width="32" height="14" viewBox="0 0 32 14" style={{ display: 'inline', verticalAlign: 'middle', margin: '0 2px' }}>
-      <rect x="0.5" y="0.5" width="31" height="13" rx="6.5" fill="white" stroke="#333" strokeWidth="1"/>
-      <text x="16" y="7.5" textAnchor="middle" dominantBaseline="middle" fontSize="7" fontFamily="sans-serif" fill="#333">AND</text>
+    <svg width="32" height="14" viewBox="0 0 32 14" style={iconStyle}>
+      <rect x="0.5" y="0.5" width="31" height="13" rx="6.5" fill="var(--node-fill)" stroke="var(--node-stroke)" strokeWidth="1"/>
+      <text x="16" y="7.5" textAnchor="middle" dominantBaseline="middle" fontSize="7" fontFamily="sans-serif" fill="var(--node-text)">AND</text>
     </svg>
   )
 }
 
-const STEPS = [
-  <>Add intentional elements <GoalShape /> by clicking the + buttons.</>,
-  <>Add information from the popup that appears. You can also modify the type of the element <GoalShape /> by clicking on the element <GoalShape />.</>,
-  <>Select two intentional elements <GoalShape /> to choose the link <ArrowIcon /> that defines their relationship. The order of the selection defines the direction of the link <ArrowIcon />. You can change the link's type and direction by clicking on the link <ArrowIcon />.</>,
-  <>For the links <ArrowIcon />, the path is created along an octilinear grid.</>,
-  <>You can slide the information tags <TagIcon /> on the link to improve readability.</>,
-  <>If a long link <ArrowIcon /> is having trouble drawing a clean path, you can click on the link <ArrowIcon /> and enable an outer path from the popup. A direction (left, right, top, bottom) can also be set to control which side of the diagram the path goes around.</>,
+function ActorTagIcon() {
+  return (
+    <svg width="30" height="14" viewBox="0 0 30 14" style={iconStyle}>
+      <rect x="0.5" y="1.5" width="29" height="11" rx="4" fill="var(--node-fill)" stroke="var(--node-stroke)" strokeWidth="1"/>
+      <line x1="7" y1="7" x2="23" y2="7" stroke="var(--node-text)" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
+const B = ({ children }) => <strong>{children}</strong>
+
+const HELP = [
+  {
+    title: 'Building the diagram',
+    steps: [
+      <>Add intentional elements <GoalShape /> with the <B>+</B> buttons, then click on the canvas to place them.</>,
+      <>Click an element to select it: it gets a <B>blue</B> outline <BlueShape /> and a popup opens to edit its label, type and actor. Press <B>Enter</B> to confirm what you typed.</>,
+      <>Click the selected element again to deselect it.</>,
+      <>The popup places itself so it covers as little of the diagram as possible. Drag it by its top bar, or use <B>hide</B> / <B>show</B> to minimise it.</>,
+    ],
+  },
+  {
+    title: 'Linking two elements',
+    steps: [
+      <>Click the first element. Its <B>blue</B> outline <BlueShape /> marks the <B>source</B> of the link.</>,
+      <>Click the second element. Its <B>green</B> outline <GreenShape /> marks the <B>target</B>, and a dashed <B>ghost link</B> <ArrowIcon dashed color="#16a34a" /> previews the route.</>,
+      <>Pick the link type from the list that appears. The link <ArrowIcon /> points from blue to green. Choose <B>cancel</B> to abort.</>,
+      <>Click a link <ArrowIcon /> to change its type, reverse its direction, or delete it.</>,
+      <>Links follow an octilinear grid. You can slide the information tags <TagIcon /> along a link to improve readability.</>,
+      <>If a long link struggles to find a clean path, click it and enable an <B>outer route</B> from the popup. A side (left, right, top, bottom) controls which way it goes around the diagram.</>,
+    ],
+  },
+  {
+    title: 'Actors',
+    steps: [
+      <>Type an actor name in an element's popup to group it into that actor. Elements sharing a name share a boundary.</>,
+      <>Click an actor's name tag <ActorTagIcon /> to highlight it; click it again to clear the highlight.</>,
+      <>Drag the name tag or the boundary to move the actor with all its elements.</>,
+    ],
+  },
+  {
+    title: 'Filter panel (left)',
+    steps: [
+      <><B>Hide</B> and <B>Highlight</B> each element, link and actor type with the checkboxes.</>,
+      <><B>Show all</B> / <B>Hide all</B> and <B>Highlight all</B> / <B>Clear all</B> change every type at once. Click the same button again to restore your previous selection.</>,
+      <><B>Show tags</B> / <B>Hide tags</B> toggles the tags on links and elements.</>,
+      <><B>Show legend</B> displays what each element and link looks like next to its checkboxes.</>,
+      <><B>Each actor</B> opens a side panel to hide or highlight actors one by one.</>,
+    ],
+  },
+  {
+    title: 'Dependencies',
+    steps: [
+      <>Select an element, then <B>Highlight relationships</B> to see the elements linked into it. Use <B>Layers of dependency</B> <B>− / +</B> to reach further back, one layer at a time.</>,
+      <><B>Highlight all dependencies</B> shows its whole upstream chain. Everything else is dimmed; click the button again to clear.</>,
+    ],
+  },
 ]
 
 export default function Toolbar() {
@@ -127,7 +183,9 @@ export default function Toolbar() {
               padding: '14px 18px',
               paddingTop: 10,
               zIndex: 300,
-              width: 380,
+              width: 420,
+              maxHeight: 'calc(100vh - 80px)',
+              overflowY: 'auto',
               fontFamily: 'monospace',
               fontSize: 12,
               color: 'var(--text-1)',
@@ -141,9 +199,19 @@ export default function Toolbar() {
                   fontSize: 14, color: 'var(--text-2)', lineHeight: 1, padding: '2px 4px',
                 }}
               >×</button>
-              <ol style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {STEPS.map((step, i) => <li key={i}>{step}</li>)}
-              </ol>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {HELP.map(section => (
+                  <section key={section.title}>
+                    <div style={{ fontWeight: 'bold', textTransform: 'uppercase', fontSize: 11, marginBottom: 4,
+                      paddingBottom: 3, borderBottom: '1px solid var(--border-md)' }}>
+                      {section.title}
+                    </div>
+                    <ol style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {section.steps.map((step, i) => <li key={i}>{step}</li>)}
+                    </ol>
+                  </section>
+                ))}
+              </div>
             </div>
           )}
         </div>

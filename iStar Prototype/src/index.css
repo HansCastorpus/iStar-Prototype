@@ -27,9 +27,9 @@ button:hover:not(:disabled) {
   --node-text:  #222;
   --link-def:   #555;
   /* node highlight fills */
-  --hl-goal:      #eae7e3;
+  --hl-goal:      #E2C29C;
   --hl-task:      #A2BBD9;
-  --hl-softgoal:  #e2dfd5;
+  --hl-softgoal:  #EBC2AD;
   --hl-resource:  #AFD2AF;
   /* link highlight colors */
   --hl-hurt:      #EE3131;
@@ -63,9 +63,9 @@ button:hover:not(:disabled) {
   --node-text:  #ddd;
   --link-def:   #999;
   /* node highlight fills – muted, visible on dark bg */
-  --hl-goal:      #434b55;
-  --hl-task:      #562c2c;
-  --hl-softgoal:  #395475;
+  --hl-goal:      #6B382E;
+  --hl-task:      #34485F;
+  --hl-softgoal:  #83533F;
   --hl-resource:  #2d4a2d;
   /* link highlight colors – lightened */
   --hl-hurt:      #d63737;

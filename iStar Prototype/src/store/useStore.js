@@ -118,28 +118,59 @@ const useStore = create((set, get) => ({
   toggleLegend: () => set(s => ({ legendOpen: !s.legendOpen })),
   hideTags: false,
   toggleHideTags: () => set(s => ({ hideTags: !s.hideTags })),
+  setHideTags: (hide) => set({ hideTags: hide }),
 
   // ── Filter ───────────────────────────────────────────────────────────────────
   highlightTypes: [],              // types currently highlighted; empty = mode off
   isolateTypes:   [...ALL_TYPES],  // types currently isolated;   empty = mode off
   focusNodeId:    null,            // when set, dims all links not connected to this node
   focusDeep:      false,           // when true, use transitive closure instead of direct links only
+  focusDepth:     1,               // layers of relationships shown when focusDeep is off
   highlightSnapshot: null,         // selection before the last "Highlight all"/"Clear all", to restore on a second click
   isolateSnapshot:   null,         // same for "Show all"/"Hide all"
   hiddenActorIds:      [],         // individual actors hidden from the filter panel
   highlightedActorIds: [],         // individual actors highlighted from the filter panel
 
-  toggleActorHidden:    (id) => set(s => ({ hiddenActorIds: toggleIn(s.hiddenActorIds, id) })),
-  toggleActorHighlight: (id) => set(s => ({ highlightedActorIds: toggleIn(s.highlightedActorIds, id) })),
+  // Per-actor toggles work on the *effective* state (the "actor" type row OR the per-actor list),
+  // and fold back into the type row when every actor ends up the same, so all controls stay in sync.
+  toggleActorHighlight: (id) => set(s => {
+    const all = Object.keys(s.actors)
+    const typeOn = s.highlightTypes.includes('actor')
+    const next = toggleIn(typeOn ? all : s.highlightedActorIds, id)
+    const allOn = all.length > 0 && all.every(a => next.includes(a))
+    const others = s.highlightTypes.filter(t => t !== 'actor')
+    return {
+      highlightTypes: allOn ? [...others, 'actor'] : others,
+      highlightedActorIds: allOn ? [] : next,
+    }
+  }),
+  toggleActorHidden: (id) => set(s => {
+    const all = Object.keys(s.actors)
+    const typeVisible = s.isolateTypes.includes('actor')
+    const next = toggleIn(typeVisible ? s.hiddenActorIds : all, id)
+    const allHidden = all.length > 0 && all.every(a => next.includes(a))
+    const others = s.isolateTypes.filter(t => t !== 'actor')
+    return {
+      isolateTypes: allHidden ? others : [...others, 'actor'],
+      hiddenActorIds: allHidden ? [] : next,
+    }
+  }),
 
+  // Toggling the "actor" type row applies to every actor, so it also resets the per-actor choices
   toggleHighlightType: (type) => set(s => {
     const has = s.highlightTypes.includes(type)
-    return { highlightTypes: has ? s.highlightTypes.filter(t => t !== type) : [...s.highlightTypes, type] }
+    return {
+      highlightTypes: has ? s.highlightTypes.filter(t => t !== type) : [...s.highlightTypes, type],
+      ...(type === 'actor' && { highlightedActorIds: [] }),
+    }
   }),
 
   toggleIsolateType: (type) => set(s => {
     const has = s.isolateTypes.includes(type)
-    return { isolateTypes: has ? s.isolateTypes.filter(t => t !== type) : [...s.isolateTypes, type] }
+    return {
+      isolateTypes: has ? s.isolateTypes.filter(t => t !== type) : [...s.isolateTypes, type],
+      ...(type === 'actor' && { hiddenActorIds: [] }),
+    }
   }),
 
   filterSelectAll:  () => set({ highlightTypes: [...ALL_TYPES], isolateTypes: [...ALL_TYPES] }),
@@ -152,6 +183,8 @@ const useStore = create((set, get) => ({
     const r = bulkSet(s.isolateTypes, s.hiddenActorIds, s.isolateSnapshot, on, true)
     return r ? { isolateTypes: r.types, hiddenActorIds: r.actorIds, isolateSnapshot: r.snapshot } : {}
   }),
+
+  setFocusDepth: (n) => set({ focusDepth: Math.max(1, Math.round(n)) }),
 
   setFocusNode: (id, deep = false) => set(s => {
     const same = s.focusNodeId === id && s.focusDeep === deep
