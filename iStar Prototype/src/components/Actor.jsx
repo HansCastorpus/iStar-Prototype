@@ -22,7 +22,7 @@ function octilinearHull(points) {
   if (!points.length) return []
 
   let a = -Infinity, b = -Infinity, c = -Infinity, d = -Infinity
-  let e = -Infinity, f = -Infißnity, g = -Infinity, h = -Infinity
+  let e = -Infinity, f = -Infinity, g = -Infinity, h = -Infinity
 
   for (const { x, y } of points) {
     if (x > a) a = x

@@ -456,5 +456,7 @@ const actionBtn = {
 const historyBtn = (enabled) => ({
   ...actionBtn,
   padding: '5px 10px',
+  fontSize: 22,
+  lineHeight: '15px',  // bigger glyph, same button height as its neighbours
   ...(!enabled && { color: 'var(--text-3)', borderColor: 'var(--border)', cursor: 'default' }),
 })
