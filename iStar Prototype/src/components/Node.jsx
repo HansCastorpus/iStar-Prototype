@@ -17,6 +17,9 @@ function transitiveSourceSet(links, startId) {
   return visited
 }
 
+const SELECTED_COLOR = '#0070f3'
+const PENDING_TARGET_COLOR = '#16a34a'
+
 const BADGE_CHAR_W = 7.5
 const BADGE_PAD_X = 7
 
@@ -43,10 +46,16 @@ export default function Node({ node }) {
 
   const pointerRef = useRef(null)
 
-  const { mode, selectedId, select, moveNode, moveNodeGroup,
+  const { mode, selectedId, select, deselect, moveNode, moveNodeGroup,
     addToSelection, setPendingLink, setDraggingNode } = useStore()
 
-  const isSelected = useStore(s => s.selectedId === node.id || s.selectedIds.includes(node.id))
+  // Nodes selected by clicking their actor stay selected (they move together) but aren't outlined
+  const isSelected = useStore(s =>
+    s.selectedId === node.id ||
+    (s.selectedIds.includes(node.id) && !(s.selectedActorId && s.selectedActorId === node.actorId)))
+  // Second element clicked while one was selected: target of the link being created
+  const isPendingTarget = useStore(s => s.pendingLink?.targetId === node.id)
+  const accent = isPendingTarget ? PENDING_TARGET_COLOR : isSelected ? SELECTED_COLOR : null
   const highlightTypes = useStore(s => s.highlightTypes)
   const isolateTypes = useStore(s => s.isolateTypes)
 
@@ -147,6 +156,13 @@ export default function Node({ node }) {
         const srcNode = state.nodes[prevSelected]
         const { srcSide, tgtSide } = computeBestPorts(srcNode, nodeRef.current)
         setPendingLink(prevSelected, srcSide, nodeRef.current.id, tgtSide)
+      } else if (
+        prevSelected === nodeRef.current.id &&
+        state.selectedType === 'node' &&
+        state.selectedIds.length === 0
+      ) {
+        // A plain click on the already-selected element clears the selection
+        deselect()
       } else {
         select(nodeRef.current.id, 'node')
       }
@@ -184,8 +200,8 @@ export default function Node({ node }) {
         <path
           d={`M ${GOAL_PAD_X},0 L ${node.width - GOAL_PAD_X},0 L ${node.width},${node.height / 2} L ${node.width - GOAL_PAD_X},${node.height} L ${GOAL_PAD_X},${node.height} L 0,${node.height / 2} Z`}
           fill={hlFill}
-          stroke={isSelected ? '#0070f3' : stroke}
-          strokeWidth={isSelected ? 2 : 1}
+          stroke={accent ?? stroke}
+          strokeWidth={accent ? 2 : 1}
         />
       ) : (
         <>
@@ -194,8 +210,8 @@ export default function Node({ node }) {
             height={node.height}
             rx={(node.type === 'goal' || node.type === 'softgoal') ? node.height / 2 : 0}
             fill={hlFill}
-            stroke={isSelected ? '#0070f3' : stroke}
-            strokeWidth={isSelected ? 2 : 1}
+            stroke={accent ?? stroke}
+            strokeWidth={accent ? 2 : 1}
           />
           {node.type === 'softgoal' && (
             <>
@@ -206,25 +222,25 @@ export default function Node({ node }) {
               </defs>
               <line
                 x1={7} y1={0} x2={7} y2={node.height}
-                stroke={isSelected ? '#0070f3' : stroke} strokeWidth={1}
+                stroke={accent ?? stroke} strokeWidth={1}
                 clipPath={`url(#sg-${node.id})`}
                 style={{ pointerEvents: 'none' }}
               />
               <line
                 x1={11} y1={0} x2={11} y2={node.height}
-                stroke={isSelected ? '#0070f3' : stroke} strokeWidth={1}
+                stroke={accent ?? stroke} strokeWidth={1}
                 clipPath={`url(#sg-${node.id})`}
                 style={{ pointerEvents: 'none' }}
               />
               <line
                 x1={node.width - 11} y1={0} x2={node.width - 11} y2={node.height}
-                stroke={isSelected ? '#0070f3' : stroke} strokeWidth={1}
+                stroke={accent ?? stroke} strokeWidth={1}
                 clipPath={`url(#sg-${node.id})`}
                 style={{ pointerEvents: 'none' }}
               />
               <line
                 x1={node.width - 7} y1={0} x2={node.width - 7} y2={node.height}
-                stroke={isSelected ? '#0070f3' : stroke} strokeWidth={1}
+                stroke={accent ?? stroke} strokeWidth={1}
                 clipPath={`url(#sg-${node.id})`}
                 style={{ pointerEvents: 'none' }}
               />
@@ -260,8 +276,8 @@ export default function Node({ node }) {
         height={NODE_BADGE_H}
         rx={NODE_BADGE_H / 2}
         fill="var(--node-fill)"
-        stroke={isSelected ? '#0070f3' : stroke}
-        strokeWidth={isSelected ? 2 : 1}
+        stroke={accent ?? stroke}
+        strokeWidth={accent ? 2 : 1}
         style={{ pointerEvents: 'none' }}
       />
       <text

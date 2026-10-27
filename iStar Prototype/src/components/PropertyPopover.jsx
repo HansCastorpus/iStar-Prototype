@@ -1,6 +1,8 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import useStore from '../store/useStore.js'
 import { useZoom, worldToScreen } from '../contexts/ZoomContext.jsx'
+import { usePopupPlacement, screenBounds, diagramObstacles } from '../utils/usePopupPlacement.js'
+import PopupConnector, { POPUP_Z } from './PopupConnector.jsx'
 
 const NODE_TYPES = ['goal', 'task', 'softgoal', 'resource']
 const LINK_TYPES = [
@@ -10,50 +12,88 @@ const LINK_TYPES = [
   'needed-by', 'part-of',
 ]
 
-export default function PropertyPopover() {
+const SEL_LINK_WEIGHT = 4 // covering the selected link matters more than other links
+
+// Point halfway along a polyline
+function pathMidpoint(points) {
+  const segs = points.slice(1).map((p, i) => Math.hypot(p.x - points[i].x, p.y - points[i].y))
+  let rest = segs.reduce((s, l) => s + l, 0) / 2
+  for (let i = 0; i < segs.length; i++) {
+    if (rest <= segs[i]) {
+      const t = segs[i] ? rest / segs[i] : 0
+      return { x: points[i].x + (points[i + 1].x - points[i].x) * t, y: points[i].y + (points[i + 1].y - points[i].y) * t }
+    }
+    rest -= segs[i]
+  }
+  return points[points.length - 1]
+}
+
+// The screen rect the popup belongs to, or null when nothing usable is selected
+function selectionAnchor({ selectedId, selectedIds, selectedType, nodes, links, linkPaths, transform }) {
+  if (selectedIds.length > 1) {
+    const sel = selectedIds.map(id => nodes[id]).filter(Boolean)
+    return sel.length ? screenBounds(sel, transform) : null
+  }
+  if (selectedType === 'link') {
+    const link = links[selectedId]
+    const path = linkPaths[selectedId]
+    if (!link) return null
+    let mid
+    if (path?.length >= 2) mid = pathMidpoint(path)
+    else {
+      const src = nodes[link.sourceId], tgt = nodes[link.targetId]
+      if (!src || !tgt) return null
+      mid = { x: (src.x + src.width / 2 + tgt.x + tgt.width / 2) / 2, y: (src.y + src.height / 2 + tgt.y + tgt.height / 2) / 2 }
+    }
+    const { x, y } = worldToScreen(mid.x, mid.y, transform)
+    return { x: x - 8, y: y - 8, w: 16, h: 16 }
+  }
+  const node = nodes[selectedId]
+  return node ? screenBounds([node], transform) : null
+}
+
+export default function PropertyPopover({ linkPaths = {} }) {
   const { selectedId, selectedType, nodes, links, actors,
     updateNode, updateLink, deleteNode, deleteLink, reverseLink, ensureActor, deselect } = useStore()
   const selectedIds = useStore(s => s.selectedIds)
   const { transform } = useZoom()
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
-  const handleRef = useRef(null)
-  const dragStateRef = useRef(null)
+  const [collapsed, setCollapsed] = useState(false)  // kept across selections so a minimized popup stays out of the way
 
-  useEffect(() => { setDragOffset({ x: 0, y: 0 }) }, [selectedId, selectedIds.length])
+  const anchor = selectionAnchor({ selectedId, selectedIds, selectedType, nodes, links, linkPaths, transform })
+  const { pos, popRef, handleRef, dragProps, connector } = usePopupPlacement({
+    id: 'properties',
+    anchor,
+    getObstacles: () => diagramObstacles({ nodes, linkPaths, transform, weights: { [selectedId]: SEL_LINK_WEIGHT } }),
+    resetKey: `${selectedId}|${selectedIds.join(',')}`,
+  })
 
-  const onDragDown = (e) => {
-    if (e.button !== 0) return
-    e.preventDefault()
-    handleRef.current.setPointerCapture(e.pointerId)
-    dragStateRef.current = {
-      pointerId: e.pointerId,
-      startX: e.clientX - dragOffset.x,
-      startY: e.clientY - dragOffset.y,
-    }
-  }
-  const onDragMove = (e) => {
-    if (!dragStateRef.current || e.pointerId !== dragStateRef.current.pointerId) return
-    setDragOffset({ x: e.clientX - dragStateRef.current.startX, y: e.clientY - dragStateRef.current.startY })
-  }
-  const onDragUp = (e) => {
-    if (!dragStateRef.current || e.pointerId !== dragStateRef.current.pointerId) return
-    handleRef.current.releasePointerCapture(e.pointerId)
-    dragStateRef.current = null
-  }
+  const header = (onClose) => (
+    <PopoverHeader
+      handleRef={handleRef}
+      dragProps={dragProps}
+      collapsed={collapsed}
+      onToggle={() => setCollapsed(c => !c)}
+      onClose={onClose}
+    />
+  )
 
-  if (!selectedId && selectedIds.length === 0) return null
+  // Positioned shell shared by all popup variants, with a connector back to the selection
+  const frame = (children) => (
+    <>
+      <PopupConnector connector={connector} pos={pos} />
+      <div ref={popRef} style={{ ...popoverStyle(pos.x, pos.y), paddingTop: HEADER_H + 4 }}>
+        {children}
+      </div>
+    </>
+  )
+
+  if ((!selectedId && selectedIds.length === 0) || !anchor) return null
 
   // ── Multi-select popup ───────────────────────────────────────────────────────
   if (selectedIds.length > 1) {
     const selectedNodes = selectedIds.map(id => nodes[id]).filter(Boolean)
     if (selectedNodes.length === 0) return null
-
-    const minX = Math.min(...selectedNodes.map(n => n.x))
-    const maxX = Math.max(...selectedNodes.map(n => n.x + n.width))
-    const minY = Math.min(...selectedNodes.map(n => n.y))
-    const maxY = Math.max(...selectedNodes.map(n => n.y + n.height))
-    const { x: cx, y: cy } = worldToScreen((minX + maxX) / 2, (minY + maxY) / 2, transform)
 
     const actorIds = [...new Set(selectedNodes.map(n => n.actorId))]
     const commonActorName = actorIds.length === 1 && actorIds[0]
@@ -66,59 +106,37 @@ export default function PropertyPopover() {
       for (const id of selectedIds) updateNode(id, { actorId })
     }
 
-    return (
-      <div style={{
-        ...popoverStyle(cx + dragOffset.x, cy + dragOffset.y),
-        transform: 'translate(-50%, -50%)',
-        paddingTop: 20,
-      }}>
-        <div
-          ref={handleRef}
-          onPointerDown={onDragDown} onPointerMove={onDragMove}
-          onPointerUp={onDragUp} onPointerCancel={onDragUp}
-          style={dragHandleStyle}
-        >
-          <span style={{ fontSize: 8, color: '#ccc', letterSpacing: 3 }}>• • •</span>
-        </div>
+    return frame(<>
+        {header()}
         <div style={{ fontSize: 9, color: '#aaa', marginBottom: 2, fontFamily: 'monospace' }}>
           {selectedIds.length} elements selected
         </div>
+        {!collapsed && <>
         <label style={labelStyle}>actor</label>
         <input
           key={selectedIds.join(',')}
           list="actor-list-multi"
           defaultValue={commonActorName}
           onBlur={handleMultiActorChange}
+          onKeyDown={confirmOnEnter}
           style={inputStyle}
           placeholder={actorIds.length > 1 ? 'mixed…' : 'actor name…'}
         />
         <datalist id="actor-list-multi">
           {actorNames.map(n => <option key={n} value={n} />)}
         </datalist>
-      </div>
-    )
+        </>}
+    </>)
   }
 
   if (selectedType === 'link') {
     const link = links[selectedId]
     if (!link) return null
-    const src = nodes[link.sourceId], tgt = nodes[link.targetId]
-    if (!src || !tgt) return null
-    const { x: lx, y: ly } = worldToScreen(
-      (src.x + src.width / 2 + tgt.x + tgt.width / 2) / 2,
-      (src.y + src.height / 2 + tgt.y + tgt.height / 2) / 2,
-      transform,
-    )
-    return (
-      <div style={{ ...popoverStyle(lx - 150 + dragOffset.x, ly - 150 + dragOffset.y), paddingTop: 20 }}>
-        <div
-          ref={handleRef}
-          onPointerDown={onDragDown} onPointerMove={onDragMove}
-          onPointerUp={onDragUp} onPointerCancel={onDragUp}
-          style={dragHandleStyle}
-        >
-          <span style={{ fontSize: 8, color: 'var(--text-3)', letterSpacing: 3 }}>• • •</span>
-        </div>
+    return frame(<>
+        {header()}
+        {collapsed ? (
+          <div style={summaryStyle}>{link.type}</div>
+        ) : <>
         <label style={labelStyle}>type</label>
         <select
           value={link.type}
@@ -170,17 +188,12 @@ export default function PropertyPopover() {
             </button>
           )}
         </div>
-      </div>
-    )
+        </>}
+    </>)
   }
 
   const node = nodes[selectedId]
   if (!node) return null
-
-  const GAP = 20
-  const { x: sx, y: sy } = worldToScreen(node.x + node.width / 2, node.y, transform)
-  const connDx = GAP - dragOffset.x
-  const connDy = GAP - dragOffset.y
 
   const actorName = node.actorId ? actors[node.actorId]?.name ?? '' : ''
   const actorNames = Object.values(actors).map((a) => a.name)
@@ -203,30 +216,17 @@ export default function PropertyPopover() {
     updateNode(node.id, { actorId })
   }
 
-  return (
-    <div style={{
-      ...popoverStyle(sx - GAP + dragOffset.x, sy - GAP + dragOffset.y),
-      transform: 'translate(-100%, -100%)',
-      paddingTop: 20,
-    }}>
-      <div
-        ref={handleRef}
-        onPointerDown={onDragDown} onPointerMove={onDragMove}
-        onPointerUp={onDragUp} onPointerCancel={onDragUp}
-        style={dragHandleStyle}
-      >
-        <span style={{ fontSize: 8, color: '#ccc', letterSpacing: 3 }}>• • •</span>
-      </div>
-      <button onClick={deselect} onPointerDown={e => e.stopPropagation()} style={closeBtnStyle}>×</button>
-      <svg style={{ position: 'absolute', bottom: 0, right: 0, width: 0, height: 0, overflow: 'visible', pointerEvents: 'none' }}>
-        <line x1={0} y1={0} x2={connDx} y2={connDy} stroke="#bbb" strokeWidth={1} />
-        <circle cx={connDx} cy={connDy} r={2} fill="#aaa" />
-      </svg>
+  return frame(<>
+      {header(deselect)}
+      {collapsed ? (
+        <div style={summaryStyle}>{node.label || node.type}</div>
+      ) : <>
       <label style={labelStyle}>label</label>
       <input
         autoFocus
         value={node.label}
         onChange={handleLabelChange}
+        onKeyDown={confirmOnEnter}
         style={inputStyle}
         placeholder="enter label…"
       />
@@ -241,6 +241,7 @@ export default function PropertyPopover() {
         list="actor-list"
         defaultValue={actorName}
         onBlur={handleActorChange}
+        onKeyDown={confirmOnEnter}
         style={inputStyle}
         placeholder="actor name…"
       />
@@ -264,8 +265,16 @@ export default function PropertyPopover() {
           </button>
         )}
       </div>
-    </div>
-  )
+      </>}
+  </>)
+}
+
+// Enter confirms a text field by leaving it (actor fields save on blur; labels save as you type).
+// Deferred so a highlighted autocomplete suggestion is filled in first; skipped mid-IME composition.
+function confirmOnEnter(e) {
+  if (e.key !== 'Enter' || e.nativeEvent.isComposing) return
+  const el = e.currentTarget
+  setTimeout(() => el.blur())
 }
 
 const popoverStyle = (x, y) => ({
@@ -278,7 +287,7 @@ const popoverStyle = (x, y) => ({
   display: 'flex',
   flexDirection: 'column',
   gap: '3px',
-  zIndex: 100,
+  zIndex: POPUP_Z,
   minWidth: 160,
 })
 
@@ -294,8 +303,49 @@ const inputStyle = {
   color: 'var(--text-1)',
 }
 
+const HEADER_H = 22
+
+// Header bar: drag handle across the top, with a hide/show toggle (and optional ×) on the right
+function PopoverHeader({ handleRef, dragProps, collapsed, onToggle, onClose }) {
+  const stop = e => e.stopPropagation()
+  return (
+    <>
+      <div ref={handleRef} {...dragProps} style={dragHandleStyle}>
+        <span style={{ fontSize: 8, color: 'var(--text-3)', letterSpacing: 3 }}>• • •</span>
+      </div>
+      <div style={headerActionsStyle}>
+        <button onClick={onToggle} onPointerDown={stop} style={toggleBtnStyle}>
+          {collapsed ? 'show' : 'hide'}
+        </button>
+        {onClose && <button onClick={onClose} onPointerDown={stop} style={closeBtnStyle}>×</button>}
+      </div>
+    </>
+  )
+}
+
+const headerActionsStyle = {
+  position: 'absolute', top: 0, right: 4, height: HEADER_H,
+  display: 'flex', alignItems: 'center', gap: 6,
+}
+
+const toggleBtnStyle = {
+  background: 'var(--node-fill)',
+  border: '1px solid var(--border-md)',
+  color: 'var(--text-1)',
+  padding: '1px 6px',
+  cursor: 'pointer',
+  fontSize: 9,
+  fontFamily: 'monospace',
+  lineHeight: 1.3,
+}
+
+const summaryStyle = {
+  fontSize: 10, color: 'var(--text-1)', fontFamily: 'monospace',
+  maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+}
+
 const dragHandleStyle = {
-  position: 'absolute', top: 0, left: 0, right: 0, height: 16,
+  position: 'absolute', top: 0, left: 0, right: 0, height: HEADER_H,
   cursor: 'grab',
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   borderBottom: '1px solid var(--border-lt)',
@@ -303,9 +353,6 @@ const dragHandleStyle = {
 }
 
 const closeBtnStyle = {
-  position: 'absolute',
-  top: 4,
-  right: 6,
   background: 'none',
   border: 'none',
   cursor: 'pointer',

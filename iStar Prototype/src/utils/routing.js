@@ -660,3 +660,11 @@ export function computePreviewPath(sourceNode, sourceSide, cursorWorld) {
       : [{ x: s.x, y: cursorWorld.y }]
   return [ps, s, ...elbow, cursorWorld]
 }
+
+// Ghost route for a link awaiting its type: source port → target port, orthogonal
+export function computePendingPath(sourceNode, sourceSide, targetNode, targetSide) {
+  const dt = getSideDirection(targetSide)
+  const pt = getSlotPosition(targetNode, targetSide, 0)
+  const t  = { x: pt.x + dt.dx * STUB, y: pt.y + dt.dy * STUB }
+  return [...computePreviewPath(sourceNode, sourceSide, t), pt]
+}

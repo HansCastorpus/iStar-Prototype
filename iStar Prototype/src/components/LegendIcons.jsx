@@ -1,5 +1,3 @@
-import useStore from '../store/useStore.js'
-
 // Mirror Link.jsx constants
 const AH = 8, AHW = 5, IG = 4
 const IR = 5, LR = 8
@@ -11,7 +9,7 @@ const TRIMA  = AH + IG + IR                  // 17
 const TRIMP  = TRIM + 3                      // 22
 
 // Link SVG: 8px tall slice; icons overflow via overflow:visible
-const SW = 96, SH = 8, MID = 4, TIP = 88, LS = 4
+const SW = 72, SH = 8, MID = 4, TIP = 64, LS = 4
 
 function partOfArcs(cx, cy) {
   const r = IR, ah = 3, aw = 1.5, rotDeg = -85
@@ -185,107 +183,46 @@ const LINK_DEFS = [
   { type: 'part-of',    hl: { color: 'var(--hl-part-of)',   sw: 6 } },
 ]
 
-const LABEL_W = 76
-const SEP = <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--border-lt)', flexShrink: 0 }} />
+export const LEGEND_W = SW   // width reserved for a legend icon in the filter panel
 
-const headerCell = (w) => ({
-  width: w, flexShrink: 0,
-  fontSize: 9, color: 'var(--text-3)', fontFamily: 'monospace', textAlign: 'center',
-})
-
-export default function LegendPanel() {
-  const legendOpen = useStore(s => s.legendOpen)
-  if (!legendOpen) return null
-
+// Actor sample: dashed boundary with a name tag; highlighted adds the striped fill (see Actor.jsx)
+const AW = 48, AH_ = 22
+function ActorIcon({ highlighted }) {
+  const id = `legend-actor-stripes-${highlighted ? 'hl' : 'in'}`
   return (
-    <div style={{
-      position: 'absolute',
-      left: 230,
-      top: 0,
-      bottom: 0,
-      width: LABEL_W + SW * 2 + 28,
-      background: 'var(--bg-panel)',
-      borderRight: '1px solid var(--border)',
-      zIndex: 150,
-      overflowY: 'auto',
-      padding: '10px 12px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 4,
-    }}>
-      <div style={{ fontSize: 11, color: 'var(--text-2)', fontFamily: 'monospace', textTransform: 'uppercase', marginBottom: 4 }}>
-        Legend
-      </div>
+    <svg width={AW} height={AH_} viewBox={`0 0 ${AW} ${AH_}`} style={{ flexShrink: 0, overflow: 'visible' }}>
+      {highlighted && (
+        <defs>
+          <pattern id={id} patternUnits="userSpaceOnUse" width={5} height={5} patternTransform="rotate(45)">
+            <rect width={5} height={5} fill="var(--actor-hl-fill)" />
+            <line x1={2.5} y1={0} x2={2.5} y2={5} stroke="var(--actor-hl-stripe)" strokeWidth={2} />
+          </pattern>
+        </defs>
+      )}
+      <rect x={8.5} y={5.5} width={AW - 9} height={AH_ - 6} rx={4}
+        fill={highlighted ? `url(#${id})` : 'none'}
+        stroke={highlighted ? 'var(--node-stroke)' : 'var(--text-3)'} strokeWidth={highlighted ? 1.5 : 1}
+        strokeDasharray={highlighted ? undefined : '3 2'} />
+      <rect x={0.5} y={0.5} width={18} height={9} rx={3}
+        fill="var(--node-fill)" stroke="var(--node-stroke)" strokeWidth={highlighted ? 1.5 : 1} />
+    </svg>
+  )
+}
 
-      {/* ── Nodes ── */}
-      <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'monospace', textTransform: 'uppercase', marginBottom: 4, marginTop: 4 }}>
-        Nodes
-      </div>
+// Legend sample for a node or link type, in its inactive or highlighted style
+export function LegendIcon({ type, highlighted }) {
+  if (type === 'actor') return <ActorIcon highlighted={highlighted} />
+  if (NODE_TYPES.includes(type))
+    return <NodeIcon type={type} fill={highlighted ? `var(--hl-${type})` : 'var(--node-fill)'} />
 
-      {/* Node column headers */}
-      <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 4, borderBottom: '1px solid var(--border-lt)' }}>
-        <div style={{ width: LABEL_W, flexShrink: 0 }} />
-        {SEP}
-        <div style={headerCell(SW)}>inactive</div>
-        {SEP}
-        <div style={headerCell(SW)}>highlighted</div>
-      </div>
-
-      {/* Node rows */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-        {NODE_TYPES.map(type => (
-          <div key={type} style={{ display: 'flex', alignItems: 'center' }}>
-            <div style={{ width: LABEL_W, fontSize: 11, fontFamily: 'monospace', color: 'var(--text-1)', flexShrink: 0 }}>
-              {type}
-            </div>
-            {SEP}
-            <div style={{ width: SW, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
-              <NodeIcon type={type} fill="var(--node-fill)" />
-            </div>
-            {SEP}
-            <div style={{ width: SW, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
-              <NodeIcon type={type} fill={`var(--hl-${type})`} />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Links ── */}
-      <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'monospace', textTransform: 'uppercase', marginBottom: 4 }}>
-        Links
-      </div>
-
-      {/* Link column headers */}
-      <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 4, borderBottom: '1px solid var(--border-lt)' }}>
-        <div style={{ width: LABEL_W, flexShrink: 0 }} />
-        {SEP}
-        <div style={headerCell(SW)}>inactive</div>
-        {SEP}
-        <div style={headerCell(SW)}>highlighted</div>
-      </div>
-
-      {/* Link rows – 8px tall SVGs, icons overflow via overflow:visible */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        {LINK_DEFS.map(({ type, hl }) => (
-          <div key={type} style={{ display: 'flex', alignItems: 'center' }}>
-            <div style={{ width: LABEL_W, fontSize: 11, fontFamily: 'monospace', color: 'var(--text-1)', flexShrink: 0 }}>
-              {type}
-            </div>
-            {SEP}
-            <svg width={SW} height={SH} viewBox={`0 0 ${SW} ${SH}`}
-              style={{ flexShrink: 0, overflow: 'visible' }}>
-              <LinkIcon type={type} color="var(--link-def)" sw={1.5}
-                id={`leg-in-${type}`} />
-            </svg>
-            {SEP}
-            <svg width={SW} height={SH} viewBox={`0 0 ${SW} ${SH}`}
-              style={{ flexShrink: 0, overflow: 'visible' }}>
-              <LinkIcon type={type} color={hl.color} sw={hl.sw} dash={hl.dash}
-                id={`leg-hl-${type}`} />
-            </svg>
-          </div>
-        ))}
-      </div>
-    </div>
+  const def = LINK_DEFS.find(l => l.type === type)
+  if (!def) return null
+  const { color, sw, dash } = highlighted ? def.hl : { color: 'var(--link-def)', sw: 1.5 }
+  return (
+    <svg width={SW} height={SH} viewBox={`0 0 ${SW} ${SH}`}
+      style={{ flexShrink: 0, overflow: 'visible' }}>
+      <LinkIcon type={type} color={color} sw={sw} dash={dash}
+        id={`leg-${highlighted ? 'hl' : 'in'}-${type}`} />
+    </svg>
   )
 }

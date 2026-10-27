@@ -6,6 +6,9 @@ const LINE_LEN = 15
 const LABEL_PAD_X = 10
 const LABEL_PAD_Y = 6
 const LABEL_RADIUS = 6
+const FONT_SIZE = 11
+const FONT_SIZE_HL = 12.5  // name tag text size when the actor is highlighted
+const STRIPE_GAP = 8       // spacing of the diagonal stripes in the highlight fill
 
 let measureCtx = null
 function measureText(text, font) {
@@ -99,10 +102,12 @@ function buildHullPath(verts, r = 15) {
 
 export default function Actor({ actor }) {
   const nodes = useStore(s => s.nodes)
-  const isSelected = useStore(s =>
-    Object.values(s.nodes).some(n => n.actorId === actor.id && s.selectedIds.includes(n.id))
-  )
-  const { selectActorNodes, moveNodeGroup } = useStore()
+  // Hidden/highlighted for all actors (type row) or just this one (per-actor row) in the filter panel
+  const isHidden = useStore(s => !s.isolateTypes.includes('actor') || s.hiddenActorIds.includes(actor.id))
+  // Clicking the actor toggles the same per-actor highlight as the filter panel, so the two always agree
+  const isHighlighted = useStore(s =>
+    s.highlightTypes.includes('actor') || s.highlightedActorIds.includes(actor.id))
+  const { moveNodeGroup, toggleActorHighlight } = useStore()
 
   const gRef = useRef(null)
   const dragRef = useRef(null)
@@ -144,12 +149,13 @@ export default function Actor({ actor }) {
     }
   }, [nodes, actor.id])
 
-  if (!d || !anchorCorner) return null
+  if (!d || !anchorCorner || isHidden) return null
 
   const name = actor.name || ''
-  const FONT_SIZE = 11
-  const labelW = Math.max(36, measureText(name, `${FONT_SIZE}px sans-serif`) + 2 * LABEL_PAD_X)
-  const labelH = FONT_SIZE + 2 * LABEL_PAD_Y
+  const fontSize = isHighlighted ? FONT_SIZE_HL : FONT_SIZE
+  const fontWeight = isHighlighted ? 'bold' : 'normal'
+  const labelW = Math.max(36, measureText(name, `${fontWeight} ${fontSize}px sans-serif`) + 2 * LABEL_PAD_X)
+  const labelH = fontSize + 2 * LABEL_PAD_Y
 
   const lineEndX = anchorCorner.x + LINE_LEN * lineDir.x
   const lineEndY = anchorCorner.y + LINE_LEN * lineDir.y
@@ -170,13 +176,13 @@ export default function Actor({ actor }) {
   // onPointerDown fires on the hit elements; capture is set on the <g>
   // so that subsequent move/up events (which go to the capturing element) are
   // handled by the <g> handlers below.
-  const onPointerDown = (e) => {
+  // fromName: pressed on the name tag (a plain click there toggles the highlight)
+  const onPointerDown = (e, fromName = false) => {
     if (e.button !== 0) return
     if (useStore.getState().mode !== 'select') return
     if (!memberIds.length) return
     e.stopPropagation()
 
-    selectActorNodes(actor.id)
     gRef.current.setPointerCapture(e.pointerId)
 
     const world = clientToWorld(e.clientX, e.clientY)
@@ -186,6 +192,8 @@ export default function Actor({ actor }) {
       pointerId: e.pointerId,
       startWorld: world,
       startLead: { x: leadNode.x, y: leadNode.y },
+      hasMoved: false,
+      fromName,
     }
   }
 
@@ -197,6 +205,7 @@ export default function Actor({ actor }) {
     const world = clientToWorld(e.clientX, e.clientY)
     const newLeadX = ds.startLead.x + (world.x - ds.startWorld.x)
     const newLeadY = ds.startLead.y + (world.y - ds.startWorld.y)
+    if (Math.abs(newLeadX - ds.startLead.x) > 1 || Math.abs(newLeadY - ds.startLead.y) > 1) ds.hasMoved = true
     moveNodeGroup(memberIds[0], newLeadX, newLeadY, memberIds)
   }
 
@@ -205,9 +214,14 @@ export default function Actor({ actor }) {
     if (!ds || e.pointerId !== ds.pointerId) return
     gRef.current.releasePointerCapture(e.pointerId)
     dragRef.current = null
+    // A plain click on the name tag toggles the highlight; dragging only moves the group
+    if (ds.fromName && !ds.hasMoved) toggleActorHighlight(actor.id)
   }
 
-  const hullStroke = isSelected ? '#0070f3' : 'var(--text-3)'
+  // Highlighted (incl. selected): solid line matching the name tag's stroke
+  const hullStroke = isHighlighted ? 'var(--node-stroke)' : 'var(--text-3)'
+  const hullStrokeW = isHighlighted ? 2 : 1
+  const stripeId = `actor-stripes-${actor.id}`
 
   return (
     <g ref={gRef}
@@ -215,30 +229,41 @@ export default function Actor({ actor }) {
       onPointerUp={onGroupPointerUp}
       onPointerCancel={onGroupPointerUp}
     >
+      {/* Highlighted: light fill with diagonal stripes */}
+      {isHighlighted && <>
+        <defs>
+          <pattern id={stripeId} patternUnits="userSpaceOnUse" width={STRIPE_GAP} height={STRIPE_GAP}
+            patternTransform="rotate(45)">
+            <rect width={STRIPE_GAP} height={STRIPE_GAP} fill="var(--actor-hl-fill)" />
+            <line x1={STRIPE_GAP / 2} y1={0} x2={STRIPE_GAP / 2} y2={STRIPE_GAP} stroke="var(--actor-hl-stripe)" strokeWidth={3} />
+          </pattern>
+        </defs>
+        <path d={d} fill={`url(#${stripeId})`} stroke="none" style={{ pointerEvents: 'none' }} />
+      </>}
       {/* Wide invisible hit area on the hull outline */}
       <path
         d={d} fill="none" stroke="transparent" strokeWidth={14}
         style={{ pointerEvents: 'stroke', cursor: 'move' }}
         onPointerDown={onPointerDown}
       />
-      <path d={d} fill="none" stroke={hullStroke} strokeWidth={isSelected ? 1.5 : 1}
-        strokeDasharray="6 3" style={{ pointerEvents: 'none' }} />
+      <path d={d} fill="none" stroke={hullStroke} strokeWidth={hullStrokeW}
+        strokeDasharray={isHighlighted ? undefined : '6 3'} style={{ pointerEvents: 'none' }} />
       <line
         x1={anchorCorner.x} y1={anchorCorner.y}
         x2={lineEndX}       y2={lineEndY}
-        stroke="var(--node-stroke)" strokeWidth={1} style={{ pointerEvents: 'none' }}
+        stroke="var(--node-stroke)" strokeWidth={isHighlighted ? 2 : 1} style={{ pointerEvents: 'none' }}
       />
       <rect
         x={labelCx - labelW / 2} y={labelCy - labelH / 2}
         width={labelW} height={labelH} rx={LABEL_RADIUS} ry={LABEL_RADIUS}
-        fill="var(--node-fill)" stroke="var(--node-stroke)" strokeWidth={1}
-        style={{ cursor: 'move' }}
-        onPointerDown={onPointerDown}
+        fill="var(--node-fill)" stroke="var(--node-stroke)" strokeWidth={isHighlighted ? 2 : 1}
+        style={{ cursor: 'pointer' }}
+        onPointerDown={e => onPointerDown(e, true)}
       />
       <text
         x={labelCx} y={labelCy}
         textAnchor="middle" dominantBaseline="central"
-        fontSize={FONT_SIZE} fontFamily="sans-serif" fill="var(--node-text)"
+        fontSize={fontSize} fontWeight={fontWeight} fontFamily="sans-serif" fill="var(--node-text)"
         style={{ pointerEvents: 'none', userSelect: 'none' }}
       >
         {name}

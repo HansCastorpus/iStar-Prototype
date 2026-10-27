@@ -2,7 +2,6 @@ import { useEffect } from 'react'
 import Canvas from './components/Canvas.jsx'
 import Toolbar from './components/Toolbar.jsx'
 import FilterPanel from './components/FilterPanel.jsx'
-import LegendPanel from './components/LegendPanel.jsx'
 import useStore from './store/useStore.js'
 
 export default function App() {
@@ -20,7 +19,6 @@ export default function App() {
         <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
           <Canvas />
         </div>
-        <LegendPanel />
       </div>
     </div>
   )

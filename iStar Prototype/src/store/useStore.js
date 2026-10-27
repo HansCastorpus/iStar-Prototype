@@ -8,7 +8,26 @@ const ACTOR_GAP = 20
 export const ALL_TYPES = [
   'goal', 'task', 'softgoal', 'resource',
   'depends-on', 'or', 'xor', 'and', 'help', 'hurt', 'make', 'break', 'needed-by', 'part-of',
+  'actor',
 ]
+
+// Bulk filter buttons: first click sets every type on/off and remembers the previous
+// selection; clicking the same button again (while still all/none) restores it.
+// `resetActorsWhen` is the state (on/off) that also empties the per-actor list:
+// "Show all" un-hides every actor, "Clear all" un-highlights every actor.
+function bulkSet(types, actorIds, snapshot, on, resetActorsWhen) {
+  const resetsActors = resetActorsWhen === on
+  const atTarget = (on ? ALL_TYPES.every(t => types.includes(t)) : types.length === 0)
+    && (!resetsActors || actorIds.length === 0)
+  if (atTarget) return snapshot && { ...snapshot, snapshot: null }
+  return {
+    types: on ? [...ALL_TYPES] : [],
+    actorIds: resetsActors ? [] : actorIds,
+    snapshot: { types, actorIds },
+  }
+}
+
+const toggleIn = (list, id) => list.includes(id) ? list.filter(x => x !== id) : [...list, id]
 const HULL_PAD = 20  // must match Actor.jsx PAD
 const ALIGN_SNAP = 12  // px — snap to other nodes' center axes within this distance
 
@@ -90,11 +109,12 @@ const useStore = create((set, get) => ({
   pendingLink: null,   // { sourceId, sourceSide, targetId, targetSide } — awaiting type choice
   draggingNodeId: null,
   selectedIds: [],    // multi-select node IDs
+  selectedActorId: null, // set when the selection came from clicking an actor (its nodes aren't outlined)
 
   // ── Dark mode ────────────────────────────────────────────────────────────────
   darkMode: false,
   toggleDarkMode: () => set(s => ({ darkMode: !s.darkMode })),
-  legendOpen: false,
+  legendOpen: true,
   toggleLegend: () => set(s => ({ legendOpen: !s.legendOpen })),
   hideTags: false,
   toggleHideTags: () => set(s => ({ hideTags: !s.hideTags })),
@@ -104,6 +124,13 @@ const useStore = create((set, get) => ({
   isolateTypes:   [...ALL_TYPES],  // types currently isolated;   empty = mode off
   focusNodeId:    null,            // when set, dims all links not connected to this node
   focusDeep:      false,           // when true, use transitive closure instead of direct links only
+  highlightSnapshot: null,         // selection before the last "Highlight all"/"Clear all", to restore on a second click
+  isolateSnapshot:   null,         // same for "Show all"/"Hide all"
+  hiddenActorIds:      [],         // individual actors hidden from the filter panel
+  highlightedActorIds: [],         // individual actors highlighted from the filter panel
+
+  toggleActorHidden:    (id) => set(s => ({ hiddenActorIds: toggleIn(s.hiddenActorIds, id) })),
+  toggleActorHighlight: (id) => set(s => ({ highlightedActorIds: toggleIn(s.highlightedActorIds, id) })),
 
   toggleHighlightType: (type) => set(s => {
     const has = s.highlightTypes.includes(type)
@@ -117,12 +144,14 @@ const useStore = create((set, get) => ({
 
   filterSelectAll:  () => set({ highlightTypes: [...ALL_TYPES], isolateTypes: [...ALL_TYPES] }),
   filterSelectNone: () => set({ highlightTypes: [], isolateTypes: [] }),
-  toggleAllHighlight: () => set(s => ({
-    highlightTypes: s.highlightTypes.length === ALL_TYPES.length ? [] : [...ALL_TYPES],
-  })),
-  toggleAllIsolate: () => set(s => ({
-    isolateTypes: s.isolateTypes.length === ALL_TYPES.length ? [] : [...ALL_TYPES],
-  })),
+  setAllHighlight: (on) => set(s => {
+    const r = bulkSet(s.highlightTypes, s.highlightedActorIds, s.highlightSnapshot, on, false)
+    return r ? { highlightTypes: r.types, highlightedActorIds: r.actorIds, highlightSnapshot: r.snapshot } : {}
+  }),
+  setAllIsolate: (on) => set(s => {
+    const r = bulkSet(s.isolateTypes, s.hiddenActorIds, s.isolateSnapshot, on, true)
+    return r ? { isolateTypes: r.types, hiddenActorIds: r.actorIds, isolateSnapshot: r.snapshot } : {}
+  }),
 
   setFocusNode: (id, deep = false) => set(s => {
     const same = s.focusNodeId === id && s.focusDeep === deep
@@ -134,8 +163,8 @@ const useStore = create((set, get) => ({
   setDraggingNode: (id) => set({ draggingNodeId: id }),
 
   // ── Selection ────────────────────────────────────────────────────────────────
-  select: (id, type) => set({ selectedId: id, selectedType: type, selectedIds: [] }),
-  deselect: () => set({ selectedId: null, selectedType: null, selectedIds: [], focusNodeId: null, focusDeep: false }),
+  select: (id, type) => set({ selectedId: id, selectedType: type, selectedIds: [], selectedActorId: null }),
+  deselect: () => set({ selectedId: null, selectedType: null, selectedIds: [], selectedActorId: null, focusNodeId: null, focusDeep: false }),
 
   addToSelection: (id) => set(s => {
     const base = (s.selectedIds.length === 0 && s.selectedId && s.selectedType === 'node')
@@ -145,6 +174,7 @@ const useStore = create((set, get) => ({
     const selectedIds = has ? base.filter(x => x !== id) : [...base, id]
     return {
       selectedIds,
+      selectedActorId: null,
       selectedId: selectedIds.length ? (has ? selectedIds[selectedIds.length - 1] ?? null : id) : null,
       selectedType: selectedIds.length ? 'node' : null,
     }
@@ -154,7 +184,7 @@ const useStore = create((set, get) => ({
     const ids = Object.values(s.nodes)
       .filter(n => n.actorId === actorId)
       .map(n => n.id)
-    return { selectedIds: ids, selectedId: null, selectedType: null }
+    return { selectedIds: ids, selectedId: null, selectedType: null, selectedActorId: actorId }
   }),
 
   // ── Nodes ────────────────────────────────────────────────────────────────────
@@ -197,7 +227,7 @@ const useStore = create((set, get) => ({
       },
       selectedId: id,
       selectedType: 'node',
-      selectedIds: [],
+      selectedIds: [], selectedActorId: null,
       mode: 'select',
     }))
     return id
@@ -287,7 +317,7 @@ const useStore = create((set, get) => ({
     const links = Object.fromEntries(
       Object.entries(s.links).filter(([, l]) => l.sourceId !== id && l.targetId !== id)
     )
-    return { nodes, links, selectedId: null, selectedType: null, selectedIds: [] }
+    return { nodes, links, selectedId: null, selectedType: null, selectedIds: [], selectedActorId: null }
   }),
 
   // ── Actors ───────────────────────────────────────────────────────────────────
@@ -409,6 +439,7 @@ const useStore = create((set, get) => ({
       '--hl-goal', '--hl-task', '--hl-softgoal', '--hl-resource',
       '--hl-hurt', '--hl-help', '--hl-needed-by', '--hl-depends-on',
       '--hl-or', '--hl-xor', '--hl-and', '--hl-part-of',
+      '--actor-hl-fill', '--actor-hl-stripe',
     ]
     let svgStr = new XMLSerializer().serializeToString(clone)
     for (const v of cssVars) {
@@ -444,7 +475,7 @@ const useStore = create((set, get) => ({
 
   clearDiagram: () => set({
     actors: {}, nodes: {}, links: {},
-    selectedId: null, selectedType: null, selectedIds: [],
+    selectedId: null, selectedType: null, selectedIds: [], selectedActorId: null,
     connectSource: null, pendingLink: null, mode: 'select', focusNodeId: null, focusDeep: false,
   }),
 
@@ -455,7 +486,7 @@ const useStore = create((set, get) => ({
         actors: actors || {},
         nodes:  nodes  || {},
         links:  links  || {},
-        selectedId: null, selectedType: null, selectedIds: [], mode: 'select',
+        selectedId: null, selectedType: null, selectedIds: [], selectedActorId: null, mode: 'select',
         connectSource: null, pendingLink: null,
       })
     } catch (e) {

@@ -2,6 +2,13 @@
 html, body, #root { width: 100%; height: 100%; overflow: hidden; }
 body { font-family: monospace; font-size: 12px; }
 
+/* Hover feedback for every button: tint with the button's own text colour so it
+   works on light, dark and filled (active) buttons alike */
+button { transition: box-shadow 0.12s ease; }
+button:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 100vmax color-mix(in srgb, currentColor 10%, transparent);
+}
+
 /* ── Light theme (default) ─────────────────────────────────────────────────── */
 :root {
   --bg-canvas:  #f8f8f8;
@@ -33,6 +40,9 @@ body { font-family: monospace; font-size: 12px; }
   --hl-xor:       #E07000;
   --hl-and:       #1c7e40;
   --hl-part-of:   #2b15a6;
+  /* actor highlight – light grey fill with slightly darker stripes */
+  --actor-hl-fill:   #ffffff;
+  --actor-hl-stripe: #ededed;
 }
 
 /* ── Dark theme ─────────────────────────────────────────────────────────────── */
@@ -66,4 +76,13 @@ body { font-family: monospace; font-size: 12px; }
   --hl-xor:       #ff9f43;
   --hl-and:       #30a423;
   --hl-part-of:   #c34cb1;
+  --actor-hl-fill:   #2b2b2b;
+  --actor-hl-stripe: #383838;
 }
+
+/* Side panels that open next to the filter panel */
+@keyframes panel-slide-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: none; }
+}
+.panel-slide-in { animation: panel-slide-in 0.15s ease-out; }

@@ -1,6 +1,8 @@
-import { useState, useRef } from 'react'
 import useStore from '../store/useStore.js'
 import { useZoom, worldToScreen } from '../contexts/ZoomContext.jsx'
+import { usePopupPlacement, diagramObstacles, segmentBounds } from '../utils/usePopupPlacement.js'
+import { computePendingPath } from '../utils/routing.js'
+import PopupConnector, { POPUP_Z } from './PopupConnector.jsx'
 
 const LINK_TYPES = [
   'depends-on',
@@ -9,49 +11,52 @@ const LINK_TYPES = [
   'needed-by', 'part-of',
 ]
 
-export default function LinkTypePopup() {
+const ENDPOINT_WEIGHT = 8  // don't cover the two elements being connected
+const PENDING_WEIGHT  = 4  // ...or the ghost link between them
+
+const center = n => ({ x: n.x + n.width / 2, y: n.y + n.height / 2 })
+
+// Small screen rect at the midpoint between the two elements being connected
+function pendingAnchor(src, tgt, transform) {
+  if (!src || !tgt) return null
+  const a = center(src), b = center(tgt)
+  const { x, y } = worldToScreen((a.x + b.x) / 2, (a.y + b.y) / 2, transform)
+  return { x: x - 8, y: y - 8, w: 16, h: 16 }
+}
+
+function pendingSegments(pendingLink, src, tgt) {
+  const pts = computePendingPath(src, pendingLink.sourceSide, tgt, pendingLink.targetSide)
+  return pts.slice(1).map((p, i) => [pts[i], p])
+}
+
+export default function LinkTypePopup({ linkPaths = {} }) {
   const { pendingLink, nodes, confirmLink, clearConnect } = useStore()
   const { transform } = useZoom()
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
-  const handleRef = useRef(null)
-  const dragStateRef = useRef(null)
 
-  const onDragDown = (e) => {
-    if (e.button !== 0) return
-    e.preventDefault()
-    handleRef.current.setPointerCapture(e.pointerId)
-    dragStateRef.current = {
-      pointerId: e.pointerId,
-      startX: e.clientX - dragOffset.x,
-      startY: e.clientY - dragOffset.y,
-    }
-  }
-  const onDragMove = (e) => {
-    if (!dragStateRef.current || e.pointerId !== dragStateRef.current.pointerId) return
-    setDragOffset({ x: e.clientX - dragStateRef.current.startX, y: e.clientY - dragStateRef.current.startY })
-  }
-  const onDragUp = (e) => {
-    if (!dragStateRef.current || e.pointerId !== dragStateRef.current.pointerId) return
-    handleRef.current.releasePointerCapture(e.pointerId)
-    dragStateRef.current = null
-  }
+  const src = pendingLink && nodes[pendingLink.sourceId]
+  const tgt = pendingLink && nodes[pendingLink.targetId]
+  const anchor = pendingAnchor(src, tgt, transform)
 
-  if (!pendingLink) return null
+  const { pos, popRef, handleRef, dragProps, connector } = usePopupPlacement({
+    id: 'link-type',
+    avoid: ['properties'],  // placed after the element popup, so it steps around it
+    anchor,
+    getObstacles: () => [
+      ...diagramObstacles({ nodes, linkPaths, transform, weights: { [src.id]: ENDPOINT_WEIGHT, [tgt.id]: ENDPOINT_WEIGHT } }),
+      ...pendingSegments(pendingLink, src, tgt).map(([a, b]) => ({ ...segmentBounds(a, b, transform, 6), weight: PENDING_WEIGHT })),
+    ],
+    resetKey: pendingLink ? `${pendingLink.sourceId}|${pendingLink.targetId}` : '',
+  })
 
-  const src = nodes[pendingLink.sourceId]
-  const tgt = nodes[pendingLink.targetId]
-  if (!src || !tgt) return null
-
-  const worldMidX = (src.x + src.width / 2 + tgt.x + tgt.width / 2) / 2
-  const worldMidY = (src.y + src.height / 2 + tgt.y + tgt.height / 2) / 2
-  const { x: sx, y: sy } = worldToScreen(worldMidX, worldMidY, transform)
+  if (!pendingLink || !anchor) return null
 
   return (
-    <div style={{
+    <>
+    <PopupConnector connector={connector} pos={pos} />
+    <div ref={popRef} style={{
       position: 'absolute',
-      left: sx + dragOffset.x,
-      top: sy + dragOffset.y,
-      transform: 'translate(-50%, -50%)',
+      left: pos.x,
+      top: pos.y,
       background: 'var(--bg-popup)',
       border: '1px solid var(--border-md)',
       padding: '6px',
@@ -59,12 +64,11 @@ export default function LinkTypePopup() {
       display: 'flex',
       flexDirection: 'column',
       gap: '3px',
-      zIndex: 100,
+      zIndex: POPUP_Z,
     }}>
       <div
         ref={handleRef}
-        onPointerDown={onDragDown} onPointerMove={onDragMove}
-        onPointerUp={onDragUp} onPointerCancel={onDragUp}
+        {...dragProps}
         style={{
           position: 'absolute', top: 0, left: 0, right: 0, height: 16,
           cursor: 'grab',
@@ -104,5 +108,6 @@ export default function LinkTypePopup() {
         cancel
       </button>
     </div>
+    </>
   )
 }

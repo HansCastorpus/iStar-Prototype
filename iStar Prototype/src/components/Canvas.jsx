@@ -128,8 +128,8 @@ export default function Canvas() {
 
   return (
     <ZoomContext.Provider value={{ transform, transformRef }}>
-      <PropertyPopover />
-      <LinkTypePopup />
+      <PropertyPopover linkPaths={linkPaths} />
+      <LinkTypePopup linkPaths={linkPaths} />
       <svg
         ref={svgRef}
         id="diagram-canvas"
