@@ -1,18 +1,29 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { flushSync } from 'react-dom'
 import useStore, { ALL_TYPES } from '../store/useStore.js'
 import { LegendIcon, LEGEND_W } from './LegendIcons.jsx'
 import { upstreamLayerCount } from '../utils/dependencies.js'
+import { useT } from '../i18n.js'
 
 const NODE_TYPES = ['goal', 'task', 'softgoal', 'resource']
 const LINK_TYPES = ['depends-on', 'or', 'xor', 'and', 'help', 'hurt', 'make', 'break', 'needed-by', 'part-of']
 const ACTOR_TYPES = ['actor']
 
-const COL_H = 112  // width of Highlight column
-const COL_I = 88   // width of Hide column
-const COL_I_PAD_L = 10  // extra room between the divider and the Hide column
+// Minimum column widths (they fit the English labels); columns grow when a language's labels are longer
+const MIN_LABEL_W = 82  // name column / Show-Hide tags buttons
+const MIN_COL_I   = 88  // visibility column (Show all / Hide all)
+const MIN_COL_H   = 112 // highlight column (Highlight all / Clear all)
+const COL_I_PAD_L = 10  // extra room between the divider and the visibility column
+const PANEL_CHROME = 50 // panel padding (2 × 12) + card border (2) + card padding (2 × 12)
+const BTN_CHROME  = 22  // header button padding (2 × 10) + border (2)
 
-const PANEL_W = 332
+// Width of `text` in the header buttons' font
+let measureCtx = null
+function buttonTextW(text) {
+  if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d')
+  measureCtx.font = '10px monospace'
+  return Math.ceil(measureCtx.measureText(text).width)
+}
 
 // Width of a classic scrollbar on this system (0 with overlay scrollbars, e.g. macOS default)
 const SCROLLBAR_W = (() => {
@@ -26,16 +37,29 @@ const SCROLLBAR_W = (() => {
 const LEGEND_GAP = 6  // space between legend icon and checkbox
 const SQUARE = 16
 
-// Shared column styles so header buttons and row checkboxes line up exactly;
-// columns only grow as much as needed to fit checkbox + legend icon when the legend is on
+// Shared column styles so header buttons and row checkboxes line up exactly. Widths fit the current
+// language's button labels; with the legend on, columns grow just enough for checkbox + legend icon.
 const LEGEND_CONTENT = SQUARE + LEGEND_GAP + LEGEND_W
-const colIWidth = (legend) => legend ? Math.max(COL_I, LEGEND_CONTENT + COL_I_PAD_L + 4) : COL_I
-const colHWidth = (legend) => legend ? Math.max(COL_H, LEGEND_CONTENT + 8) : COL_H
-const legendExtra = (legend) => colIWidth(legend) - COL_I + colHWidth(legend) - COL_H
-const colI = (legend) => ({ width: colIWidth(legend), flexShrink: 0, borderLeft: '1px solid var(--border-lt)', padding: `0 4px 0 ${COL_I_PAD_L}px` })
-const colH = (legend) => ({ width: colHWidth(legend), flexShrink: 0, borderLeft: '1px solid var(--border-lt)', padding: '0 4px' })
+function useColumns() {
+  const t = useT()
+  return useMemo(() => {
+    const widest = (keys) => Math.max(...keys.map(k => buttonTextW(t(k)))) + BTN_CHROME
+    const label = Math.max(MIN_LABEL_W, widest(['filter.showTags', 'filter.hideTags']) + 8)
+    const i = Math.max(MIN_COL_I, widest(['filter.showAll', 'filter.hideAll']) + COL_I_PAD_L + 4)
+    const h = Math.max(MIN_COL_H, widest(['filter.highlightAll', 'filter.clearAll']) + 8)
+    const iW = (legend) => legend ? Math.max(i, LEGEND_CONTENT + COL_I_PAD_L + 4) : i
+    const hW = (legend) => legend ? Math.max(h, LEGEND_CONTENT + 8) : h
+    return {
+      panelWidth: (legend) => PANEL_CHROME + label + iW(legend) + hW(legend),
+      colI: (legend) => ({ width: iW(legend), flexShrink: 0, borderLeft: '1px solid var(--border-lt)', padding: `0 4px 0 ${COL_I_PAD_L}px` }),
+      colH: (legend) => ({ width: hW(legend), flexShrink: 0, borderLeft: '1px solid var(--border-lt)', padding: '0 4px' }),
+    }
+  }, [t])
+}
 
 export default function FilterPanel() {
+  const t = useT()
+  const { panelWidth: basePanelWidth, colI, colH } = useColumns()
   const highlightTypes      = useStore(s => s.highlightTypes)
   const isolateTypes        = useStore(s => s.isolateTypes)
   const toggleHighlightType = useStore(s => s.toggleHighlightType)
@@ -90,7 +114,22 @@ export default function FilterPanel() {
   const allHighlighted  = ALL_TYPES.every(t => highlightTypes.includes(t))
   const noneHighlighted = highlightTypes.length === 0 && highlightedActorIds.length === 0
 
-  const panelWidth = PANEL_W + legendExtra(legendOpen) + (overflows ? SCROLLBAR_W : 0)
+  const panelWidth = basePanelWidth(legendOpen) + (overflows ? SCROLLBAR_W : 0)
+
+  // Share the Filter card's on-screen position so the toolbar can centre the logo over it
+  const [filterCardEl, setFilterCardEl] = useState(null)
+  const setFilterCardBox = useStore(s => s.setFilterCardBox)
+  useEffect(() => {
+    if (!filterCardEl) return
+    const publish = () => {
+      const r = filterCardEl.getBoundingClientRect()
+      setFilterCardBox({ left: r.left, width: r.width })
+    }
+    const ro = new ResizeObserver(publish)
+    ro.observe(filterCardEl)
+    window.addEventListener('resize', publish)
+    return () => { ro.disconnect(); window.removeEventListener('resize', publish) }
+  }, [filterCardEl, setFilterCardBox])
 
   return (
     <>
@@ -109,9 +148,9 @@ export default function FilterPanel() {
       gap: 12,
     }}>
       {/* Filter container */}
-      <div style={cardStyle}>
+      <div ref={setFilterCardEl} style={cardStyle}>
         <div style={cardTitle}>
-          Filter
+          {t('filter.title')}
         </div>
 
         {/* Legend button */}
@@ -138,7 +177,7 @@ export default function FilterPanel() {
               <rect x="1" y="5.75" width="11" height="1.5" rx="0.75" fill="currentColor"/>
               <rect x="1" y="9.5" width="11" height="1.5" rx="0.75" fill="currentColor"/>
             </svg>
-            {legendOpen ? 'Hide legend' : 'Show legend'}
+            {legendOpen ? t('filter.hideLegend') : t('filter.showLegend')}
           </button>
         </div>
 
@@ -147,29 +186,29 @@ export default function FilterPanel() {
           {/* Show / hide tags, stacked like the column buttons on the right */}
           <div style={{ flex: 1, minWidth: 0, paddingRight: 8, display: 'flex', alignItems: 'flex-end' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <button onClick={() => setHideTags(false)} style={colBtnStyle(!hideTags)}>Show tags</button>
-              <button onClick={() => setHideTags(true)} style={colBtnStyle(hideTags)}>Hide tags</button>
+              <button onClick={() => setHideTags(false)} style={colBtnStyle(!hideTags)}>{t('filter.showTags')}</button>
+              <button onClick={() => setHideTags(true)} style={colBtnStyle(hideTags)}>{t('filter.hideTags')}</button>
             </div>
           </div>
           <div style={{ ...colI(legendOpen), display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <button onClick={() => setAllIsolate(true)} style={colBtnStyle(allVisible)}>Show all</button>
-            <button onClick={() => setAllIsolate(false)} style={colBtnStyle(noneVisible)}>Hide all</button>
+            <button onClick={() => setAllIsolate(true)} style={colBtnStyle(allVisible)}>{t('filter.showAll')}</button>
+            <button onClick={() => setAllIsolate(false)} style={colBtnStyle(noneVisible)}>{t('filter.hideAll')}</button>
           </div>
           <div style={{ ...colH(legendOpen), display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <button onClick={() => setAllHighlight(true)} style={colBtnStyle(allHighlighted)}>Highlight all</button>
-            <button onClick={() => setAllHighlight(false)} style={colBtnStyle(noneHighlighted)}>Clear all</button>
+            <button onClick={() => setAllHighlight(true)} style={colBtnStyle(allHighlighted)}>{t('filter.highlightAll')}</button>
+            <button onClick={() => setAllHighlight(false)} style={colBtnStyle(noneHighlighted)}>{t('filter.clearAll')}</button>
           </div>
         </div>
 
-        <Section label="Nodes" types={NODE_TYPES} first legend={legendOpen}
+        <Section label={t('filter.elements')} types={NODE_TYPES} first legend={legendOpen}
           highlightTypes={highlightTypes} isolateTypes={isolateTypes}
           onToggleH={toggleHighlightType} onToggleI={toggleIsolateType} />
 
-        <Section label="Links" types={LINK_TYPES} legend={legendOpen}
+        <Section label={t('filter.links')} types={LINK_TYPES} legend={legendOpen}
           highlightTypes={highlightTypes} isolateTypes={isolateTypes}
           onToggleH={toggleHighlightType} onToggleI={toggleIsolateType} />
 
-        <Section label="Actors" types={ACTOR_TYPES} legend={legendOpen}
+        <Section label={t('filter.actors')} types={ACTOR_TYPES} legend={legendOpen}
           highlightTypes={highlightTypes} isolateTypes={isolateTypes}
           onToggleH={toggleHighlightType} onToggleI={toggleIsolateType} />
         <ActorListToggle open={actorPanelOpen} onToggle={() => setActorPanelOpen(o => !o)} />
@@ -178,17 +217,17 @@ export default function FilterPanel() {
       {/* Dependencies container */}
       <div style={{ ...cardStyle, gap: 6 }}>
         <div style={cardTitle}>
-          Dependencies
+          {t('deps.title')}
         </div>
         <div style={infoText}>
-          <strong style={{ color: 'var(--text-1)' }}>Select an element.</strong> Choose whether you want to see specific relationships or all its dependencies.
+          <strong style={{ color: 'var(--text-1)' }}>{t('deps.infoLead')}</strong> {t('deps.info')}
         </div>
         <button
           onClick={() => canFocus && setFocusNode(selectedId, false)}
           disabled={!canFocus}
           style={focusBtnStyle(isDirectActive, canFocus)}
         >
-          {isDirectActive ? 'Clear focus' : 'Highlight relationships'}
+          {isDirectActive ? t('deps.clear') : t('deps.relationships')}
         </button>
         <LayerStepper
           value={layers}
@@ -201,16 +240,16 @@ export default function FilterPanel() {
           disabled={!canFocus}
           style={focusBtnStyle(isDeepActive, canFocus)}
         >
-          {isDeepActive ? 'Clear focus' : 'Highlight all dependencies'}
+          {isDeepActive ? t('deps.clear') : t('deps.all')}
         </button>
         {/* Current status */}
         {(!canFocus || isDirectActive || isDeepActive) && (
           <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'monospace', marginTop: 2, lineHeight: 1.5 }}>
             {!canFocus
-              ? 'No element selected.'
+              ? t('deps.noSelection')
               : isDeepActive
-              ? 'Showing the full dependency chain.'
-              : `Showing ${layers} ${layers === 1 ? 'layer' : 'layers'} of relationships.`}
+              ? t('deps.showingAll')
+              : layers === 1 ? t('deps.showingLayer') : t('deps.showingLayers', { n: layers })}
           </div>
         )}
       </div>
@@ -223,6 +262,7 @@ export default function FilterPanel() {
 
 // "Layers  − 2 / 4 +" control for how far back "Highlight relationships" reaches
 function LayerStepper({ value, max, enabled, onChange }) {
+  const t = useT()
   // Same look as the other panel buttons (incl. their disabled state), just sized to the symbol
   const stepBtn = (disabled) => ({ ...focusBtnStyle(false, !disabled), width: 'auto', minWidth: 30 })
   const canDec = enabled && value > 1
@@ -230,7 +270,7 @@ function LayerStepper({ value, max, enabled, onChange }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 2,
       fontSize: 10, fontFamily: 'monospace', color: enabled ? 'var(--text-2)' : 'var(--text-3)' }}>
-      <span style={{ whiteSpace: 'nowrap' }}>Layers of dependency</span>
+      <span style={{ whiteSpace: 'nowrap' }}>{t('deps.layers')}</span>
       {/* Arrow from the label to the buttons, stretching across the free space */}
       <span aria-hidden style={{ flex: 1, minWidth: 16, display: 'flex', alignItems: 'center' }}>
         <span style={{ flex: 1, height: 1, background: 'currentColor' }} />
@@ -238,11 +278,11 @@ function LayerStepper({ value, max, enabled, onChange }) {
           <path d="M0,0 L5,4 L0,8 Z" fill="currentColor" />
         </svg>
       </span>
-      <button onClick={() => onChange(value - 1)} disabled={!canDec} aria-label="Fewer layers" style={stepBtn(!canDec)}><StepIcon /></button>
+      <button onClick={() => onChange(value - 1)} disabled={!canDec} aria-label={t('deps.fewer')} style={stepBtn(!canDec)}><StepIcon /></button>
       <span style={{ minWidth: 36, textAlign: 'center', color: enabled ? 'var(--text-1)' : 'var(--text-3)' }}>
         {enabled ? `${value} / ${max}` : '–'}
       </span>
-      <button onClick={() => onChange(value + 1)} disabled={!canInc} aria-label="More layers" style={stepBtn(!canInc)}><StepIcon plus /></button>
+      <button onClick={() => onChange(value + 1)} disabled={!canInc} aria-label={t('deps.more')} style={stepBtn(!canInc)}><StepIcon plus /></button>
     </div>
   )
 }
@@ -267,16 +307,17 @@ function SectionLabel({ first, children }) {
 }
 
 function Section({ label, first, legend, types, highlightTypes, isolateTypes, onToggleH, onToggleI }) {
+  const t = useT()
   return (
     <>
       <SectionLabel first={first}>{label}</SectionLabel>
-      {types.map(t => (
+      {types.map(type => (
         <TypeRow
-          key={t} label={t} legend={legend}
-          inHighlight={highlightTypes.includes(t)}
-          inIsolate={isolateTypes.includes(t)}
-          onToggleH={() => onToggleH(t)}
-          onToggleI={() => onToggleI(t)}
+          key={type} label={t(`type.${type}`)} legendType={type} legend={legend}
+          inHighlight={highlightTypes.includes(type)}
+          inIsolate={isolateTypes.includes(type)}
+          onToggleH={() => onToggleH(type)}
+          onToggleI={() => onToggleI(type)}
         />
       ))}
     </>
@@ -286,6 +327,7 @@ function Section({ label, first, legend, types, highlightTypes, isolateTypes, on
 // legendType: which sample to show when the legend is on (null = blank space, keeps checkboxes aligned)
 // wrap: let long labels run onto several lines instead of being cut off with "…"
 function TypeRow({ label, legendType = label, wrap = false, legend, inHighlight, inIsolate, onToggleH, onToggleI }) {
+  const { colI, colH } = useColumns()
   const slot = (highlighted) => !legend ? null
     : legendType ? <LegendSlot type={legendType} highlighted={highlighted} />
     : <div style={{ width: LEGEND_W, flexShrink: 0 }} />
@@ -311,6 +353,7 @@ function TypeRow({ label, legendType = label, wrap = false, legend, inHighlight,
 
 // Button in the Actors section that opens the per-actor panel
 function ActorListToggle({ open, onToggle }) {
+  const t = useT()
   const count = useStore(s => Object.keys(s.actors).length)
   return (
     <button onClick={onToggle} disabled={!count} aria-expanded={open}
@@ -318,7 +361,7 @@ function ActorListToggle({ open, onToggle }) {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '6px 10px', fontSize: 11, textAlign: 'left',
         ...(!count && { color: 'var(--text-3)', cursor: 'default' }) }}>
-      <span>{count ? `Each actor (${count})` : 'No actors yet'}</span>
+      <span>{count ? t('filter.eachActor', { n: count }) : t('filter.noActors')}</span>
       {count > 0 && <span aria-hidden>{open ? '◂' : '▸'}</span>}
     </button>
   )
@@ -328,6 +371,8 @@ const ACTOR_PANEL_W = 340
 
 // Side panel next to the filter panel: every actor with its own hide / highlight checkboxes
 function ActorPanel({ left, onClose }) {
+  const t = useT()
+  const { colI, colH } = useColumns()
   const actors              = useStore(s => s.actors)
   const hiddenActorIds      = useStore(s => s.hiddenActorIds)
   const highlightedActorIds = useStore(s => s.highlightedActorIds)
@@ -348,8 +393,8 @@ function ActorPanel({ left, onClose }) {
     }}>
       <div style={cardStyle}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          <div style={{ ...cardTitle, flex: 1, marginBottom: 0 }}>Actors</div>
-          <button onClick={onClose} aria-label="Close actor panel" style={{
+          <div style={{ ...cardTitle, flex: 1, marginBottom: 0 }}>{t('actors.title')}</div>
+          <button onClick={onClose} aria-label={t('actors.close')} style={{
             background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, lineHeight: 1,
             color: 'var(--text-2)', padding: '0 2px',
           }}>×</button>
@@ -358,16 +403,16 @@ function ActorPanel({ left, onClose }) {
         {/* Column labels, aligned with the checkbox columns */}
         <div style={{ display: 'flex', alignItems: 'center', marginTop: 8, paddingBottom: 4, borderBottom: '1px solid var(--border-lt)' }}>
           <div style={{ flex: 1 }} />
-          <div style={{ ...colI(false), ...colLabel }}>visible</div>
-          <div style={{ ...colH(false), ...colLabel }}>highlight</div>
+          <div style={{ ...colI(false), ...colLabel }}>{t('actors.visible')}</div>
+          <div style={{ ...colH(false), ...colLabel }}>{t('actors.highlight')}</div>
         </div>
 
         {list.length === 0 && (
-          <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'monospace', padding: '6px 0' }}>No actors yet.</div>
+          <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'monospace', padding: '6px 0' }}>{t('actors.none')}</div>
         )}
         {list.map(a => (
           <TypeRow
-            key={a.id} label={a.name || '(unnamed)'} legendType={null} legend={false} wrap
+            key={a.id} label={a.name || t('actors.unnamed')} legendType={null} legend={false} wrap
             inIsolate={actorsVisible && !hiddenActorIds.includes(a.id)}
             inHighlight={actorsHighlighted || highlightedActorIds.includes(a.id)}
             onToggleI={() => toggleActorHidden(a.id)}

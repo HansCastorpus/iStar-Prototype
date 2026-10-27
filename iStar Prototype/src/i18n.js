@@ -1,0 +1,221 @@
+import { useCallback } from 'react'
+import useStore from './store/useStore.js'
+
+// All user-facing text, in English and French. Stored data (element / link types) stays in
+// English; only what's displayed is translated. Help content lives in Toolbar.jsx (it embeds icons).
+// `{name}` placeholders are filled from t(key, { name: ... }).
+export const STRINGS = {
+  en: {
+    // iStar element / link / actor types (the names shown for stored type keys)
+    'type.goal': 'goal',
+    'type.task': 'task',
+    'type.softgoal': 'softgoal',
+    'type.resource': 'resource',
+    'type.actor': 'actor',
+    'type.depends-on': 'depends-on',
+    'type.or': 'or',
+    'type.xor': 'xor',
+    'type.and': 'and',
+    'type.help': 'help',
+    'type.hurt': 'hurt',
+    'type.make': 'make',
+    'type.break': 'break',
+    'type.needed-by': 'needed-by',
+    'type.part-of': 'part-of',
+
+    // Header
+    'toolbar.help': 'Help',
+    'toolbar.select': 'Select',
+    'toolbar.addGoal': '+ Goal',
+    'toolbar.addTask': '+ Task',
+    'toolbar.addSoftgoal': '+ Softgoal',
+    'toolbar.addResource': '+ Resource',
+    'toolbar.exportJson': 'Export JSON',
+    'toolbar.import': 'Import',
+    'toolbar.dark': '☾ Dark',
+    'toolbar.light': '☀ Light',
+    'toolbar.clear': 'Clear',
+    'toolbar.wipe': 'Wipe canvas?',
+    'toolbar.confirm': 'Confirm',
+    'toolbar.cancel': 'Cancel',
+    'toolbar.closeHelp': 'Close help',
+    'toolbar.language': 'Language',
+
+    // Filter card
+    'filter.title': 'Filter',
+    'filter.showLegend': 'Show legend',
+    'filter.hideLegend': 'Hide legend',
+    'filter.showTags': 'Show tags',
+    'filter.hideTags': 'Hide tags',
+    'filter.showAll': 'Show all',
+    'filter.hideAll': 'Hide all',
+    'filter.highlightAll': 'Highlight all',
+    'filter.clearAll': 'Clear all',
+    'filter.elements': 'Elements',
+    'filter.links': 'Links',
+    'filter.actors': 'Actors',
+    'filter.eachActor': 'Each actor ({n})',
+    'filter.noActors': 'No actors yet',
+
+    // Actor side panel
+    'actors.title': 'Actors',
+    'actors.close': 'Close actor panel',
+    'actors.visible': 'visible',
+    'actors.highlight': 'highlight',
+    'actors.none': 'No actors yet.',
+    'actors.unnamed': '(unnamed)',
+
+    // Dependencies card
+    'deps.title': 'Dependencies',
+    'deps.infoLead': 'Select an element.',
+    'deps.info': 'Choose whether you want to see specific relationships or all its dependencies.',
+    'deps.relationships': 'Highlight relationships',
+    'deps.all': 'Highlight all dependencies',
+    'deps.clear': 'Clear focus',
+    'deps.layers': 'Layers of dependency',
+    'deps.fewer': 'Fewer layers',
+    'deps.more': 'More layers',
+    'deps.noSelection': 'No element selected.',
+    'deps.showingAll': 'Showing the full dependency chain.',
+    'deps.showingLayer': 'Showing 1 layer of relationships.',
+    'deps.showingLayers': 'Showing {n} layers of relationships.',
+
+    // Element / link popup
+    'popup.hide': 'hide',
+    'popup.show': 'show',
+    'popup.close': 'Close',
+    'popup.label': 'label',
+    'popup.type': 'type',
+    'popup.actor': 'actor',
+    'popup.labelPlaceholder': 'enter label…',
+    'popup.actorPlaceholder': 'actor name…',
+    'popup.mixed': 'mixed…',
+    'popup.selected': '{n} elements selected',
+    'popup.reverse': 'reverse direction',
+    'popup.outerRoute': 'route: outer',
+    'popup.outerRouteOn': 'route: outer [on]',
+    'popup.side.left': 'left',
+    'popup.side.right': 'right',
+    'popup.side.top': 'top',
+    'popup.side.bottom': 'bottom',
+    'popup.delete': 'delete',
+    'popup.cancel': 'cancel',
+    'popup.deleteLink': 'delete link',
+    'popup.deleteElement': 'delete element',
+    'popup.confirmDelete': 'confirm delete',
+
+    // Link type list (after picking two elements)
+    'linkType.title': 'link type',
+    'linkType.cancel': 'cancel',
+  },
+
+  fr: {
+    'type.goal': 'but',
+    'type.task': 'tâche',
+    'type.softgoal': 'but souple',
+    'type.resource': 'ressource',
+    'type.actor': 'acteur',
+    'type.depends-on': 'dépend de',
+    'type.or': 'ou',
+    'type.xor': 'xor',
+    'type.and': 'et',
+    'type.help': 'aide',
+    'type.hurt': 'nuit',
+    'type.make': 'réalise',
+    'type.break': 'brise',
+    'type.needed-by': 'requis par',
+    'type.part-of': 'partie de',
+
+    'toolbar.help': 'Aide',
+    'toolbar.select': 'Sélection',
+    'toolbar.addGoal': '+ But',
+    'toolbar.addTask': '+ Tâche',
+    'toolbar.addSoftgoal': '+ But souple',
+    'toolbar.addResource': '+ Ressource',
+    'toolbar.exportJson': 'Exporter JSON',
+    'toolbar.import': 'Importer',
+    'toolbar.dark': '☾ Sombre',
+    'toolbar.light': '☀ Clair',
+    'toolbar.clear': 'Effacer',
+    'toolbar.wipe': 'Tout effacer ?',
+    'toolbar.confirm': 'Confirmer',
+    'toolbar.cancel': 'Annuler',
+    'toolbar.closeHelp': "Fermer l'aide",
+    'toolbar.language': 'Langue',
+
+    'filter.title': 'Filtres',
+    'filter.showLegend': 'Afficher la légende',
+    'filter.hideLegend': 'Masquer la légende',
+    'filter.showTags': 'Afficher tags',
+    'filter.hideTags': 'Masquer tags',
+    'filter.showAll': 'Tout afficher',
+    'filter.hideAll': 'Tout masquer',
+    'filter.highlightAll': 'Tout surligner',
+    'filter.clearAll': 'Tout effacer',
+    'filter.elements': 'Éléments',
+    'filter.links': 'Liens',
+    'filter.actors': 'Acteurs',
+    'filter.eachActor': 'Chaque acteur ({n})',
+    'filter.noActors': "Pas encore d'acteur",
+
+    'actors.title': 'Acteurs',
+    'actors.close': 'Fermer le panneau des acteurs',
+    'actors.visible': 'visible',
+    'actors.highlight': 'surligner',
+    'actors.none': "Pas encore d'acteur.",
+    'actors.unnamed': '(sans nom)',
+
+    'deps.title': 'Dépendances',
+    'deps.infoLead': 'Sélectionnez un élément.',
+    'deps.info': 'Choisissez de voir des relations précises ou toutes ses dépendances.',
+    'deps.relationships': 'Surligner les relations',
+    'deps.all': 'Surligner toutes les dépendances',
+    'deps.clear': 'Effacer le focus',
+    'deps.layers': 'Niveaux de dépendance',
+    'deps.fewer': 'Moins de niveaux',
+    'deps.more': 'Plus de niveaux',
+    'deps.noSelection': 'Aucun élément sélectionné.',
+    'deps.showingAll': 'Chaîne de dépendances complète affichée.',
+    'deps.showingLayer': '1 niveau de relations affiché.',
+    'deps.showingLayers': '{n} niveaux de relations affichés.',
+
+    'popup.hide': 'masquer',
+    'popup.show': 'afficher',
+    'popup.close': 'Fermer',
+    'popup.label': 'libellé',
+    'popup.type': 'type',
+    'popup.actor': 'acteur',
+    'popup.labelPlaceholder': 'saisir un libellé…',
+    'popup.actorPlaceholder': "nom de l'acteur…",
+    'popup.mixed': 'mixte…',
+    'popup.selected': '{n} éléments sélectionnés',
+    'popup.reverse': 'inverser le sens',
+    'popup.outerRoute': 'tracé : extérieur',
+    'popup.outerRouteOn': 'tracé : extérieur [actif]',
+    'popup.side.left': 'gauche',
+    'popup.side.right': 'droite',
+    'popup.side.top': 'haut',
+    'popup.side.bottom': 'bas',
+    'popup.delete': 'supprimer',
+    'popup.cancel': 'annuler',
+    'popup.deleteLink': 'supprimer le lien',
+    'popup.deleteElement': "supprimer l'élément",
+    'popup.confirmDelete': 'confirmer la suppression',
+
+    'linkType.title': 'type de lien',
+    'linkType.cancel': 'annuler',
+  },
+}
+
+export const LANGS = ['en', 'fr']
+
+export function translate(lang, key, vars) {
+  const s = STRINGS[lang]?.[key] ?? STRINGS.en[key] ?? key
+  return vars ? s.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '') : s
+}
+
+// t(key, vars) for the current language; re-renders the component when the language changes
+export function useT() {
+  const lang = useStore(s => s.lang)
+  return useCallback((key, vars) => translate(lang, key, vars), [lang])
+}

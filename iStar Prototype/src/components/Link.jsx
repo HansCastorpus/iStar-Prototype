@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import useStore from '../store/useStore.js'
 import { upstreamSet, focusLayers } from '../utils/dependencies.js'
+import { useT } from '../i18n.js'
 import { useZoom } from '../contexts/ZoomContext.jsx'
 import { pointsToPath, getPointAtT, projectOntoPath } from '../utils/routing.js'
 
@@ -238,6 +239,7 @@ export default function Link({ link, points, andBar }) {
   const isolateTypes   = useStore(s => s.isolateTypes)
   const focusNodeId    = useStore(s => s.focusNodeId)
   const hideTags       = useStore(s => s.hideTags)
+  const tr             = useT()  // translate (t is the tag's position along the link)
 
   const isHidden   = !isolateTypes.includes(link.type)
   const isFocused = useStore(s => {
@@ -318,7 +320,7 @@ export default function Link({ link, points, andBar }) {
       deleteLink(link.id)
   }
 
-  const labelText = (link.type ?? '').toUpperCase()
+  const labelText = (link.type ? tr(`type.${link.type}`) : '').toUpperCase()
   const boxW = labelText.length * CHAR_W + PAD_X * 2
   const boxH = FONT_SIZE + PAD_Y * 2
 

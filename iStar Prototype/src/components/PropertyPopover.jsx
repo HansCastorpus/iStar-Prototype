@@ -2,6 +2,7 @@ import { useState } from 'react'
 import useStore from '../store/useStore.js'
 import { useZoom, worldToScreen } from '../contexts/ZoomContext.jsx'
 import { usePopupPlacement, screenBounds, diagramObstacles } from '../utils/usePopupPlacement.js'
+import { useT } from '../i18n.js'
 import PopupConnector, { POPUP_Z } from './PopupConnector.jsx'
 
 const NODE_TYPES = ['goal', 'task', 'softgoal', 'resource']
@@ -57,6 +58,7 @@ export default function PropertyPopover({ linkPaths = {} }) {
     updateNode, updateLink, deleteNode, deleteLink, reverseLink, ensureActor, deselect } = useStore()
   const selectedIds = useStore(s => s.selectedIds)
   const { transform } = useZoom()
+  const t = useT()
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [collapsed, setCollapsed] = useState(false)  // kept across selections so a minimized popup stays out of the way
 
@@ -109,10 +111,10 @@ export default function PropertyPopover({ linkPaths = {} }) {
     return frame(<>
         {header()}
         <div style={{ fontSize: 9, color: '#aaa', marginBottom: 2, fontFamily: 'monospace' }}>
-          {selectedIds.length} elements selected
+          {t('popup.selected', { n: selectedIds.length })}
         </div>
         {!collapsed && <>
-        <label style={labelStyle}>actor</label>
+        <label style={labelStyle}>{t('popup.actor')}</label>
         <input
           key={selectedIds.join(',')}
           list="actor-list-multi"
@@ -120,7 +122,7 @@ export default function PropertyPopover({ linkPaths = {} }) {
           onBlur={handleMultiActorChange}
           onKeyDown={confirmOnEnter}
           style={inputStyle}
-          placeholder={actorIds.length > 1 ? 'mixed…' : 'actor name…'}
+          placeholder={actorIds.length > 1 ? t('popup.mixed') : t('popup.actorPlaceholder')}
         />
         <datalist id="actor-list-multi">
           {actorNames.map(n => <option key={n} value={n} />)}
@@ -135,29 +137,29 @@ export default function PropertyPopover({ linkPaths = {} }) {
     return frame(<>
         {header()}
         {collapsed ? (
-          <div style={summaryStyle}>{link.type}</div>
+          <div style={summaryStyle}>{t(`type.${link.type}`)}</div>
         ) : <>
-        <label style={labelStyle}>type</label>
+        <label style={labelStyle}>{t('popup.type')}</label>
         <select
           value={link.type}
           onChange={e => updateLink(selectedId, { type: e.target.value })}
           style={inputStyle}
         >
-          {LINK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          {LINK_TYPES.map(type => <option key={type} value={type}>{t(`type.${type}`)}</option>)}
         </select>
 
         <button
           onClick={() => reverseLink(selectedId)}
           style={{ ...btnStyle('#555'), marginTop: 4 }}
         >
-          reverse direction
+          {t('popup.reverse')}
         </button>
 
         <button
           onClick={() => updateLink(selectedId, { outerRoute: !link.outerRoute, outerRouteSide: null })}
           style={{ ...btnStyle(link.outerRoute ? '#1a7' : '#555'), marginTop: 2 }}
         >
-          {link.outerRoute ? 'route: outer [on]' : 'route: outer'}
+          {link.outerRoute ? t('popup.outerRouteOn') : t('popup.outerRoute')}
         </button>
 
         {link.outerRoute && (
@@ -170,7 +172,7 @@ export default function PropertyPopover({ linkPaths = {} }) {
                 })}
                 style={btnStyle(link.outerRouteSide === side ? '#1a7' : '#888')}
               >
-                {side}
+                {t(`popup.side.${side}`)}
               </button>
             ))}
           </div>
@@ -179,12 +181,12 @@ export default function PropertyPopover({ linkPaths = {} }) {
         <div style={{ marginTop: 4 }}>
           {confirmDelete ? (
             <div style={{ display: 'flex', gap: 4 }}>
-              <button onClick={() => deleteLink(selectedId)} style={btnStyle('#c00')}>delete</button>
-              <button onClick={() => setConfirmDelete(false)} style={btnStyle('#888')}>cancel</button>
+              <button onClick={() => deleteLink(selectedId)} style={btnStyle('#c00')}>{t('popup.delete')}</button>
+              <button onClick={() => setConfirmDelete(false)} style={btnStyle('#888')}>{t('popup.cancel')}</button>
             </div>
           ) : (
             <button onClick={() => setConfirmDelete(true)} style={btnStyle('#c00')}>
-              delete link
+              {t('popup.deleteLink')}
             </button>
           )}
         </div>
@@ -219,31 +221,31 @@ export default function PropertyPopover({ linkPaths = {} }) {
   return frame(<>
       {header(deselect)}
       {collapsed ? (
-        <div style={summaryStyle}>{node.label || node.type}</div>
+        <div style={summaryStyle}>{node.label || t(`type.${node.type}`)}</div>
       ) : <>
-      <label style={labelStyle}>label</label>
+      <label style={labelStyle}>{t('popup.label')}</label>
       <input
         autoFocus
         value={node.label}
         onChange={handleLabelChange}
         onKeyDown={confirmOnEnter}
         style={inputStyle}
-        placeholder="enter label…"
+        placeholder={t('popup.labelPlaceholder')}
       />
 
-      <label style={labelStyle}>type</label>
+      <label style={labelStyle}>{t('popup.type')}</label>
       <select value={node.type} onChange={handleTypeChange} style={inputStyle}>
-        {NODE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+        {NODE_TYPES.map((type) => <option key={type} value={type}>{t(`type.${type}`)}</option>)}
       </select>
 
-      <label style={labelStyle}>actor</label>
+      <label style={labelStyle}>{t('popup.actor')}</label>
       <input
         list="actor-list"
         defaultValue={actorName}
         onBlur={handleActorChange}
         onKeyDown={confirmOnEnter}
         style={inputStyle}
-        placeholder="actor name…"
+        placeholder={t('popup.actorPlaceholder')}
       />
       <datalist id="actor-list">
         {actorNames.map((n) => <option key={n} value={n} />)}
@@ -253,15 +255,15 @@ export default function PropertyPopover({ linkPaths = {} }) {
         {confirmDelete ? (
           <div style={{ display: 'flex', gap: 4 }}>
             <button onClick={() => deleteNode(node.id)} style={btnStyle('#c00')}>
-              confirm delete
+              {t('popup.confirmDelete')}
             </button>
             <button onClick={() => setConfirmDelete(false)} style={btnStyle('#888')}>
-              cancel
+              {t('popup.cancel')}
             </button>
           </div>
         ) : (
           <button onClick={() => setConfirmDelete(true)} style={btnStyle('#c00')}>
-            delete node
+            {t('popup.deleteElement')}
           </button>
         )}
       </div>
@@ -307,6 +309,7 @@ const HEADER_H = 22
 
 // Header bar: drag handle across the top, with a hide/show toggle (and optional ×) on the right
 function PopoverHeader({ handleRef, dragProps, collapsed, onToggle, onClose }) {
+  const t = useT()
   const stop = e => e.stopPropagation()
   return (
     <>
@@ -315,9 +318,9 @@ function PopoverHeader({ handleRef, dragProps, collapsed, onToggle, onClose }) {
       </div>
       <div style={headerActionsStyle}>
         <button onClick={onToggle} onPointerDown={stop} style={toggleBtnStyle}>
-          {collapsed ? 'show' : 'hide'}
+          {collapsed ? t('popup.show') : t('popup.hide')}
         </button>
-        {onClose && <button onClick={onClose} onPointerDown={stop} style={closeBtnStyle}>×</button>}
+        {onClose && <button onClick={onClose} onPointerDown={stop} aria-label={t('popup.close')} style={closeBtnStyle}>×</button>}
       </div>
     </>
   )

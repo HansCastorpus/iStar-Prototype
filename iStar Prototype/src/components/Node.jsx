@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import useStore from '../store/useStore.js'
 import { upstreamSet, focusLayers } from '../utils/dependencies.js'
+import { useT } from '../i18n.js'
 import { wrapLabel, NODE_LINE_H, NODE_BADGE_H, NODE_PAD_X, GOAL_PAD_X } from '../utils/grid.js'
 
 const SELECTED_COLOR = '#0070f3'
@@ -45,6 +46,8 @@ export default function Node({ node }) {
   const highlightTypes = useStore(s => s.highlightTypes)
   const isolateTypes = useStore(s => s.isolateTypes)
   const hideTags = useStore(s => s.hideTags)
+  const t = useT()
+  const typeName = t(`type.${node.type}`)
 
   const highlightActive = highlightTypes.length > 0
   const isHidden = !isolateTypes.includes(node.type)
@@ -154,13 +157,13 @@ export default function Node({ node }) {
   const { stroke } = NODE_TYPES[node.type] ?? NODE_TYPES.goal
 
   const nodePadX = (node.type === 'goal' || node.type === 'task' || node.type === 'softgoal') ? GOAL_PAD_X : NODE_PAD_X
-  const lines = wrapLabel(node.label || `[${node.type}]`, node.width, nodePadX)
+  const lines = wrapLabel(node.label || `[${typeName}]`, node.width, nodePadX)
   const cx = node.width / 2
   const textAreaH = node.height - NODE_BADGE_H / 2
   const cy = textAreaH / 2
 
   const badgeCY = node.height
-  const badgeW = node.type.length * BADGE_CHAR_W + BADGE_PAD_X * 2
+  const badgeW = typeName.length * BADGE_CHAR_W + BADGE_PAD_X * 2
 
   return (
     <g
@@ -271,7 +274,7 @@ export default function Node({ node }) {
         fill="var(--node-text)"
         style={{ pointerEvents: 'none', userSelect: 'none' }}
       >
-        {node.type.toUpperCase()}
+        {typeName.toUpperCase()}
       </text>
       </>}
     </g>

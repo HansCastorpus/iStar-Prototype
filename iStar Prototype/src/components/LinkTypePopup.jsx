@@ -2,6 +2,7 @@ import useStore from '../store/useStore.js'
 import { useZoom, worldToScreen } from '../contexts/ZoomContext.jsx'
 import { usePopupPlacement, diagramObstacles, segmentBounds } from '../utils/usePopupPlacement.js'
 import { computePendingPath } from '../utils/routing.js'
+import { useT } from '../i18n.js'
 import PopupConnector, { POPUP_Z } from './PopupConnector.jsx'
 
 const LINK_TYPES = [
@@ -32,6 +33,7 @@ function pendingSegments(pendingLink, src, tgt) {
 export default function LinkTypePopup({ linkPaths = {} }) {
   const { pendingLink, nodes, confirmLink, clearConnect } = useStore()
   const { transform } = useZoom()
+  const t = useT()
 
   const src = pendingLink && nodes[pendingLink.sourceId]
   const tgt = pendingLink && nodes[pendingLink.targetId]
@@ -80,7 +82,7 @@ export default function LinkTypePopup({ linkPaths = {} }) {
         <span style={{ fontSize: 8, color: 'var(--text-3)', letterSpacing: 3 }}>• • •</span>
       </div>
 
-      <div style={{ fontSize: 9, color: 'var(--text-2)', marginBottom: 2 }}>link type</div>
+      <div style={{ fontSize: 9, color: 'var(--text-2)', marginBottom: 2 }}>{t('linkType.title')}</div>
       {LINK_TYPES.map((type) => (
         <button
           key={type}
@@ -96,7 +98,7 @@ export default function LinkTypePopup({ linkPaths = {} }) {
             fontFamily: 'monospace',
           }}
         >
-          {type}
+          {t(`type.${type}`)}
         </button>
       ))}
       <button
@@ -105,7 +107,7 @@ export default function LinkTypePopup({ linkPaths = {} }) {
         style={{ background: 'none', border: 'none', color: 'var(--text-2)',
           cursor: 'pointer', fontSize: 10, marginTop: 2, fontFamily: 'monospace' }}
       >
-        cancel
+        {t('linkType.cancel')}
       </button>
     </div>
     </>

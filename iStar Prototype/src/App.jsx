@@ -11,6 +11,9 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light')
   }, [darkMode])
 
+  const lang = useStore(s => s.lang)
+  useEffect(() => { document.documentElement.lang = lang }, [lang])
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
       <Toolbar />

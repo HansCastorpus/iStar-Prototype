@@ -106,7 +106,9 @@ export default function Actor({ actor }) {
   // Hidden/highlighted for all actors (type row) or just this one (per-actor row) in the filter panel
   const isHidden = useStore(s => !s.isolateTypes.includes('actor') || s.hiddenActorIds.includes(actor.id))
   // Clicking the actor toggles the same per-actor highlight as the filter panel, so the two always agree
-  // Lit up while a dependency view (Dependencies section) includes any of its elements
+  // While a dependency view (Dependencies section) is on, actors holding any of its elements light up
+  // and every other actor fades, like the elements and links outside the view
+  const focusActive = useStore(s => !!s.focusNodeId)
   const inDependencyView = useStore(s => {
     if (!s.focusNodeId) return false
     const set = upstreamSet(s.links, s.focusNodeId, focusLayers(s))
@@ -232,6 +234,7 @@ export default function Actor({ actor }) {
 
   return (
     <g ref={gRef}
+      opacity={focusActive && !inDependencyView ? 0.15 : 1}
       onPointerMove={onGroupPointerMove}
       onPointerUp={onGroupPointerUp}
       onPointerCancel={onGroupPointerUp}

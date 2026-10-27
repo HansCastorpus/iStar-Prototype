@@ -113,12 +113,27 @@ const useStore = create((set, get) => ({
 
   // ── Dark mode ────────────────────────────────────────────────────────────────
   darkMode: false,
+  // Interface language ('en' | 'fr'): remembered between visits, else the browser's language
+  lang: (() => {
+    try {
+      const saved = localStorage.getItem('istar-lang')
+      if (saved === 'en' || saved === 'fr') return saved
+    } catch { /* storage unavailable */ }
+    return typeof navigator !== 'undefined' && navigator.language?.startsWith('fr') ? 'fr' : 'en'
+  })(),
+  setLang: (lang) => {
+    try { localStorage.setItem('istar-lang', lang) } catch { /* storage unavailable */ }
+    set({ lang })
+  },
   toggleDarkMode: () => set(s => ({ darkMode: !s.darkMode })),
   legendOpen: true,
   toggleLegend: () => set(s => ({ legendOpen: !s.legendOpen })),
   hideTags: false,
   toggleHideTags: () => set(s => ({ hideTags: !s.hideTags })),
   setHideTags: (hide) => set({ hideTags: hide }),
+  filterCardBox: null,   // { left, width } of the Filter card on screen, so the toolbar can centre the logo over it
+  setFilterCardBox: (box) => set(s =>
+    s.filterCardBox?.left === box.left && s.filterCardBox?.width === box.width ? s : { filterCardBox: box }),
 
   // ── Filter ───────────────────────────────────────────────────────────────────
   highlightTypes: [],              // types currently highlighted; empty = mode off
