@@ -16,27 +16,27 @@ export const popoverStyle = (x, y) => ({
   top: y,
   background: 'var(--bg-popup)',
   border: '1px solid var(--border-md)',
-  padding: '8px',
+  padding: '12px',
   display: 'flex',
   flexDirection: 'column',
-  gap: '3px',
+  gap: '5px',
   zIndex: POPUP_Z,
-  minWidth: 160,
+  minWidth: 230,
 })
 
-export const labelStyle = { fontSize: 9, color: 'var(--text-2)', marginTop: 2 }
+export const labelStyle = { fontSize: 12, fontWeight: 600, color: 'var(--text-title)', marginTop: 4 }
 
 export const inputStyle = {
   font: 'inherit',
-  fontSize: 11,
+  fontSize: 14,
   border: '1px solid var(--border)',
-  padding: '2px 4px',
+  padding: '4px 7px',
   width: '100%',
   background: 'var(--node-fill)',
   color: 'var(--text-1)',
 }
 
-export const HEADER_H = 22
+export const HEADER_H = 28
 
 export const headerActionsStyle = {
   position: 'absolute', top: 0, right: 4, height: HEADER_H,
@@ -47,16 +47,16 @@ export const toggleBtnStyle = {
   background: 'var(--node-fill)',
   border: '1px solid var(--border-md)',
   color: 'var(--text-1)',
-  padding: '1px 6px',
+  padding: '2px 8px',
   cursor: 'pointer',
-  fontSize: 9,
+  fontSize: 11,
   fontFamily: 'monospace',
   lineHeight: 1.3,
 }
 
 export const summaryStyle = {
-  fontSize: 10, color: 'var(--text-1)', fontFamily: 'monospace',
-  maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+  fontSize: 13, color: 'var(--text-1)', fontFamily: 'monospace',
+  maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
 }
 
 export const dragHandleStyle = {
@@ -71,7 +71,7 @@ export const closeBtnStyle = {
   background: 'none',
   border: 'none',
   cursor: 'pointer',
-  fontSize: 13,
+  fontSize: 18,
   color: 'var(--text-2)',
   lineHeight: 1,
   padding: 0,
@@ -81,8 +81,8 @@ export const btnStyle = (color) => ({
   background: 'none',
   border: `1px solid ${color}`,
   color,
-  padding: '2px 6px',
+  padding: '4px 10px',
   cursor: 'pointer',
-  fontSize: 10,
+  fontSize: 12,
   fontFamily: 'monospace',
 })

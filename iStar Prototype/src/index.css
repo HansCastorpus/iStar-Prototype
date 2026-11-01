@@ -17,6 +17,7 @@ button:hover:not(:disabled) {
   --text-1:     #333;
   --text-2:     #999;
   --text-3:     #aaa;
+  --text-title: #3a3a3a;  /* popup titles and field labels */
   --text-node:  #222;
   --border:     #ddd;
   --border-lt:  #eee;
@@ -43,6 +44,11 @@ button:hover:not(:disabled) {
   /* actor highlight – light grey fill with slightly darker stripes */
   --actor-hl-fill:   #ffffff;
   --actor-hl-stripe: #ededed;
+  --actor-bg:        #f4f6f9;  /* background of an actor with nothing nested in it */
+  --actor-hl-tone:       #7f95b3;  /* highlighted actors lean towards this blue-grey */
+  --actor-hl-stripe-mix: #2f4766;  /* highlight stripes darken towards this */
+  --actor-bg-light:  #fbfcfd;  /* deepest nested actor */
+  --actor-bg-deep:   #e0e5ec;  /* what it darkens towards for each level out of a nesting */
 }
 
 /* ── Dark theme ─────────────────────────────────────────────────────────────── */
@@ -53,6 +59,7 @@ button:hover:not(:disabled) {
   --text-1:     #ddd;
   --text-2:     #777;
   --text-3:     #555;
+  --text-title: #d0d0d0;
   --text-node:  #ddd;
   --border:     #3a3a3a;
   --border-lt:  #2e2e2e;
@@ -78,6 +85,11 @@ button:hover:not(:disabled) {
   --hl-part-of:   #c34cb1;
   --actor-hl-fill:   #2b2b2b;
   --actor-hl-stripe: #383838;
+  --actor-bg:        #1f2329;
+  --actor-hl-tone:       #6f88ad;
+  --actor-hl-stripe-mix: #a9c0e0;
+  --actor-bg-light:  #2a2f37;
+  --actor-bg-deep:   #15181d;
 }
 
 /* Side panels that open next to the filter panel */

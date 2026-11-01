@@ -8,7 +8,7 @@ export default function PopoverHeader({ handleRef, dragProps, collapsed, onToggl
   return (
     <>
       <div ref={handleRef} {...dragProps} style={dragHandleStyle}>
-        <span style={{ fontSize: 8, color: 'var(--text-3)', letterSpacing: 3 }}>• • •</span>
+        <span style={{ fontSize: 10, color: 'var(--text-3)', letterSpacing: 3 }}>• • •</span>
       </div>
       <div style={headerActionsStyle}>
         <button onClick={onToggle} onPointerDown={stop} style={toggleBtnStyle}>

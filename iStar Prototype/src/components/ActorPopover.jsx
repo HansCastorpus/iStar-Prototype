@@ -3,6 +3,7 @@ import useStore from '../store/useStore.js'
 import { useZoom, worldToScreen } from '../contexts/ZoomContext.jsx'
 import { usePopupPlacement, diagramObstacles } from '../utils/usePopupPlacement.js'
 import { useT } from '../i18n.js'
+import { inActor } from '../utils/actorTree.js'
 import PopupConnector from './PopupConnector.jsx'
 import PopoverHeader from './PopoverHeader.jsx'
 import { HEADER_H, popoverStyle, labelStyle, inputStyle, summaryStyle, btnStyle, confirmOnEnter } from './popupStyles.js'
@@ -54,12 +55,37 @@ export default function ActorPopover({ linkPaths = {} }) {
   )
 }
 
+// Logos are stored inside the diagram, so keep them small: scaled to fit 256px, as a PNG data URL with its aspect ratio
+const LOGO_MAX = 256
+function shrinkImage(file) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      // Vector images have no fixed pixel size, so they are rendered at full size; bitmaps are only shrunk
+      const fit = LOGO_MAX / Math.max(img.width || LOGO_MAX, img.height || LOGO_MAX)
+      const k = file.type === 'image/svg+xml' ? fit : Math.min(1, fit)
+      const c = document.createElement('canvas')
+      const w = img.width || LOGO_MAX, h = img.height || LOGO_MAX
+      c.width = Math.max(1, Math.round(w * k))
+      c.height = Math.max(1, Math.round(h * k))
+      const ctx = c.getContext('2d')
+      ctx.imageSmoothingQuality = 'high'
+      ctx.drawImage(img, 0, 0, c.width, c.height)
+      URL.revokeObjectURL(url)
+      resolve({ url: c.toDataURL('image/png'), aspect: c.width / c.height })
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null) }
+    img.src = url
+  })
+}
+
 // Keyed by actor, so the typed name and the ungroup confirmation reset when another actor is opened
 function ActorFields({ actor }) {
   const t = useT()
   const actors = useStore(s => s.actors)
-  const memberCount = useStore(s => Object.values(s.nodes).filter(n => n.actorId === actor.id).length)
-  const { renameActor, ungroupActor } = useStore()
+  const memberCount = useStore(s => Object.values(s.nodes).filter(n => inActor(n, actor.id)).length)
+  const { renameActor, ungroupActor, setActorLevel, setActorLogo } = useStore()
   const [typed, setTyped] = useState(actor.name)
   const [confirmUngroup, setConfirmUngroup] = useState(false)
 
@@ -68,7 +94,7 @@ function ActorFields({ actor }) {
 
   return (
     <>
-      <div style={{ fontSize: 9, color: 'var(--text-3)', fontFamily: 'monospace', marginBottom: 2 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-title)', fontFamily: 'monospace', marginBottom: 4 }}>
         {t('actorPopup.title')} · {t(memberCount === 1 ? 'actorPopup.element' : 'actorPopup.elements', { n: memberCount })}
       </div>
 
@@ -83,10 +109,40 @@ function ActorFields({ actor }) {
         placeholder={t('popup.actorPlaceholder')}
       />
       {mergeTarget && (
-        <div style={{ fontSize: 9, color: 'var(--text-2)', fontFamily: 'monospace', lineHeight: 1.4 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-1)', fontFamily: 'monospace', lineHeight: 1.4 }}>
           {t('actorPopup.mergeHint', { name: mergeTarget.name })}
         </div>
       )}
+
+      <label style={labelStyle}>{t('actorPopup.level')}</label>
+      <input
+        type="number"
+        min={1}
+        step={1}
+        value={actor.level ?? 1}
+        onChange={e => setActorLevel(actor.id, e.target.value)}
+        onKeyDown={confirmOnEnter}
+        style={inputStyle}
+        title={t('actorPopup.levelHint')}
+      />
+
+      <label style={labelStyle}>{t('actorPopup.logo')}</label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        {actor.logo && <img src={actor.logo} alt="" style={{ width: 20, height: 20, objectFit: 'contain' }} />}
+        <label style={{ ...btnStyle('#888'), cursor: 'pointer' }}>
+          {t(actor.logo ? 'actorPopup.logoChange' : 'actorPopup.logoAdd')}
+          <input
+            type="file" accept="image/*" style={{ display: 'none' }}
+            onChange={async e => {
+              const file = e.target.files[0]
+              e.target.value = ''
+              const img = file && await shrinkImage(file)
+              if (img) setActorLogo(actor.id, img.url, img.aspect)
+            }}
+          />
+        </label>
+        {actor.logo && <button onClick={() => setActorLogo(actor.id, null)} style={btnStyle('#888')}>{t('actorPopup.logoRemove')}</button>}
+      </div>
 
       <div style={{ marginTop: 6 }}>
         {confirmUngroup ? (

@@ -1,4 +1,4 @@
-import { GRID, snap, GOAL_PAD_X } from './grid.js'
+import { GRID, snap, TASK_TIP_X } from './grid.js'
 import { getSlotPosition, getSideDirection, STUB } from './ports.js'
 
 const DETOUR_PAD    = GRID * 2
@@ -119,6 +119,29 @@ function simplifyPoints(pts) {
   }
   out.push(pts[pts.length - 1])
   return out.length < pts.length ? simplifyPoints(out) : out
+}
+
+// A link the user has dragged (link.via) is bent through that point. The short stubs leaving the two
+// elements are kept, and each half in between is an octilinear path to the point.
+export function throughVia(pts, via) {
+  const n = pts.length
+  const head = n >= 3 ? [pts[0], pts[1]] : [pts[0]]
+  const tail = n >= 3 ? [pts[n - 2], pts[n - 1]] : [pts[n - 1]]
+  const from = head[head.length - 1], to = tail[0]
+  return simplifyPoints([...head, ...octilinearMid(from, via), via, ...octilinearMid(via, to), ...tail])
+}
+
+// The same rules the automatic routing keeps: the path doesn't run through an element, and it doesn't
+// run along another link (the bend is refused otherwise). `otherPaths` are the other links' paths.
+export function bendIsAllowed(pts, link, nodes, otherPaths) {
+  if (firstBlocker(pts, Object.values(nodes), link.sourceId, link.targetId)) return false
+  const middle = (path) => {
+    const keys = []
+    for (let i = 1; i < path.length - 2; i++) { const k = segKey(path[i], path[i + 1]); if (k) keys.push(k) }
+    return keys
+  }
+  const mine = middle(pts)
+  return !otherPaths.some(other => middle(other).some(o => mine.some(m => overlaps(m, o))))
 }
 
 // ── Single-link path ──────────────────────────────────────────────────────────
@@ -558,9 +581,15 @@ export function computeAllPaths(nodes, linkSlots, links) {
   reroutePass(nodes, mutableSlots, innerLinks, pathMap, existingSegs)
   separateOverlaps(pathMap)
   for (const id of Object.keys(pathMap)) pathMap[id] = simplifyPoints(pathMap[id])
+  // Dragged links keep their bend while it is still allowed (an element may since have moved into it)
+  for (const link of linkList) {
+    if (!link.via) continue
+    const bent = throughVia(pathMap[link.id], link.via)
+    if (!firstBlocker(bent, Object.values(nodes), link.sourceId, link.targetId)) pathMap[link.id] = bent
+  }
   for (const link of linkList) {
     const pts = pathMap[link.id]
-    if (pts) pathMap[link.id] = snapEndsToShape(pts, nodes[link.sourceId], nodes[link.targetId])
+    if (pts) pathMap[link.id] = snapTargetToTask(snapStartToShape(pts, nodes[link.sourceId]), nodes[link.targetId])
   }
   return pathMap
 }
@@ -568,16 +597,16 @@ export function computeAllPaths(nodes, linkSlots, links) {
 // ── Shape-exact link ends ───────────────────────────────────────────────────────
 // Routing attaches links to the node's bounding box, but tasks have pointed ends and goals /
 // softgoals rounded ones, so off-centre links would start in the empty corner in front of the
-// shape. Slide each end along its (straight) end segment until it touches the drawn outline.
-// Mirrors the shapes in Node.jsx: task ends inset by GOAL_PAD_X, goal / softgoal ends of radius H/2.
+// shape. Slide the start along its (straight) first segment until it touches the drawn outline.
+// Mirrors the shapes in Node.jsx: task ends inset by TASK_TIP_X, goal / softgoal ends of radius H/2.
 
 // How far inside the bounding box the outline is, `d` px from the middle (left/right sides)
 // or from the end of the straight top edge (top side)
 function outlineInset(node, d, alongSide) {
   const r = node.height / 2
   if (node.type === 'task') {
-    // left/right: the point's sides slope GOAL_PAD_X across a half-height; top: the reverse
-    return alongSide ? GOAL_PAD_X * Math.min(d / r, 1) : r * Math.min(d / GOAL_PAD_X, 1)
+    // left/right: the point's sides slope TASK_TIP_X across a half-height; top: the reverse
+    return alongSide ? TASK_TIP_X * Math.min(d / r, 1) : r * Math.min(d / TASK_TIP_X, 1)
   }
   if (node.type === 'goal' || node.type === 'softgoal') {
     const dd = Math.min(d, r)
@@ -599,18 +628,36 @@ function snapEnd(node, end, next) {
   }
   if (vertical && Math.abs(end.y - y) < eps) {
     // Top edge: straight between the two ends, sloped / curved beyond them
-    const flat = node.type === 'task' ? GOAL_PAD_X : h / 2
+    const flat = node.type === 'task' ? TASK_TIP_X : h / 2
     const d = Math.max(x + flat - end.x, end.x - (x + w - flat), 0)
     return { ...end, y: end.y + Math.min(outlineInset(node, d, false), Math.abs(next.y - end.y) - 1) }
   }
   return end  // bottom ports start under the type badge, which is drawn as a flat pill
 }
 
-function snapEndsToShape(pts, src, tgt) {
+// Only the departure end follows the outline; arrowheads stay aligned on the bounding box
+function snapStartToShape(pts, src) {
   if (pts.length < 2) return pts
   const out = [...pts]
   out[0] = snapEnd(src, pts[0], pts[1])
-  out[out.length - 1] = snapEnd(tgt, pts[pts.length - 1], pts[pts.length - 2])
+  return out
+}
+
+// ...except at a task, whose cut-in points leave a gap in front of an off-centre arrowhead (and the
+// thicker highlighted link then pokes out past the outline): there the arrival end follows the outline
+// too, and goes TASK_END_OVERLAP px further in so it sits inside the shape.
+const TASK_END_OVERLAP = 3
+function snapTargetToTask(pts, tgt) {
+  if (pts.length < 2 || tgt?.type !== 'task') return pts
+  const out = [...pts]
+  const end = pts[pts.length - 1], prev = pts[pts.length - 2]
+  const snapped = snapEnd(tgt, end, prev)
+  const len = Math.hypot(end.x - prev.x, end.y - prev.y)
+  // bottom ports (under the type badge) are left alone, like in snapEnd
+  const atBottom = Math.abs(end.y - (tgt.y + tgt.height)) < 0.5 && Math.abs(end.x - prev.x) < 0.5
+  if (!len || atBottom) return pts
+  const k = TASK_END_OVERLAP / len
+  out[out.length - 1] = { x: snapped.x + (end.x - prev.x) * k, y: snapped.y + (end.y - prev.y) * k }
   return out
 }
 

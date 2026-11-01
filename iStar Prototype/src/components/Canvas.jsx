@@ -9,6 +9,7 @@ import LinkPreview from './LinkPreview.jsx'
 import PropertyPopover from './PropertyPopover.jsx'
 import LinkTypePopup from './LinkTypePopup.jsx'
 import ActorPopover from './ActorPopover.jsx'
+import { actorLayout } from '../utils/actorTree.js'
 import { computeLinkSlots } from '../utils/layout.js'
 import { computeAllPaths } from '../utils/routing.js'
 import { GRID } from '../utils/grid.js'
@@ -22,7 +23,7 @@ export default function Canvas() {
   const [cursorWorld, setCursorWorld] = useState({ x: 0, y: 0 })
   const modeRef = useRef('select')
 
-  const { nodes, links, actors, mode, addNode, deselect, clearConnect, draggingNodeId, selectedIds, selectedId, selectedType } = useStore()
+  const { nodes, links, actors, mode, addNode, deselect, deselectAll, clearConnect, draggingNodeId, selectedIds, selectedId, selectedType } = useStore()
 
   // Keep refs in sync with reactive values.
   useEffect(() => { modeRef.current = mode }, [mode])
@@ -75,6 +76,13 @@ export default function Canvas() {
       clearConnect()
       if (!hadPendingLink) deselect()
     }
+  }
+
+  // Double click on empty space clears everything selected, actors included
+  const handleCanvasDoubleClick = (e) => {
+    if (!e.target.classList.contains('canvas-bg')) return
+    if (modeRef.current.startsWith('add-')) return
+    deselectAll()
   }
 
   const linkSlots = useMemo(() => computeLinkSlots(nodes, links), [nodes, links])
@@ -138,6 +146,7 @@ export default function Canvas() {
         style={{ width: '100%', height: '100%', display: 'block', background: 'var(--bg-canvas)' }}
         onMouseMove={handleMouseMove}
         onClick={handleCanvasClick}
+        onDoubleClick={handleCanvasDoubleClick}
       >
         {/* Infinite background — pan target */}
         <rect className="canvas-bg" x="-50000" y="-50000"
@@ -194,13 +203,17 @@ export default function Canvas() {
           })()}
 
           {/* Actors sit below everything */}
-          {Object.values(actors).map((actor) => (
-            <Actor key={actor.id} actor={actor} />
+          {/* outer actors first, so nested ones (and their backgrounds) are drawn on top of them */}
+          {(() => {
+            const { shade } = actorLayout(nodes)
+            return Object.values(actors).sort((a, b) => (shade[a.id]?.depth ?? 0) - (shade[b.id]?.depth ?? 0))
+          })().map((actor) => (
+            <Actor key={actor.id} actor={actor} linkPaths={linkPaths} />
           ))}
 
           {/* Links above actors */}
           {Object.values(links).map((link) => (
-            <Link key={link.id} link={link} points={linkPaths[link.id]} andBar={andBarMap[link.id]} />
+            <Link key={link.id} link={link} points={linkPaths[link.id]} andBar={andBarMap[link.id]} allPaths={linkPaths} />
           ))}
 
           {/* Nodes on top */}

@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import useStore from '../store/useStore.js'
 import { useZoom, worldToScreen } from '../contexts/ZoomContext.jsx'
 import { usePopupPlacement, screenBounds, diagramObstacles } from '../utils/usePopupPlacement.js'
 import { useT } from '../i18n.js'
+import { actorLayout } from '../utils/actorTree.js'
 import PopupConnector from './PopupConnector.jsx'
 import PopoverHeader from './PopoverHeader.jsx'
 import { HEADER_H, popoverStyle, labelStyle, inputStyle, summaryStyle, btnStyle, confirmOnEnter } from './popupStyles.js'
@@ -55,9 +56,126 @@ function selectionAnchor({ selectedId, selectedIds, selectedType, nodes, links, 
   return node ? screenBounds([node], transform) : null
 }
 
+const blockedStyle = { fontSize: 11, color: '#c00', fontFamily: 'monospace', lineHeight: 1.4 }
+
+// Primary actor and any nested actors of the selected element(s). Each slot has a text box (creates
+// the actor if the name is new) and a drop-down of the existing actors, and a choice is applied to
+// every selected element. Nested slots are stored in order on the element as `nestedActorIds`.
+// With several elements a slot shows the value they share, or "mixed" when they differ.
+function NodeActorFields({ selected }) {
+  const t = useT()
+  const actors = useStore(s => s.actors)
+  const { updateNode, ensureActor, checkActorChange } = useStore()
+  const [blocked, setBlocked] = useState(null)  // { slot, reason } of the last refused change
+  const [nonce, setNonce] = useState(0)         // remounts the text boxes to drop a refused name
+  const [slots, setSlots] = useState(0)         // empty nested slots added in this session
+  const allNodes = useStore(s => s.nodes)
+  const { parentOf } = useMemo(() => actorLayout(allNodes), [allNodes])
+  const list = Object.values(actors)
+  const ids = selected.map(n => n.id)
+
+  // Value of a slot across the selection: the shared id, null if none has one, undefined if mixed
+  const shared = (get) => {
+    const vals = new Set(selected.map(n => get(n) ?? null))
+    return vals.size === 1 ? [...vals][0] : undefined
+  }
+  const primary = shared(n => n.actorId)
+  const nestedAt = (i) => shared(n => n.nestedActorIds?.[i])
+  const count = Math.max(slots, ...selected.map(n => n.nestedActorIds?.length ?? 0))
+  const allHavePrimary = selected.every(n => n.actorId)
+
+  // Actors stay in their category: a primary actor is never offered as nested, and a nested actor is
+  // only offered under the parent it already has. Unused actors can go either way.
+  const primaryOptions = list.filter(a => a.id === primary || !parentOf[a.id])
+  const nestedOptions = (i) => {
+    const parent = i === 0 ? primary : nestedAt(i - 1)
+    return list.filter(a => a.id === nestedAt(i) ||
+      (!selected.some(n => n.actorId === a.id) &&
+        (parentOf[a.id] === undefined || parent === undefined || parentOf[a.id] === parent)))
+  }
+
+  // What changing a slot does to one element
+  const primaryPatch = (id) => () => ({ actorId: id })
+  const nestedPatch = (i) => (id) => (node) => {
+    const nested = node.nestedActorIds ?? []
+    const next = Array.from({ length: Math.max(nested.length, i + 1) }, (_, k) => k === i ? id : nested[k] ?? null)
+    while (next.length && next[next.length - 1] == null) next.pop()
+    return { nestedActorIds: next }
+  }
+
+  // Refuses (and says why) a change that would overlap actor areas or nest an actor in two places.
+  // An actor that doesn't exist yet is checked under a placeholder id.
+  const attempt = (slot, id, patchFor, name = '') => {
+    const reason = checkActorChange(ids, patchFor(id), id ? { [id]: name } : {})
+    setBlocked(reason && { slot, reason })
+    if (reason) setNonce(n => n + 1)
+    return !reason
+  }
+  const applyAll = (patchFor, id) => {
+    const { beginBatch, endBatch } = useStore.getState()
+    beginBatch()  // creating the actor + assigning every element is one undo step
+    const patch = patchFor(id)
+    for (const n of selected) updateNode(n.id, patch(n))
+    endBatch()
+  }
+
+  const field = (slot, labelKey, labelArgs, selectKey, id, patchFor, options) => {
+    const shownName = id ? actors[id]?.name ?? '' : ''
+    const apply = (actorId) => { if (attempt(slot, actorId, patchFor)) applyAll(patchFor, actorId) }
+    const commitName = (raw) => {
+      const name = raw.trim()
+      if (name === shownName) return
+      if (!name) return apply(null)
+      const existing = list.find(a => a.name === name)
+      if (existing) return apply(existing.id)
+      if (!attempt(slot, `new:${slot}`, patchFor, name)) return
+      const { beginBatch, endBatch } = useStore.getState()
+      beginBatch()
+      applyAll(patchFor, ensureActor(name))
+      endBatch()
+    }
+    return (
+      <>
+        <label style={labelStyle}>{t(labelKey, labelArgs)}</label>
+        <input
+          key={`${id ?? ''}|${nonce}`}  // remount so the text follows a drop-down choice
+          defaultValue={shownName}
+          onBlur={e => commitName(e.target.value)}
+          onKeyDown={confirmOnEnter}
+          style={inputStyle}
+          placeholder={id === undefined ? t('popup.mixed') : t('popup.actorPlaceholder')}
+        />
+        <label style={labelStyle}>{t(selectKey)}</label>
+        <select value={id ?? ''} onChange={e => apply(e.target.value || null)} style={inputStyle}>
+          {id === undefined && <option value="" disabled>{t('popup.mixed')}</option>}
+          {id !== undefined && <option value="">{t('popup.actorNone')}</option>}
+          {options.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+        {blocked?.slot === slot && <div style={blockedStyle}>{t(blocked.reason === 'parent' ? 'popup.actorParent' : 'popup.actorOverlap')}</div>}
+      </>
+    )
+  }
+
+  return (
+    <>
+      {field('p', 'popup.primaryActor', undefined, 'popup.existingPrimary', primary, primaryPatch, primaryOptions)}
+      {allHavePrimary && Array.from({ length: count }, (_, i) => (
+        <div key={i} style={{ display: 'contents' }}>
+          {field(i, 'popup.nestedActor', { n: i + 1 }, 'popup.existingNested', nestedAt(i), nestedPatch(i), nestedOptions(i))}
+        </div>
+      ))}
+      {allHavePrimary && (
+        <button onClick={() => setSlots(count + 1)} style={{ ...btnStyle('#888'), marginTop: 4 }}>
+          + {t('popup.addNested')}
+        </button>
+      )}
+    </>
+  )
+}
+
 export default function PropertyPopover({ linkPaths = {} }) {
-  const { selectedId, selectedType, nodes, links, actors,
-    updateNode, updateLink, deleteNode, deleteLink, reverseLink, ensureActor, deselect } = useStore()
+  const { selectedId, selectedType, nodes, links,
+    updateNode, updateLink, deleteNode, deleteLink, reverseLink, deselect } = useStore()
   const selectedIds = useStore(s => s.selectedIds)
   const { transform } = useZoom()
   const t = useT()
@@ -114,39 +232,13 @@ export default function PropertyPopover({ linkPaths = {} }) {
     const selectedNodes = selectedIds.map(id => nodes[id]).filter(Boolean)
     if (selectedNodes.length === 0) return null
 
-    const actorIds = [...new Set(selectedNodes.map(n => n.actorId))]
-    const commonActorName = actorIds.length === 1 && actorIds[0]
-      ? actors[actorIds[0]]?.name ?? '' : ''
-    const actorNames = Object.values(actors).map(a => a.name)
-
-    const handleMultiActorChange = (e) => {
-      const name = e.target.value.trim()
-      const { beginBatch, endBatch } = useStore.getState()
-      beginBatch()  // creating the actor + assigning every element is one undo step
-      const actorId = name ? ensureActor(name) : null
-      for (const id of selectedIds) updateNode(id, { actorId })
-      endBatch()
-    }
-
     return frame(<>
         {header()}
-        <div style={{ fontSize: 9, color: '#aaa', marginBottom: 2, fontFamily: 'monospace' }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-title)', marginBottom: 4, fontFamily: 'monospace' }}>
           {t('popup.selected', { n: selectedIds.length })}
         </div>
         {!collapsed && <>
-        <label style={labelStyle}>{t('popup.actor')}</label>
-        <input
-          key={selectedIds.join(',')}
-          list="actor-list-multi"
-          defaultValue={commonActorName}
-          onBlur={handleMultiActorChange}
-          onKeyDown={confirmOnEnter}
-          style={inputStyle}
-          placeholder={actorIds.length > 1 ? t('popup.mixed') : t('popup.actorPlaceholder')}
-        />
-        <datalist id="actor-list-multi">
-          {actorNames.map(n => <option key={n} value={n} />)}
-        </datalist>
+        <NodeActorFields key={selectedIds.join(',')} selected={selectedNodes} />
         </>}
     </>)
   }
@@ -217,28 +309,12 @@ export default function PropertyPopover({ linkPaths = {} }) {
   const node = nodes[selectedId]
   if (!node) return null
 
-  const actorName = node.actorId ? actors[node.actorId]?.name ?? '' : ''
-  const actorNames = Object.values(actors).map((a) => a.name)
-
   const handleLabelChange = (e) => {
     updateNode(node.id, { label: e.target.value })
   }
 
   const handleTypeChange = (e) => {
     updateNode(node.id, { type: e.target.value })
-  }
-
-  const handleActorChange = (e) => {
-    const name = e.target.value.trim()
-    if (!name) {
-      updateNode(node.id, { actorId: null })
-      return
-    }
-    const { beginBatch, endBatch } = useStore.getState()
-    beginBatch()  // creating the actor + assigning it is one undo step
-    const actorId = ensureActor(name)
-    updateNode(node.id, { actorId })
-    endBatch()
   }
 
   return frame(<>
@@ -263,18 +339,8 @@ export default function PropertyPopover({ linkPaths = {} }) {
         {NODE_TYPES.map((type) => <option key={type} value={type}>{t(`type.${type}`)}</option>)}
       </select>
 
-      <label style={labelStyle}>{t('popup.actor')}</label>
-      <input
-        list="actor-list"
-        defaultValue={actorName}
-        onBlur={handleActorChange}
-        onKeyDown={confirmOnEnter}
-        style={inputStyle}
-        placeholder={t('popup.actorPlaceholder')}
-      />
-      <datalist id="actor-list">
-        {actorNames.map((n) => <option key={n} value={n} />)}
-      </datalist>
+      <NodeActorFields key={node.id} selected={[node]} />
+
 
       <div style={{ marginTop: 6 }}>
         {confirmDelete ? (

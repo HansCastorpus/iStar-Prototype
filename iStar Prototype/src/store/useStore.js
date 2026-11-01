@@ -1,9 +1,9 @@
 import { create } from 'zustand'
 import { GRID, snap, computeNodeSize } from '../utils/grid.js'
 import { getUsedOffsets, getNextSlot } from '../utils/ports.js'
+import { chainOf, layoutIssues, addsIssue, actorNames } from '../utils/actorTree.js'
 
 const MIN_CLEARANCE = GRID * 2
-const ACTOR_GAP = 20
 
 export const ALL_TYPES = [
   'goal', 'task', 'softgoal', 'resource',
@@ -28,7 +28,6 @@ function bulkSet(types, actorIds, snapshot, on, resetActorsWhen) {
 }
 
 const toggleIn = (list, id) => list.includes(id) ? list.filter(x => x !== id) : [...list, id]
-const HULL_PAD = 20  // must match Actor.jsx PAD
 const ALIGN_SNAP = 12  // px — snap to other nodes' center axes within this distance
 
 function alignSnap(x, y, width, height, nodes, excludeId) {
@@ -52,46 +51,6 @@ function tooClose(x, y, w, h, nodes, excludeId = null) {
     const gapV = Math.max(other.y - (y + h), y - (other.y + other.height))
     return !(gapH >= MIN_CLEARANCE || gapV >= MIN_CLEARANCE)
   })
-}
-
-// Compute octilinear extent values for all nodes belonging to actorId.
-function computeActorExtents(nodes, actorId) {
-  let a = -Infinity, b = -Infinity, c = -Infinity, d = -Infinity
-  let e = -Infinity, f = -Infinity, g = -Infinity, h = -Infinity
-  let hasMembers = false
-
-  for (const n of Object.values(nodes)) {
-    if (n.actorId !== actorId) continue
-    hasMembers = true
-    const pts = [
-      { x: n.x - HULL_PAD,           y: n.y - HULL_PAD            },
-      { x: n.x + n.width + HULL_PAD, y: n.y - HULL_PAD            },
-      { x: n.x - HULL_PAD,           y: n.y + n.height + HULL_PAD },
-      { x: n.x + n.width + HULL_PAD, y: n.y + n.height + HULL_PAD },
-    ]
-    for (const { x: px, y: py } of pts) {
-      if (px        > a) a = px
-      if (px + py   > b) b = px + py
-      if (py        > c) c = py
-      if (-px + py  > d) d = -px + py
-      if (-px       > e) e = -px
-      if (-px - py  > f) f = -px - py
-      if (-py       > g) g = -py
-      if (px - py   > h) h = px - py
-    }
-  }
-  return hasMembers ? { a, b, c, d, e, f, g, h } : null
-}
-
-// SAT check for two octilinear hulls: returns true if they are separated by
-// at least `gap` pixels along any of the 4 octilinear axis directions.
-function hullsSeparated(e1, e2, gap) {
-  return (
-    e1.a + e2.e + gap <= 0 || e2.a + e1.e + gap <= 0 ||
-    e1.c + e2.g + gap <= 0 || e2.c + e1.g + gap <= 0 ||
-    e1.b + e2.f + gap <= 0 || e2.b + e1.f + gap <= 0 ||
-    e1.d + e2.h + gap <= 0 || e2.d + e1.h + gap <= 0
-  )
 }
 
 // ── Undo / redo history ────────────────────────────────────────────────────────
@@ -231,6 +190,15 @@ const useStore = create((set, get) => ({
   deselect: () => set({ selectedId: null, selectedType: null, selectedIds: [], selectedActorId: null, focusNodeId: null, focusDeep: false,
     editingActorId: null, editingActorTag: null }),
 
+  // A double click on empty canvas: also un-highlights the actors (clicking an actor's tag highlights it)
+  deselectAll: () => {
+    get().deselect()
+    set(s => ({
+      highlightTypes: s.highlightTypes.filter(t => t !== 'actor'),
+      highlightedActorIds: [],
+    }))
+  },
+
   addToSelection: (id) => set(s => {
     const base = (s.selectedIds.length === 0 && s.selectedId && s.selectedType === 'node')
       ? [s.selectedId]
@@ -247,7 +215,7 @@ const useStore = create((set, get) => ({
 
   selectActorNodes: (actorId) => set(s => {
     const ids = Object.values(s.nodes)
-      .filter(n => n.actorId === actorId)
+      .filter(n => chainOf(n).includes(actorId))
       .map(n => n.id)
     return { selectedIds: ids, selectedId: null, selectedType: null, selectedActorId: actorId }
   }),
@@ -309,25 +277,32 @@ const useStore = create((set, get) => ({
     return { nodes: { ...s.nodes, [id]: merged } }
   }),
 
+  // Whether these elements can take this actor change ({ actorId?, nestedActorIds? }, or a function giving
+  // that for each element): null if fine,
+  // otherwise why not — 'parent' (an actor would end up nested in two places, or inside itself) or
+  // 'overlap' (an actor's area would run into another's). Adding a far-away element stretches an
+  // area, so this has to be checked before assigning. Ids that don't exist yet can be any placeholder;
+  // newNames gives their names (tags are sized from them).
+  checkActorChange: (nodeIds, patch, newNames = {}) => {
+    const { nodes, actors } = get()
+    const names = { ...actorNames(actors), ...newNames }
+    const next = { ...nodes }
+    for (const id of nodeIds) if (next[id]) next[id] = { ...next[id], ...(typeof patch === 'function' ? patch(next[id]) : patch) }
+    const after = layoutIssues(next, names)
+    if (after.invalid) return 'parent'
+    return addsIssue(layoutIssues(nodes, names), after) ? 'overlap' : null
+  },
+
   moveNode: (id, x, y) => set((s) => {
     const node = s.nodes[id]
     const { x: nx, y: ny } = alignSnap(x, y, node.width, node.height, s.nodes, id)
     if (tooClose(nx, ny, node.width, node.height, s.nodes, id)) return {}
 
-    if (node.actorId) {
-      const nodesWithMoved = { ...s.nodes, [id]: { ...node, x: nx, y: ny } }
-      const newExt = computeActorExtents(nodesWithMoved, node.actorId)
-      if (newExt) {
-        for (const actor of Object.values(s.actors)) {
-          if (actor.id === node.actorId) continue
-          const otherExt = computeActorExtents(s.nodes, actor.id)
-          if (!otherExt) continue
-          if (!hullsSeparated(newExt, otherExt, ACTOR_GAP)) return {}
-        }
-      }
-    }
+    const moved = { ...s.nodes, [id]: { ...node, x: nx, y: ny } }
+    const names = actorNames(s.actors)
+    if (addsIssue(layoutIssues(s.nodes, names), layoutIssues(moved, names))) return {}
 
-    return { nodes: { ...s.nodes, [id]: { ...node, x: nx, y: ny } } }
+    return { nodes: moved }
   }),
 
   moveNodeGroup: (leadId, rawX, rawY, groupIds) => set(s => {
@@ -355,24 +330,10 @@ const useStore = create((set, get) => ({
       })) return {}
     }
 
-    const movedActorIds = new Set(groupIds.map(id => s.nodes[id]?.actorId).filter(Boolean))
-    if (movedActorIds.size > 0) {
-      const movedNodes = { ...s.nodes }
-      for (const id of groupIds) movedNodes[id] = { ...s.nodes[id], ...proposed[id] }
-      for (const actorId of movedActorIds) {
-        const newExt = computeActorExtents(movedNodes, actorId)
-        if (!newExt) continue
-        for (const actor of Object.values(s.actors)) {
-          if (actor.id === actorId || movedActorIds.has(actor.id)) continue
-          const otherExt = computeActorExtents(s.nodes, actor.id)
-          if (!otherExt) continue
-          if (!hullsSeparated(newExt, otherExt, ACTOR_GAP)) return {}
-        }
-      }
-    }
-
     const newNodes = { ...s.nodes }
     for (const id of groupIds) newNodes[id] = { ...s.nodes[id], ...proposed[id] }
+    const names = actorNames(s.actors)
+    if (addsIssue(layoutIssues(s.nodes, names), layoutIssues(newNodes, names))) return {}
     return { nodes: newNodes }
   }),
 
@@ -432,9 +393,28 @@ const useStore = create((set, get) => ({
     const existing = Object.values(get().actors).find((a) => a.name === name)
     if (existing) return existing.id
     const id = crypto.randomUUID()
-    set((s) => ({ actors: { ...s.actors, [id]: { id, name, type } } }))
+    set((s) => ({ actors: { ...s.actors, [id]: { id, name, type, level: 1 } } }))
     return id
   },
+
+  // Logo shown next to the actor's name (a small image as a data URL), or null to remove it
+  // (logoAspect is its width / height)
+  setActorLogo: (id, logo, logoAspect = 1) => set(s => {
+    const actor = s.actors[id]
+    if (!actor) return {}
+    const next = { ...actor }
+    delete next.logo
+    delete next.logoAspect
+    return { actors: { ...s.actors, [id]: logo ? { ...next, logo, logoAspect } : next } }
+  }),
+
+  // Tier of the actor: 1 is the highest
+  setActorLevel: (id, level) => set(s => {
+    const actor = s.actors[id]
+    const n = Math.max(1, Math.round(Number(level)) || 1)
+    if (!actor || (actor.level ?? 1) === n) return {}
+    return { actors: { ...s.actors, [id]: { ...actor, level: n } } }
+  }),
 
   // ── Connect flow ─────────────────────────────────────────────────────────────
   setConnectSource: (nodeId, side) => set({ connectSource: { nodeId, side } }),
@@ -546,6 +526,7 @@ const useStore = create((set, get) => ({
       '--hl-hurt', '--hl-help', '--hl-needed-by', '--hl-depends-on',
       '--hl-or', '--hl-xor', '--hl-and', '--hl-part-of',
       '--actor-hl-fill', '--actor-hl-stripe',
+      '--actor-bg', '--actor-bg-light', '--actor-bg-deep', '--actor-hl-stripe-mix', '--actor-hl-tone',
     ]
     let svgStr = new XMLSerializer().serializeToString(clone)
     for (const v of cssVars) {

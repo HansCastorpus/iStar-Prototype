@@ -54,7 +54,9 @@ export function diagramObstacles({ nodes, linkPaths, transform, weights = {} }) 
 //   getObstacles: () => obstacles, only called while auto-placing
 //   resetKey:     a change drops any manual (dragged) position
 export function usePopupPlacement({ id, avoid = [], anchor, getObstacles, resetKey }) {
-  const [pinned, setPinned] = useState(null)  // position set by dragging; overrides auto placement
+  // Offset from the anchor set by dragging; overrides auto placement. Kept relative to the anchor so a
+  // dragged popup travels with its element when the diagram is panned or zoomed.
+  const [pinned, setPinned] = useState(null)
   const [popEl, setPopEl] = useState(null)
   const [size, setSize] = useState({ w: 180, h: 160 })
   const [viewport, setViewport] = useState({ w: window.innerWidth, h: window.innerHeight })
@@ -83,7 +85,7 @@ export function usePopupPlacement({ id, avoid = [], anchor, getObstacles, resetK
   const otherRects = usePopupRects(useShallow(s => avoid.map(k => s.rects[k] ?? null)))
   const setRect = usePopupRects(s => s.setRect)
 
-  const pos = anchor && (pinned ?? placePopup({
+  const pos = anchor && (pinned ? { x: anchor.x + pinned.dx, y: anchor.y + pinned.dy } : placePopup({
     anchor, size, viewport,
     obstacles: [
       ...getObstacles(),
@@ -106,7 +108,8 @@ export function usePopupPlacement({ id, avoid = [], anchor, getObstacles, resetK
   }
   const onPointerMove = (e) => {
     if (!dragStateRef.current || e.pointerId !== dragStateRef.current.pointerId) return
-    setPinned({ x: e.clientX - dragStateRef.current.startX, y: e.clientY - dragStateRef.current.startY })
+    if (!anchor) return
+    setPinned({ dx: e.clientX - dragStateRef.current.startX - anchor.x, dy: e.clientY - dragStateRef.current.startY - anchor.y })
   }
   const onPointerUp = (e) => {
     if (!dragStateRef.current || e.pointerId !== dragStateRef.current.pointerId) return

@@ -61,28 +61,29 @@ export default function LinkTypePopup({ linkPaths = {} }) {
       top: pos.y,
       background: 'var(--bg-popup)',
       border: '1px solid var(--border-md)',
-      padding: '6px',
-      paddingTop: 22,
+      padding: '12px',
+      paddingTop: 34,
+      minWidth: 180,
       display: 'flex',
       flexDirection: 'column',
-      gap: '3px',
+      gap: '5px',
       zIndex: POPUP_Z,
     }}>
       <div
         ref={handleRef}
         {...dragProps}
         style={{
-          position: 'absolute', top: 0, left: 0, right: 0, height: 16,
+          position: 'absolute', top: 0, left: 0, right: 0, height: 24,
           cursor: 'grab',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           borderBottom: '1px solid var(--border-lt)',
           userSelect: 'none',
         }}
       >
-        <span style={{ fontSize: 8, color: 'var(--text-3)', letterSpacing: 3 }}>• • •</span>
+        <span style={{ fontSize: 10, color: 'var(--text-3)', letterSpacing: 3 }}>• • •</span>
       </div>
 
-      <div style={{ fontSize: 9, color: 'var(--text-2)', marginBottom: 2 }}>{t('linkType.title')}</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-title)', marginBottom: 4 }}>{t('linkType.title')}</div>
       {LINK_TYPES.map((type) => (
         <button
           key={type}
@@ -91,9 +92,9 @@ export default function LinkTypePopup({ linkPaths = {} }) {
             background: 'none',
             border: '1px solid var(--border-md)',
             color: 'var(--text-1)',
-            padding: '3px 8px',
+            padding: '5px 10px',
             cursor: 'pointer',
-            fontSize: 11,
+            fontSize: 13,
             textAlign: 'left',
             fontFamily: 'monospace',
           }}
@@ -105,7 +106,7 @@ export default function LinkTypePopup({ linkPaths = {} }) {
         onClick={clearConnect}
         onPointerDown={e => e.stopPropagation()}
         style={{ background: 'none', border: 'none', color: 'var(--text-2)',
-          cursor: 'pointer', fontSize: 10, marginTop: 2, fontFamily: 'monospace' }}
+          cursor: 'pointer', fontSize: 12, marginTop: 4, fontFamily: 'monospace' }}
       >
         {t('linkType.cancel')}
       </button>

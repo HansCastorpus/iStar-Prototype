@@ -4,6 +4,7 @@ import useStore, { ALL_TYPES } from '../store/useStore.js'
 import { LegendIcon, LEGEND_W } from './LegendIcons.jsx'
 import { upstreamLayerCount } from '../utils/dependencies.js'
 import { useT } from '../i18n.js'
+import { actorLayout } from '../utils/actorTree.js'
 
 const NODE_TYPES = ['goal', 'task', 'softgoal', 'resource']
 const LINK_TYPES = ['depends-on', 'or', 'xor', 'and', 'help', 'hurt', 'make', 'break', 'needed-by', 'part-of']
@@ -335,7 +336,7 @@ function Section({ label, first, legend, types, highlightTypes, isolateTypes, on
 // legendType: which sample to show when the legend is on (null = blank space, keeps checkboxes aligned)
 // wrap: let long labels run onto several lines instead of being cut off with "…"
 // cols: { i, h } styles to use instead of the filter panel's columns (the actor panel's are narrower)
-function TypeRow({ label, legendType = label, wrap = false, cols, legend, inHighlight, inIsolate, onToggleH, onToggleI }) {
+function TypeRow({ label, indent = 0, legendType = label, wrap = false, cols, legend, inHighlight, inIsolate, onToggleH, onToggleI }) {
   const panelCols = useColumns()
   const iStyle = cols?.i ?? panelCols.colI(legend)
   const hStyle = cols?.h ?? panelCols.colH(legend)
@@ -343,7 +344,8 @@ function TypeRow({ label, legendType = label, wrap = false, cols, legend, inHigh
     : legendType ? <LegendSlot type={legendType} highlighted={highlighted} />
     : <div style={{ width: LEGEND_W, flexShrink: 0 }} />
   return (
-    <div style={{ display: 'flex', alignItems: 'center', padding: '4px 0' }}>
+    <div style={{ display: 'flex', alignItems: 'center', padding: '4px 0', paddingLeft: indent * NEST_INDENT }}>
+      {indent > 0 && <span aria-hidden style={{ color: 'var(--text-3)', fontFamily: 'monospace', fontSize: 12, marginRight: 4, userSelect: 'none' }}>└</span>}
       <span title={label} style={{ flex: 1, minWidth: 0, fontSize: 12, fontFamily: 'monospace', color: 'var(--text-1)', userSelect: 'none', textAlign: 'left', paddingRight: 8,
         ...(wrap
           ? { overflowWrap: 'anywhere', lineHeight: 1.35 }
@@ -378,6 +380,7 @@ function ActorListToggle({ open, onToggle }) {
   )
 }
 
+const NEST_INDENT = 16  // px each nesting level is shifted right in the actor list
 const ACTOR_PANEL_W = 280
 // Narrow checkbox columns for the actor panel: just the checkbox and its small column label
 const ACTOR_COL = { width: 56, flexShrink: 0, borderLeft: '1px solid var(--border-lt)', padding: '0 2px' }
@@ -395,7 +398,27 @@ function ActorPanel({ left, onClose }) {
   const actorsVisible       = useStore(s => s.isolateTypes.includes('actor'))
   const actorsHighlighted   = useStore(s => s.highlightTypes.includes('actor'))
 
-  const list = Object.values(actors).sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+  // Primary actors by name, each followed by the actors nested in it (staggered), and so on down
+  const nodes = useStore(s => s.nodes)
+  const list = useMemo(() => {
+    const { parentOf } = actorLayout(nodes)
+    const byName = (a, b) => (a.name || '').localeCompare(b.name || '')
+    const kids = {}
+    const roots = []
+    for (const a of Object.values(actors)) {
+      const p = parentOf[a.id]
+      if (p && actors[p]) (kids[p] ??= []).push(a)
+      else roots.push(a)
+    }
+    const out = []
+    const walk = (a, indent, seen) => {
+      if (seen.has(a.id)) return
+      out.push({ actor: a, indent })
+      for (const c of (kids[a.id] ?? []).sort(byName)) walk(c, indent + 1, new Set([...seen, a.id]))
+    }
+    for (const r of roots.sort(byName)) walk(r, 0, new Set())
+    return out
+  }, [actors, nodes])
   const colLabel = { fontSize: 9, color: 'var(--text-3)', fontFamily: 'monospace', textAlign: 'center' }
 
   return (
@@ -423,9 +446,9 @@ function ActorPanel({ left, onClose }) {
         {list.length === 0 && (
           <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'monospace', padding: '6px 0' }}>{t('actors.none')}</div>
         )}
-        {list.map(a => (
+        {list.map(({ actor: a, indent }) => (
           <TypeRow
-            key={a.id} label={a.name || t('actors.unnamed')} legendType={null} legend={false} wrap cols={ACTOR_COLS}
+            key={a.id} label={a.name || t('actors.unnamed')} indent={indent} legendType={null} legend={false} wrap cols={ACTOR_COLS}
             inIsolate={actorsVisible && !hiddenActorIds.includes(a.id)}
             inHighlight={actorsHighlighted || highlightedActorIds.includes(a.id)}
             onToggleI={() => toggleActorHidden(a.id)}

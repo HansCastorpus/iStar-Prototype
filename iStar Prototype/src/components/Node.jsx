@@ -1,8 +1,9 @@
 import { useRef } from 'react'
 import useStore from '../store/useStore.js'
 import { upstreamSet, focusLayers } from '../utils/dependencies.js'
+import { inActor } from '../utils/actorTree.js'
 import { useT } from '../i18n.js'
-import { wrapLabel, NODE_LINE_H, NODE_BADGE_H, NODE_PAD_X, GOAL_PAD_X } from '../utils/grid.js'
+import { wrapLabel, NODE_LINE_H, NODE_BADGE_H, NODE_PAD_X, GOAL_PAD_X, TASK_TIP_X } from '../utils/grid.js'
 
 const SELECTED_COLOR = '#0070f3'
 const PENDING_TARGET_COLOR = '#16a34a'
@@ -39,7 +40,7 @@ export default function Node({ node }) {
   // Nodes selected by clicking their actor stay selected (they move together) but aren't outlined
   const isSelected = useStore(s =>
     s.selectedId === node.id ||
-    (s.selectedIds.includes(node.id) && !(s.selectedActorId && s.selectedActorId === node.actorId)))
+    (s.selectedIds.includes(node.id) && !(s.selectedActorId && inActor(node, s.selectedActorId))))
   // Second element clicked while one was selected: target of the link being created
   const isPendingTarget = useStore(s => s.pendingLink?.targetId === node.id)
   const accent = isPendingTarget ? PENDING_TARGET_COLOR : isSelected ? SELECTED_COLOR : null
@@ -183,7 +184,7 @@ export default function Node({ node }) {
     >
       {node.type === 'task' ? (
         <path
-          d={`M ${GOAL_PAD_X},0 L ${node.width - GOAL_PAD_X},0 L ${node.width},${node.height / 2} L ${node.width - GOAL_PAD_X},${node.height} L ${GOAL_PAD_X},${node.height} L 0,${node.height / 2} Z`}
+          d={`M ${TASK_TIP_X},0 L ${node.width - TASK_TIP_X},0 L ${node.width},${node.height / 2} L ${node.width - TASK_TIP_X},${node.height} L ${TASK_TIP_X},${node.height} L 0,${node.height / 2} Z`}
           fill={hlFill}
           stroke={accent ?? stroke}
           strokeWidth={accent ? 2 : 1}

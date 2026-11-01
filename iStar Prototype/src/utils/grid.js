@@ -8,6 +8,7 @@ export const NODE_MAX_W  = 200   // maximum node width — at this point text wr
 export const NODE_PAD_X    =  8   // horizontal padding each side
 export const NODE_PAD_Y    =  6   // vertical padding each side
 export const GOAL_PAD_X    = 30   // horizontal padding for goal (pill) nodes
+export const TASK_TIP_X    = 16   // how far the left / right points of a task are cut in (smaller = blunter)
 export const GOAL_PAD_Y    = 10   // vertical padding for goal (pill) nodes
 export const NODE_LINE_H   = 14   // line height for 11px font (11px + 3px leading)
 export const NODE_BADGE_H  = 16   // type badge height (matches link badge: 10px font + 3×2 pad)

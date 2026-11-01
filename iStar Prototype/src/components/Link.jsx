@@ -3,8 +3,10 @@ import useStore from '../store/useStore.js'
 import { upstreamSet, focusLayers } from '../utils/dependencies.js'
 import { useT } from '../i18n.js'
 import { useZoom } from '../contexts/ZoomContext.jsx'
-import { pointsToPath, getPointAtT, projectOntoPath } from '../utils/routing.js'
+import { pointsToPath, getPointAtT, projectOntoPath, throughVia, bendIsAllowed } from '../utils/routing.js'
 
+const BEND_DRAG_MIN = 4  // px a press must travel before it is a drag rather than a click
+const BEND_SNAP = 8      // px within which a dragged bend lines up with the link's ends
 const PAD_X = 10
 const PAD_Y = 3
 const FONT_SIZE = 10
@@ -228,8 +230,10 @@ function SourceIcon({ type, x, y, color, sw }) {
   }
 }
 
-export default function Link({ link, points, andBar }) {
+export default function Link({ link, points, andBar, allPaths = {} }) {
   const labelRef   = useRef(null)
+  const pathRef    = useRef(null)
+  const bendRef    = useRef(null)
   const pointerRef = useRef(null)
   const [dragging, setDragging] = useState(false)
 
@@ -312,6 +316,46 @@ export default function Link({ link, points, andBar }) {
     if (!ps.moved) select(link.id, 'link')
   }
 
+  // Dragging the link itself bends it through the point you drag to (link.via); double click undoes that.
+  // The bend only follows the pointer while the path stays within the routing rules (not through an
+  // element, not along another link), otherwise it stays at the last allowed spot. A press that
+  // doesn't move is a plain click and selects the link.
+  const onPathPointerDown = (e) => {
+    if (e.button !== 0 || useStore.getState().mode !== 'select') return
+    pathRef.current.setPointerCapture(e.pointerId)
+    bendRef.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, moved: false }
+  }
+
+  const onPathPointerMove = (e) => {
+    const bs = bendRef.current
+    if (!bs || e.pointerId !== bs.pointerId) return
+    if (!bs.moved) {
+      if (Math.hypot(e.clientX - bs.x, e.clientY - bs.y) < BEND_DRAG_MIN) return
+      bs.moved = true
+      useStore.getState().beginBatch()  // the whole drag is one undo step
+    }
+    const rect = pathRef.current.ownerSVGElement.getBoundingClientRect()
+    const tf   = transformRef.current
+    let x = Math.round((e.clientX - rect.left - tf.x) / tf.k)
+    let y = Math.round((e.clientY - rect.top  - tf.y) / tf.k)
+    // Line up with where the link leaves / enters the elements when close to it
+    for (const p of [points[1], points[points.length - 2]]) {
+      if (Math.abs(x - p.x) < BEND_SNAP) x = p.x
+      if (Math.abs(y - p.y) < BEND_SNAP) y = p.y
+    }
+    const others = Object.entries(allPaths).filter(([id, p]) => id !== link.id && p).map(([, p]) => p)
+    if (bendIsAllowed(throughVia(points, { x, y }), link, useStore.getState().nodes, others))
+      updateLink(link.id, { via: { x, y } })
+  }
+
+  const onPathPointerUp = (e) => {
+    const bs = bendRef.current
+    if (!bs || e.pointerId !== bs.pointerId) return
+    pathRef.current.releasePointerCapture(e.pointerId)
+    bendRef.current = null
+    if (bs.moved) useStore.getState().endBatch()
+  }
+
   const handlePathClick = (e) => {
     e.stopPropagation()
     select(link.id, 'link')
@@ -333,8 +377,11 @@ export default function Link({ link, points, andBar }) {
       pointerEvents: isHidden ? 'none' : undefined,
     }}>
       {/* Wide invisible hit area */}
-      <path d={d} fill="none" stroke="transparent" strokeWidth={10}
-        style={{ cursor: 'pointer' }} onClick={handlePathClick} />
+      <path ref={pathRef} d={d} fill="none" stroke="transparent" strokeWidth={10}
+        style={{ cursor: 'pointer' }} onClick={handlePathClick}
+        onPointerDown={onPathPointerDown} onPointerMove={onPathPointerMove}
+        onPointerUp={onPathPointerUp} onPointerCancel={onPathPointerUp}
+        onDoubleClick={(e) => { e.stopPropagation(); if (link.via) updateLink(link.id, { via: null }) }} />
 
       {/* Visible path */}
       <path d={d} fill="none" stroke={color} strokeWidth={sw} strokeDasharray={hlStyle?.dash} />
