@@ -57,9 +57,10 @@ export function getBestSides(sourceNode, targetNode) {
 export function getUsedOffsets(nodeId, side, links) {
   const used = []
   for (const link of Object.values(links)) {
-    if (link.sourceId === nodeId && link.sourceSlot.side === side)
+    // Slots are recomputed when drawing, so a link saved without one is simply skipped
+    if (link.sourceId === nodeId && link.sourceSlot?.side === side)
       used.push(link.sourceSlot.offset)
-    if (link.targetId === nodeId && link.targetSlot.side === side)
+    if (link.targetId === nodeId && link.targetSlot?.side === side)
       used.push(link.targetSlot.offset)
   }
   return used

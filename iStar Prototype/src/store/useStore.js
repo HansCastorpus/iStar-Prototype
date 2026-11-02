@@ -59,6 +59,20 @@ function tooClose(x, y, w, h, nodes, excludeId = null) {
 // collapse into one step.
 const HISTORY_LIMIT = 100
 const history = { past: [], future: [], batch: 0, batchRecorded: false, restoring: false }
+// Links whose arrowhead was dragged by hand go back to automatic placement when an element they touch moves
+const clearSlotOverrides = (links, nodeIds) => {
+  const ids = new Set(nodeIds)
+  let out = links
+  for (const l of Object.values(links)) {
+    if ((l.targetAnchor || l.sourceAnchor) && (ids.has(l.sourceId) || ids.has(l.targetId))) {
+      if (out === links) out = { ...links }
+      const { targetAnchor, sourceAnchor, ...rest } = l
+      out[l.id] = rest
+    }
+  }
+  return out
+}
+
 const snapshot = (s) => ({ nodes: s.nodes, links: s.links, actors: s.actors })
 // Undo history of the models that aren't open (the open one's is `history`)
 const histories = {}
@@ -406,7 +420,9 @@ const useStore = create((set, get) => ({
     const name = 'label' in updates && node.linkedModelId && updates.label.trim()
     const models = name && s.models[node.linkedModelId]
       ? { ...s.models, [node.linkedModelId]: { ...s.models[node.linkedModelId], name } } : null
-    return { nodes: { ...s.nodes, [id]: merged }, ...(models && { models }) }
+    const links = 'width' in merged && (merged.width !== node.width || merged.height !== node.height)
+      ? clearSlotOverrides(s.links, [id]) : s.links
+    return { nodes: { ...s.nodes, [id]: merged }, links, ...(models && { models }) }
   }),
 
   // Whether these elements can take this actor change ({ actorId?, nestedActorIds? }, or a function giving
@@ -434,7 +450,7 @@ const useStore = create((set, get) => ({
     const names = actorNames(s.actors)
     if (addsIssue(layoutIssues(s.nodes, names), layoutIssues(moved, names))) return {}
 
-    return { nodes: moved }
+    return { nodes: moved, links: clearSlotOverrides(s.links, [id]) }
   }),
 
   moveNodeGroup: (leadId, rawX, rawY, groupIds) => set(s => {
@@ -466,7 +482,7 @@ const useStore = create((set, get) => ({
     for (const id of groupIds) newNodes[id] = { ...s.nodes[id], ...proposed[id] }
     const names = actorNames(s.actors)
     if (addsIssue(layoutIssues(s.nodes, names), layoutIssues(newNodes, names))) return {}
-    return { nodes: newNodes }
+    return { nodes: newNodes, links: clearSlotOverrides(s.links, groupIds) }
   }),
 
   deleteNode: (id) => set((s) => {
@@ -594,6 +610,8 @@ const useStore = create((set, get) => ({
         ...s.links,
         [id]: {
           ...l,
+          sourceAnchor: l.targetAnchor ?? null,
+          targetAnchor: l.sourceAnchor ?? null,
           sourceId:   l.targetId,
           sourceSlot: l.targetSlot,
           targetId:   l.sourceId,

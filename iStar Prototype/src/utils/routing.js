@@ -110,6 +110,8 @@ function simplifyPoints(pts) {
   const out = [pts[0]]
   for (let i = 1; i < pts.length - 1; i++) {
     const A = pts[i - 1], B = pts[i], C = pts[i + 1]
+    // The points next to the two ends are the stubs that keep the first / last segment on an axis
+    if (i === 1 || i === pts.length - 2) { out.push(B); continue }
     const dx = C.x - A.x, dy = C.y - A.y
     const len = Math.hypot(dx, dy)
     const dist = len === 0
