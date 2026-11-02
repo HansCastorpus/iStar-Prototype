@@ -9,6 +9,7 @@ const MODES = [
   { id: 'add-task',       label: 'toolbar.addTask' },
   { id: 'add-softgoal',   label: 'toolbar.addSoftgoal' },
   { id: 'add-resource',   label: 'toolbar.addResource' },
+  { id: 'add-subactor',   label: 'toolbar.addSubactor' },
 ]
 
 const TOOLBAR_PAD_X = 8
@@ -63,7 +64,9 @@ const LOGO_ICON_GAP = 4    // space between the AND bar and the arrowhead's base
 const LOGO_ICON_R = 5      // half the AND bar's length
 const LOGO_LINE_W = 2
 
-function Logo() {
+// Scales up to fill its container (width: 100%), but no further than LOGO_MAX_SCALE times its drawn size
+const LOGO_MAX_SCALE = 1.8
+export function Logo() {
   const H = 24, MID = H / 2
   const goal = { x: 1, w: 52 }
   const res  = { x: 84, w: 62 }
@@ -71,8 +74,9 @@ function Logo() {
   const text = { fontSize: 12, fontFamily: 'monospace', fill: 'var(--node-text)',
     textAnchor: 'middle', dominantBaseline: 'central' }
   return (
-    <svg width={res.x + res.w + 1} height={H} viewBox={`0 0 ${res.x + res.w + 1} ${H}`}
-      role="img" aria-label="iStar Builder" style={{ display: 'block' }}>
+    <svg viewBox={`0 0 ${res.x + res.w + 1} ${H}`}
+      role="img" aria-label="iStar Builder"
+      style={{ display: 'block', width: '100%', maxWidth: (res.x + res.w + 1) * LOGO_MAX_SCALE, height: 'auto' }}>
       <rect x={goal.x} y={1} width={goal.w} height={H - 2} rx={(H - 2) / 2}
         fill="var(--node-fill)" stroke="var(--node-stroke)" strokeWidth={1} />
       <text x={goal.x + goal.w / 2} y={MID} {...text}>iStar</text>
@@ -91,20 +95,25 @@ function Logo() {
 }
 
 // Divider between the header's button groups, drawn as an OR link (geometry from Link.jsx):
-// line → hollow circle (ICON_R) → ICON_GAP → floating arrowhead.
+// line → hollow circle (ICON_R) → ICON_GAP → floating arrowhead. The line stretches, so the dividers
+// take up whatever width the header has left over, while the buttons keep their spacing.
 // `space`: side margin; it adds to the parent's flex gap to make 10px each side (toolbar gap 8 → 2).
+const CONNECTOR_MIN_W = 34
 function OrConnector({ space = 2 }) {
-  const W = 34, H = 14, MID = H / 2, tip = W
-  const cx = tip - LOGO_ARROW_H - LOGO_ICON_GAP - LOGO_ICON_R
+  const H = 14, MID = H / 2
+  const R = LOGO_ICON_R
+  const W = R + LOGO_ARROW_H + LOGO_ICON_GAP + R   // circle + gap + arrowhead (the line is the stretchy part)
+  const cx = R, tip = W
   return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden
-      style={{ display: 'block', flexShrink: 0, margin: `0 ${space}px`, overflow: 'visible' }}>
-      <line x1={0} y1={MID} x2={cx} y2={MID} stroke="var(--link-def)" strokeWidth={LOGO_LINE_W} />
-      <circle cx={cx} cy={MID} r={LOGO_ICON_R - LOGO_LINE_W / 2}
-        fill="var(--node-fill)" stroke="var(--link-def)" strokeWidth={LOGO_LINE_W} />
-      <polygon fill="var(--link-def)"
-        points={`${tip},${MID} ${tip - LOGO_ARROW_H},${MID - LOGO_ARROW_HW} ${tip - LOGO_ARROW_H},${MID + LOGO_ARROW_HW}`} />
-    </svg>
+    <div aria-hidden style={{ flex: `1 1 ${CONNECTOR_MIN_W}px`, minWidth: CONNECTOR_MIN_W, display: 'flex', alignItems: 'center', margin: `0 ${space}px` }}>
+      <div style={{ flex: 1, height: LOGO_LINE_W, background: 'var(--link-def)' }} />
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', flexShrink: 0, overflow: 'visible' }}>
+        <circle cx={cx} cy={MID} r={LOGO_ICON_R - LOGO_LINE_W / 2}
+          fill="var(--node-fill)" stroke="var(--link-def)" strokeWidth={LOGO_LINE_W} />
+        <polygon fill="var(--link-def)"
+          points={`${tip},${MID} ${tip - LOGO_ARROW_H},${MID - LOGO_ARROW_HW} ${tip - LOGO_ARROW_H},${MID + LOGO_ARROW_HW}`} />
+      </svg>
+    </div>
   )
 }
 
@@ -217,7 +226,6 @@ fr: [
 
 export default function Toolbar() {
   const { mode, setMode, exportDiagram, importDiagram, clearDiagram, exportAsImage, darkMode, toggleDarkMode } = useStore()
-  const filterCardBox = useStore(s => s.filterCardBox)
   const lang = useStore(s => s.lang)
   const setLang = useStore(s => s.setLang)
   const t = useT()
@@ -292,18 +300,8 @@ export default function Toolbar() {
       background: 'var(--bg-panel)',
       flexShrink: 0,
     }}>
-      {/* Logo, centred over the Filter card below (toolbar starts at the window's left edge) */}
-      <span style={{
-        width: filterCardBox?.width, flexShrink: 0,
-        marginLeft: filterCardBox ? filterCardBox.left - TOOLBAR_PAD_X : 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <Logo />
-      </span>
-      <span style={{ flex: 1 }} />
-
-      {/* Mode buttons */}
-      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+      {/* Mode buttons (the group grows, so its inner divider stretches like the other two) */}
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flex: '1 1 auto' }}>
         <div ref={helpRef} style={{ position: 'relative' }}>
           <button
             onClick={() => { setHelpCols(1); setHelpOpen(v => !v) }}

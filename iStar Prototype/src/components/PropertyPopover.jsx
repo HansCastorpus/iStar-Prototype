@@ -4,6 +4,7 @@ import { useZoom, worldToScreen } from '../contexts/ZoomContext.jsx'
 import { usePopupPlacement, screenBounds, diagramObstacles } from '../utils/usePopupPlacement.js'
 import { useT } from '../i18n.js'
 import { actorLayout } from '../utils/actorTree.js'
+import { shrinkImage } from '../utils/image.js'
 import PopupConnector from './PopupConnector.jsx'
 import PopoverHeader from './PopoverHeader.jsx'
 import { HEADER_H, popoverStyle, labelStyle, inputStyle, summaryStyle, btnStyle, confirmOnEnter } from './popupStyles.js'
@@ -317,12 +318,17 @@ export default function PropertyPopover({ linkPaths = {} }) {
     updateNode(node.id, { type: e.target.value })
   }
 
+  // A sub-actor box has no type to choose; it has a logo and opens its own diagram. Deleting one that
+  // has a diagram deletes the diagram too, so the confirmation says so.
+  const isSub = node.type === 'subactor'
+  const linkedName = isSub && node.linkedModelId ? useStore.getState().models[node.linkedModelId]?.name : null
+
   return frame(<>
       {header(deselect)}
       {collapsed ? (
         <div style={summaryStyle}>{node.label || t(`type.${node.type}`)}</div>
       ) : <>
-      <label style={labelStyle}>{t('popup.label')}</label>
+      <label style={labelStyle}>{t(isSub ? 'actorPopup.name' : 'popup.label')}</label>
       <input
         autoFocus
         value={node.label}
@@ -334,15 +340,41 @@ export default function PropertyPopover({ linkPaths = {} }) {
         placeholder={t('popup.labelPlaceholder')}
       />
 
-      <label style={labelStyle}>{t('popup.type')}</label>
-      <select value={node.type} onChange={handleTypeChange} style={inputStyle}>
-        {NODE_TYPES.map((type) => <option key={type} value={type}>{t(`type.${type}`)}</option>)}
-      </select>
+      {isSub ? <>
+        <label style={labelStyle}>{t('actorPopup.logo')}</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {node.logo && <img src={node.logo} alt="" style={{ width: 20, height: 20, objectFit: 'contain' }} />}
+          <label style={{ ...btnStyle('#888'), cursor: 'pointer' }}>
+            {t(node.logo ? 'actorPopup.logoChange' : 'actorPopup.logoAdd')}
+            <input
+              type="file" accept="image/*" style={{ display: 'none' }}
+              onChange={async e => {
+                const file = e.target.files[0]
+                e.target.value = ''
+                const img = file && await shrinkImage(file)
+                if (img) updateNode(node.id, { logo: img.url, logoAspect: img.aspect })
+              }}
+            />
+          </label>
+          {node.logo && <button onClick={() => updateNode(node.id, { logo: null, logoAspect: null })} style={btnStyle('#888')}>{t('actorPopup.logoRemove')}</button>}
+        </div>
+        <button onClick={() => useStore.getState().openSubactor(node.id)} style={{ ...btnStyle('#0070f3'), marginTop: 4 }}>
+          {t('subactor.openDiagram')} ›
+        </button>
+      </> : <>
+        <label style={labelStyle}>{t('popup.type')}</label>
+        <select value={node.type} onChange={handleTypeChange} style={inputStyle}>
+          {NODE_TYPES.map((type) => <option key={type} value={type}>{t(`type.${type}`)}</option>)}
+        </select>
+      </>}
 
       <NodeActorFields key={node.id} selected={[node]} />
 
 
       <div style={{ marginTop: 6 }}>
+        {confirmDelete && linkedName && (
+          <div style={{ ...blockedStyle, marginBottom: 6 }}>{t('subactor.deleteWarning', { name: linkedName })}</div>
+        )}
         {confirmDelete ? (
           <div style={{ display: 'flex', gap: 4 }}>
             <button onClick={() => deleteNode(node.id)} style={btnStyle('#c00')}>

@@ -160,6 +160,16 @@ function NodeIcon({ type, fill }) {
     )
   }
 
+  if (type === 'subactor')
+    return (
+      <svg width={NW} height={NH} viewBox={`0 0 ${NW} ${NH}`} style={{ flexShrink: 0 }}>
+        <rect x={0.5} y={0.5} width={NW-1} height={NH-1} rx={3}
+          fill={fill} stroke={stroke} strokeWidth={1.2} />
+        <line x1={6} y1={5} x2={NW-6} y2={5} stroke={stroke} strokeWidth={1.2} strokeLinecap="round" />
+        <rect x={NW/2-7} y={NH-6.5} width={14} height={4} rx={2} fill="var(--node-fill)" stroke={stroke} strokeWidth={0.8} />
+      </svg>
+    )
+
   return (
     <svg width={NW} height={NH} viewBox={`0 0 ${NW} ${NH}`} style={{ flexShrink: 0 }}>
       <rect x={0.5} y={0.5} width={NW-1} height={NH-1}
@@ -168,7 +178,7 @@ function NodeIcon({ type, fill }) {
   )
 }
 
-const NODE_TYPES = ['goal', 'task', 'softgoal', 'resource']
+const NODE_TYPES = ['goal', 'task', 'softgoal', 'resource', 'subactor']
 
 const LINK_DEFS = [
   { type: 'depends-on', hl: { color: 'var(--hl-depends-on)', sw: 6 } },

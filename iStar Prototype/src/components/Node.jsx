@@ -3,7 +3,10 @@ import useStore from '../store/useStore.js'
 import { upstreamSet, focusLayers } from '../utils/dependencies.js'
 import { inActor } from '../utils/actorTree.js'
 import { useT } from '../i18n.js'
-import { wrapLabel, NODE_LINE_H, NODE_BADGE_H, NODE_PAD_X, GOAL_PAD_X, TASK_TIP_X } from '../utils/grid.js'
+import {
+  wrapLabel, NODE_LINE_H, NODE_BADGE_H, NODE_PAD_X, GOAL_PAD_X, TASK_TIP_X,
+  SUB_FONT, SUB_PAD_X, SUB_LOGO_H, SUB_LOGO_GAP, subLogoWidth, measureSub, fitSubLabel,
+} from '../utils/grid.js'
 
 const SELECTED_COLOR = '#0070f3'
 const PENDING_TARGET_COLOR = '#16a34a'
@@ -16,6 +19,7 @@ const NODE_TYPES = {
   task: { stroke: 'var(--node-stroke)' },
   softgoal: { stroke: 'var(--node-stroke)' },
   resource: { stroke: 'var(--node-stroke)' },
+  subactor: { stroke: 'var(--node-stroke)' },
 }
 
 // Pick the best source/target sides based on which axis has the larger separation.
@@ -35,7 +39,7 @@ export default function Node({ node }) {
   const pointerRef = useRef(null)
 
   const { mode, selectedId, select, deselect, moveNode, moveNodeGroup,
-    addToSelection, setPendingLink, setDraggingNode } = useStore()
+    addToSelection, setPendingLink, setDraggingNode, openSubactor } = useStore()
 
   // Nodes selected by clicking their actor stay selected (they move together) but aren't outlined
   const isSelected = useStore(s =>
@@ -61,7 +65,7 @@ export default function Node({ node }) {
     return upstreamSet(s.links, s.focusNodeId, focusLayers(s)).has(node.id) ? 'connected' : 'dimmed'
   })
 
-  const HIGHLIGHT_FILLS = { goal: 'var(--hl-goal)', task: 'var(--hl-task)', softgoal: 'var(--hl-softgoal)', resource: 'var(--hl-resource)' }
+  const HIGHLIGHT_FILLS = { goal: 'var(--hl-goal)', task: 'var(--hl-task)', softgoal: 'var(--hl-softgoal)', resource: 'var(--hl-resource)', subactor: 'var(--hl-subactor)' }
   const isFillHighlighted = isHighlighted || focusStatus === 'focus' || focusStatus === 'connected'
   const hlFill = isFillHighlighted ? (HIGHLIGHT_FILLS[node.type] ?? 'var(--node-fill)') : 'var(--node-fill)'
 
@@ -168,6 +172,37 @@ export default function Node({ node }) {
   const badgeCY = node.height
   const badgeW = typeName.length * BADGE_CHAR_W + BADGE_PAD_X * 2
 
+  // Sub-actor box: name (+ logo) on top, an Open button below that opens its own diagram
+  const isSub = node.type === 'subactor'
+  let subBody = null
+  if (isSub) {
+    const logoW = node.logo ? subLogoWidth(node.logoAspect ?? 1) : 0
+    const name = fitSubLabel(node.label.trim() || `[${typeName}]`, node.width - SUB_PAD_X * 2 - (logoW ? logoW + SUB_LOGO_GAP : 0))
+    const textW = measureSub(name)
+    const startX = (node.width - (textW + (logoW ? SUB_LOGO_GAP + logoW : 0))) / 2
+    const rowY = 22
+    subBody = (
+      <>
+        <rect width={node.width} height={node.height} rx={8} fill={hlFill}
+          stroke={accent ?? stroke} strokeWidth={accent ? 2 : 1.5} />
+        <text x={startX} y={rowY} dominantBaseline="central" fontSize={SUB_FONT} fontWeight={600} fontFamily="sans-serif"
+          fill={isFillHighlighted ? 'var(--node-text-hl)' : 'var(--node-text)'}
+          style={{ pointerEvents: 'none', userSelect: 'none' }}>{name}</text>
+        {node.logo && (
+          <image href={node.logo} x={startX + textW + SUB_LOGO_GAP} y={rowY - SUB_LOGO_H / 2}
+            width={logoW} height={SUB_LOGO_H} preserveAspectRatio="xMidYMid meet" style={{ pointerEvents: 'none' }} />
+        )}
+        <g style={{ cursor: 'pointer' }}
+          onPointerDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); openSubactor(node.id) }}>
+          <rect x={cx - 34} y={40} width={68} height={18} rx={9} fill="var(--node-fill)" stroke="var(--node-stroke)" strokeWidth={1} />
+          <text x={cx} y={49} textAnchor="middle" dominantBaseline="central" fontSize={10} fontFamily="sans-serif"
+            fill="var(--node-text)" style={{ pointerEvents: 'none', userSelect: 'none' }}>{t('subactor.open')} ›</text>
+        </g>
+      </>
+    )
+  }
+
   return (
     <g
       ref={gRef}
@@ -182,7 +217,7 @@ export default function Node({ node }) {
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
     >
-      {node.type === 'task' ? (
+      {isSub ? subBody : node.type === 'task' ? (
         <path
           d={`M ${TASK_TIP_X},0 L ${node.width - TASK_TIP_X},0 L ${node.width},${node.height / 2} L ${node.width - TASK_TIP_X},${node.height} L ${TASK_TIP_X},${node.height} L 0,${node.height / 2} Z`}
           fill={hlFill}
@@ -235,12 +270,12 @@ export default function Node({ node }) {
         </>
       )}
 
-      <text
+      {!isSub && <text
         textAnchor="middle"
         dominantBaseline="central"
         fontSize={11}
         fontFamily="sans-serif"
-        fill="var(--node-text)"
+        fill={isFillHighlighted ? 'var(--node-text-hl)' : 'var(--node-text)'}
         style={{ pointerEvents: 'none', userSelect: 'none' }}
       >
         {lines.map((line, i) => (
@@ -252,10 +287,10 @@ export default function Node({ node }) {
             {line}
           </tspan>
         ))}
-      </text>
+      </text>}
 
       {/* Type badge — centred on the bottom edge; hidden with "Hide tags" */}
-      {!hideTags && <>
+      {!isSub && !hideTags && <>
       <rect
         x={cx - badgeW / 2}
         y={badgeCY - NODE_BADGE_H / 2}

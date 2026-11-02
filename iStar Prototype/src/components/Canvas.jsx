@@ -29,7 +29,6 @@ export default function Canvas() {
   useEffect(() => { modeRef.current = mode }, [mode])
 
   // Load saved diagram on mount.
-  useEffect(() => { useStore.getState().loadFromStorage() }, [])
 
   // Set up d3-zoom.
   useEffect(() => {

@@ -6,7 +6,7 @@ import { chainOf, layoutIssues, addsIssue, actorNames } from '../utils/actorTree
 const MIN_CLEARANCE = GRID * 2
 
 export const ALL_TYPES = [
-  'goal', 'task', 'softgoal', 'resource',
+  'goal', 'task', 'softgoal', 'resource', 'subactor',
   'depends-on', 'or', 'xor', 'and', 'help', 'hurt', 'make', 'break', 'needed-by', 'part-of',
   'actor',
 ]
@@ -60,6 +60,69 @@ function tooClose(x, y, w, h, nodes, excludeId = null) {
 const HISTORY_LIMIT = 100
 const history = { past: [], future: [], batch: 0, batchRecorded: false, restoring: false }
 const snapshot = (s) => ({ nodes: s.nodes, links: s.links, actors: s.actors })
+// Undo history of the models that aren't open (the open one's is `history`)
+const histories = {}
+
+// ── Models (tabs) ──────────────────────────────────────────────────────────────
+// The project is a tree of diagrams ("models"). A sub-actor box in one model opens another (its child).
+// The open model's data lives in the top-level nodes / links / actors; `models` holds the rest (its own
+// entry for the open one is stale until the next switch), so every component works unchanged.
+export const ROOT_MODEL = 'main'
+const emptyModel = (id, name, parent = null) => ({ id, name, parent, nodes: {}, links: {}, actors: {} })
+const withLive = (s) => ({
+  ...s.models,
+  [s.activeModelId]: { ...s.models[s.activeModelId], nodes: s.nodes, links: s.links, actors: s.actors },
+})
+const rootOf = (models) => Object.values(models).find(m => !m.parent)?.id ?? Object.keys(models)[0]
+
+// Models reachable from the root through sub-actor boxes, parents first (`depth` = layer). A model whose box
+// was deleted stays in memory so that undo can bring it back, but isn't reachable (or saved).
+export function reachableModels(models) {
+  const out = []
+  const walk = (id, depth) => {
+    const m = models[id]
+    if (!m || out.some(o => o.id === id)) return
+    out.push({ id, name: m.name, depth })
+    for (const n of Object.values(m.nodes)) if (n.type === 'subactor' && n.linkedModelId) walk(n.linkedModelId, depth + 1)
+  }
+  walk(rootOf(models), 0)
+  return out
+}
+
+// Ids from the root down to `id`, for the breadcrumb
+export function modelPath(models, id) {
+  const path = []
+  for (let m = models[id]; m && path.length < 50; m = m.parent && models[m.parent.modelId]) path.unshift(m.id)
+  return path
+}
+
+const resizeNodes = (nodes) => Object.fromEntries(Object.entries(nodes || {}).map(([id, node]) => {
+  const { width, height } = computeNodeSize(node.label, node.type, node.logo ? node.logoAspect ?? 1 : 0)
+  return [id, { ...node, width, height }]
+}))
+
+// What gets saved / exported: every reachable model, with the open one's live data
+function projectData(s) {
+  const live = withLive(s)
+  const models = {}
+  for (const { id } of reachableModels(live)) models[id] = live[id]
+  return { version: 2, activeModelId: models[s.activeModelId] ? s.activeModelId : rootOf(models), models }
+}
+
+// Turn saved / imported JSON (current or the older single-diagram format) into store state
+function loadProject(data) {
+  let models, activeModelId
+  if (data.models) {
+    models = Object.fromEntries(Object.entries(data.models).map(([id, m]) =>
+      [id, { ...emptyModel(id, m.name ?? 'Main', m.parent ?? null), ...m, nodes: resizeNodes(m.nodes) }]))
+    activeModelId = models[data.activeModelId] ? data.activeModelId : rootOf(models)
+  } else {
+    models = { [ROOT_MODEL]: { ...emptyModel(ROOT_MODEL, 'Main'), nodes: resizeNodes(data.nodes), links: data.links || {}, actors: data.actors || {} } }
+    activeModelId = ROOT_MODEL
+  }
+  const active = models[activeModelId]
+  return { models, activeModelId, nodes: active.nodes, links: active.links, actors: active.actors }
+}
 
 const useStore = create((set, get) => ({
   // ── History ──────────────────────────────────────────────────────────────────
@@ -69,6 +132,67 @@ const useStore = create((set, get) => ({
   endBatch:   () => { history.batch = Math.max(0, history.batch - 1) },
   undo: () => restore(history.past, history.future),
   redo: () => restore(history.future, history.past),
+
+  // ── Models (tabs) ────────────────────────────────────────────────────────────
+  models: { [ROOT_MODEL]: emptyModel(ROOT_MODEL, 'Main') },
+  activeModelId: ROOT_MODEL,
+
+  switchModel: (id) => {
+    const s = get()
+    if (id === s.activeModelId || !s.models[id]) return
+    const models = withLive(s)
+    histories[s.activeModelId] = { past: history.past, future: history.future }
+    const h = histories[id] ?? { past: [], future: [] }
+    history.past = h.past; history.future = h.future
+    history.batch = 0; history.batchRecorded = false
+    history.restoring = true
+    set({
+      models, activeModelId: id,
+      nodes: models[id].nodes, links: models[id].links, actors: models[id].actors,
+      selectedId: null, selectedType: null, selectedIds: [], selectedActorId: null,
+      editingActorId: null, editingActorTag: null, focusNodeId: null, focusDeep: false,
+      pendingLink: null, connectSource: null, draggingNodeId: null, mode: 'select',
+      canUndo: h.past.length > 0, canRedo: h.future.length > 0,
+    })
+    history.restoring = false
+  },
+
+  // The "Open" button of a sub-actor box: opens its diagram, creating it the first time
+  openSubactor: (nodeId) => {
+    const s = get()
+    const node = s.nodes[nodeId]
+    if (!node || node.type !== 'subactor') return
+    if (node.linkedModelId && s.models[node.linkedModelId]) return get().switchModel(node.linkedModelId)
+    const id = crypto.randomUUID()
+    set(st => ({
+      models: { ...st.models, [id]: emptyModel(id, node.label.trim() || 'Sub-actor', { modelId: st.activeModelId, nodeId }) },
+      nodes: { ...st.nodes, [nodeId]: { ...st.nodes[nodeId], linkedModelId: id } },
+    }))
+    get().switchModel(id)
+  },
+
+  // Renaming a tab renames its sub-actor box in the parent too (and the other way round, see updateNode)
+  renameModel: (id, rawName) => {
+    const name = rawName.trim()
+    const s = get()
+    if (!name || !s.models[id] || s.models[id].name === name) return
+    const parent = s.models[id].parent
+    const relabel = (nodes) => {
+      const node = nodes[parent.nodeId]
+      if (!node) return nodes
+      const { width, height } = computeNodeSize(name, node.type, node.logo ? node.logoAspect ?? 1 : 0)
+      return { ...nodes, [parent.nodeId]: { ...node, label: name, width, height } }
+    }
+    history.restoring = true  // not an undo step of its own
+    set(st => {
+      const models = { ...st.models, [id]: { ...st.models[id], name } }
+      if (!parent) return { models }
+      if (parent.modelId === st.activeModelId) return { models, nodes: relabel(st.nodes) }
+      models[parent.modelId] = { ...models[parent.modelId], nodes: relabel(models[parent.modelId].nodes) }
+      return { models }
+    })
+    history.restoring = false
+  },
 
   // ── Diagram data ────────────────────────────────────────────────────────────
   actors: {},
@@ -106,6 +230,8 @@ const useStore = create((set, get) => ({
   hideTags: false,
   toggleHideTags: () => set(s => ({ hideTags: !s.hideTags })),
   setHideTags: (hide) => set({ hideTags: hide }),
+  filterPanelRight: null,  // x of the filter panel's right edge (scrollbar included), so the header can continue its border
+  setFilterPanelRight: (x) => set(s => s.filterPanelRight === x ? s : { filterPanelRight: x }),
   filterCardBox: null,   // { left, width } of the Filter card on screen, so the toolbar can centre the logo over it
   setFilterCardBox: (box) => set(s =>
     s.filterCardBox?.left === box.left && s.filterCardBox?.width === box.width ? s : { filterCardBox: box }),
@@ -256,7 +382,7 @@ const useStore = create((set, get) => ({
     set((s) => ({
       nodes: {
         ...s.nodes,
-        [id]: { id, type, label: '', actorId: null, x: nx, y: ny, width, height },
+        [id]: { id, type, label: '', actorId: null, x: nx, y: ny, width, height, ...(type === 'subactor' && { linkedModelId: null }) },
       },
       selectedId: id,
       selectedType: 'node',
@@ -269,12 +395,16 @@ const useStore = create((set, get) => ({
   updateNode: (id, updates) => set((s) => {
     const node = s.nodes[id]
     const merged = { ...node, ...updates }
-    if ('label' in updates) {
-      const { width, height } = computeNodeSize(updates.label, node.type)
+    if ('label' in updates || 'logo' in updates) {
+      const { width, height } = computeNodeSize(merged.label, node.type, merged.logo ? merged.logoAspect ?? 1 : 0)
       merged.width  = width
       merged.height = height
     }
-    return { nodes: { ...s.nodes, [id]: merged } }
+    // A sub-actor box and the tab it opens share their name
+    const name = 'label' in updates && node.linkedModelId && updates.label.trim()
+    const models = name && s.models[node.linkedModelId]
+      ? { ...s.models, [node.linkedModelId]: { ...s.models[node.linkedModelId], name } } : null
+    return { nodes: { ...s.nodes, [id]: merged }, ...(models && { models }) }
   }),
 
   // Whether these elements can take this actor change ({ actorId?, nestedActorIds? }, or a function giving
@@ -479,8 +609,7 @@ const useStore = create((set, get) => ({
 
   // ── Persistence ───────────────────────────────────────────────────────────────
   exportDiagram: () => {
-    const { actors, nodes, links } = get()
-    const json = JSON.stringify({ actors, nodes, links }, null, 2)
+    const json = JSON.stringify(projectData(get()), null, 2)
     const blob = new Blob([json], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -521,7 +650,7 @@ const useStore = create((set, get) => ({
       '--bg-canvas', '--bg-panel', '--bg-popup',
       '--text-1', '--text-2', '--text-3', '--text-node',
       '--border', '--border-lt', '--border-md', '--border-ck',
-      '--node-fill', '--node-stroke', '--node-text', '--link-def',
+      '--node-fill', '--node-stroke', '--node-text', '--node-text-hl', '--link-def',
       '--hl-goal', '--hl-task', '--hl-softgoal', '--hl-resource',
       '--hl-hurt', '--hl-help', '--hl-needed-by', '--hl-depends-on',
       '--hl-or', '--hl-xor', '--hl-and', '--hl-part-of',
@@ -568,14 +697,17 @@ const useStore = create((set, get) => ({
 
   importDiagram: (json) => {
     try {
-      const { actors, nodes, links } = JSON.parse(json)
+      const project = loadProject(JSON.parse(json))
+      for (const k of Object.keys(histories)) delete histories[k]
+      history.past = []; history.future = []
+      history.restoring = true
       set({
-        actors: actors || {},
-        nodes:  nodes  || {},
-        links:  links  || {},
+        ...project,
         selectedId: null, selectedType: null, selectedIds: [], selectedActorId: null, mode: 'select',
-        connectSource: null, pendingLink: null,
+        connectSource: null, pendingLink: null, focusNodeId: null, focusDeep: false,
+        editingActorId: null, editingActorTag: null, canUndo: false, canRedo: false,
       })
+      history.restoring = false
     } catch (e) {
       console.error('Import failed', e)
     }
@@ -585,13 +717,10 @@ const useStore = create((set, get) => ({
     const saved = localStorage.getItem('istar-diagram')
     if (!saved) return
     try {
-      const { actors, nodes, links } = JSON.parse(saved)
-      const resizedNodes = {}
-      for (const [id, node] of Object.entries(nodes || {})) {
-        const { width, height } = computeNodeSize(node.label, node.type)
-        resizedNodes[id] = { ...node, width, height }
-      }
-      set({ actors: actors || {}, nodes: resizedNodes, links: links || {} })
+      const project = loadProject(JSON.parse(saved))
+      history.restoring = true  // loading isn't an undo step
+      set(project)
+      history.restoring = false
     } catch (_) {}
   },
 }))
@@ -631,9 +760,7 @@ useStore.subscribe((s, prev) => {
 })
 
 useStore.subscribe((s) => {
-  localStorage.setItem('istar-diagram', JSON.stringify({
-    actors: s.actors, nodes: s.nodes, links: s.links,
-  }))
+  localStorage.setItem('istar-diagram', JSON.stringify(projectData(s)))
 })
 
 export default useStore

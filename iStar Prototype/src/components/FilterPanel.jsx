@@ -6,7 +6,7 @@ import { upstreamLayerCount } from '../utils/dependencies.js'
 import { useT } from '../i18n.js'
 import { actorLayout } from '../utils/actorTree.js'
 
-const NODE_TYPES = ['goal', 'task', 'softgoal', 'resource']
+const NODE_TYPES = ['goal', 'task', 'softgoal', 'resource', 'subactor']
 const LINK_TYPES = ['depends-on', 'or', 'xor', 'and', 'help', 'hurt', 'make', 'break', 'needed-by', 'part-of']
 const ACTOR_TYPES = ['actor']
 
@@ -139,6 +139,12 @@ export default function FilterPanel() {
     window.addEventListener('resize', publish)
     return () => { ro.disconnect(); window.removeEventListener('resize', publish) }
   }, [filterCardEl, setFilterCardBox])
+
+  // Share where the panel ends (its scrollbar strip included) so the header can carry the line on
+  const setFilterPanelRight = useStore(s => s.setFilterPanelRight)
+  useEffect(() => {
+    if (panelEl) setFilterPanelRight(panelEl.getBoundingClientRect().right)
+  }, [panelEl, panelWidth, setFilterPanelRight])
 
   return (
     <>

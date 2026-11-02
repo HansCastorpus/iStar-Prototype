@@ -589,7 +589,7 @@ export function computeAllPaths(nodes, linkSlots, links) {
   }
   for (const link of linkList) {
     const pts = pathMap[link.id]
-    if (pts) pathMap[link.id] = snapTargetToTask(snapStartToShape(pts, nodes[link.sourceId]), nodes[link.targetId])
+    if (pts) pathMap[link.id] = snapStartToShape(pts, nodes[link.sourceId])
   }
   return pathMap
 }
@@ -640,24 +640,6 @@ function snapStartToShape(pts, src) {
   if (pts.length < 2) return pts
   const out = [...pts]
   out[0] = snapEnd(src, pts[0], pts[1])
-  return out
-}
-
-// ...except at a task, whose cut-in points leave a gap in front of an off-centre arrowhead (and the
-// thicker highlighted link then pokes out past the outline): there the arrival end follows the outline
-// too, and goes TASK_END_OVERLAP px further in so it sits inside the shape.
-const TASK_END_OVERLAP = 3
-function snapTargetToTask(pts, tgt) {
-  if (pts.length < 2 || tgt?.type !== 'task') return pts
-  const out = [...pts]
-  const end = pts[pts.length - 1], prev = pts[pts.length - 2]
-  const snapped = snapEnd(tgt, end, prev)
-  const len = Math.hypot(end.x - prev.x, end.y - prev.y)
-  // bottom ports (under the type badge) are left alone, like in snapEnd
-  const atBottom = Math.abs(end.y - (tgt.y + tgt.height)) < 0.5 && Math.abs(end.x - prev.x) < 0.5
-  if (!len || atBottom) return pts
-  const k = TASK_END_OVERLAP / len
-  out[out.length - 1] = { x: snapped.x + (end.x - prev.x) * k, y: snapped.y + (end.y - prev.y) * k }
   return out
 }
 

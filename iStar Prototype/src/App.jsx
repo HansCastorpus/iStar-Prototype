@@ -1,15 +1,22 @@
 import { useEffect } from 'react'
 import Canvas from './components/Canvas.jsx'
-import Toolbar from './components/Toolbar.jsx'
+import Toolbar, { Logo } from './components/Toolbar.jsx'
 import FilterPanel from './components/FilterPanel.jsx'
+import TabBar from './components/TabBar.jsx'
+import WorkTitle from './components/WorkTitle.jsx'
 import useStore from './store/useStore.js'
 
 export default function App() {
   const darkMode = useStore(s => s.darkMode)
+  const activeModelId = useStore(s => s.activeModelId)
+  const filterPanelRight = useStore(s => s.filterPanelRight)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light')
   }, [darkMode])
+
+  // Load the saved project once (not per diagram: the canvas is remounted when another diagram opens)
+  useEffect(() => { useStore.getState().loadFromStorage() }, [])
 
   const lang = useStore(s => s.lang)
   useEffect(() => { document.documentElement.lang = lang }, [lang])
@@ -31,11 +38,28 @@ export default function App() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
-      <Toolbar />
+      {/* Header: the logo has one container over the filter panel, spanning both rows; the toolbar and
+          tab bar stack to its right */}
+      <div style={{ display: 'flex', flexShrink: 0 }}>
+        <div style={{
+          width: filterPanelRight ?? 300, flexShrink: 0, boxSizing: 'border-box',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '8px 16px', background: 'var(--bg-panel)',
+          borderRight: '1px solid var(--border)', borderBottom: '1px solid var(--border)',
+        }}>
+          <Logo />
+        </div>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <Toolbar />
+          <TabBar />
+        </div>
+      </div>
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
         <FilterPanel />
         <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-          <Canvas />
+          {/* keyed by the open diagram so each one starts with a fresh view (zoom / pan) */}
+          <Canvas key={activeModelId} />
+          <WorkTitle />
         </div>
       </div>
     </div>

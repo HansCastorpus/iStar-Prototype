@@ -44,12 +44,49 @@ export function wrapLabel(label, boxWidth = NODE_MAX_W, padX = NODE_PAD_X) {
   return lines
 }
 
-// Returns { width, height } for a node displaying `label`.
+// Sub-actor box (an actor that opens its own diagram): name + optional logo on top, an "Open" button below
+export const SUB_FONT       = 13
+export const SUB_PAD_X      = 14
+export const SUB_H          = 64
+export const SUB_LOGO_H     = 18    // logo height; its width follows the image, up to SUB_LOGO_MAX_W
+export const SUB_LOGO_MAX_W = 54
+export const SUB_LOGO_GAP   = 6
+export const subLogoWidth = (aspect) => Math.min(SUB_LOGO_H * aspect, SUB_LOGO_MAX_W)
+
+// Width of `text` in a sub-actor box's name font
+export function measureSub(text) {
+  const ctx = getCtx()
+  ctx.font = `600 ${SUB_FONT}px sans-serif`
+  const w = ctx.measureText(text).width
+  ctx.font = '11px sans-serif'
+  return w
+}
+
+// `text` cut with an ellipsis to fit `maxW` in a sub-actor box's name font
+export function fitSubLabel(text, maxW) {
+  if (measureSub(text) <= maxW) return text
+  let t = text
+  while (t.length > 1 && measureSub(t + '…') > maxW) t = t.slice(0, -1)
+  return t + '…'
+}
+
+// Returns { width, height } for a node displaying `label` (`logoAspect`: width / height of a sub-actor's
+// logo, 0 for none).
 // Width grows to fit the full label on one line, capped at NODE_MAX_W.
 // Once capped, text wraps and height grows instead.
-export function computeNodeSize(label, type = '') {
+export function computeNodeSize(label, type = '', logoAspect = 0) {
   const text = (label || '').trim()
   const ctx  = getCtx()
+
+  if (type === 'subactor') {
+    ctx.font = `600 ${SUB_FONT}px sans-serif`
+    const textW = ctx.measureText(text || '[sub-actor]').width
+    ctx.font = '11px sans-serif'
+    const logoW = logoAspect ? SUB_LOGO_GAP + subLogoWidth(logoAspect) : 0
+    const width = Math.min(Math.max(Math.ceil((textW + logoW + SUB_PAD_X * 2) / GRID) * GRID, GRID * 7), GRID * 13)
+    return { width, height: SUB_H }
+  }
+
   const padX = (type === 'goal' || type === 'task' || type === 'softgoal') ? GOAL_PAD_X : NODE_PAD_X
   const padY = (type === 'goal' || type === 'task' || type === 'softgoal') ? GOAL_PAD_Y : NODE_PAD_Y
 
