@@ -123,7 +123,9 @@ export default function FilterPanel() {
   const allHighlighted  = ALL_TYPES.every(t => highlightTypes.includes(t))
   const noneHighlighted = highlightTypes.length === 0 && highlightedActorIds.length === 0
 
-  const panelWidth = basePanelWidth(legendOpen) + (overflows ? SCROLLBAR_W : 0)
+  const collapsed = useStore(s => s.filterCollapsed)
+  const toggleCollapsed = useStore(s => s.toggleFilterCollapsed)
+  const panelWidth = collapsed ? COLLAPSED_W : basePanelWidth(legendOpen) + (overflows ? SCROLLBAR_W : 0)
 
   // Share the Filter card's on-screen position so the toolbar can centre the logo over it
   const [filterCardEl, setFilterCardEl] = useState(null)
@@ -158,14 +160,21 @@ export default function FilterPanel() {
       flexDirection: 'column',
       flexShrink: 0,
       // Scrolling only switches on once the panel has widened, so the scrollbar never squeezes the cards
-      overflowY: overflows ? 'auto' : 'hidden',
-      padding: 12,
+      overflowY: collapsed ? 'hidden' : overflows ? 'auto' : 'hidden',
+      padding: collapsed ? 6 : 12,
       gap: 12,
     }}>
+      {collapsed && (
+        <button onClick={toggleCollapsed} title={t('filter.expand')} aria-label={t('filter.expand')}
+          style={collapseBtn}>»</button>
+      )}
       {/* Filter container */}
+      {!collapsed && <>
       <div ref={setFilterCardEl} style={cardStyle}>
-        <div style={cardTitle}>
+        <div style={{ ...cardTitle, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {t('filter.title')}
+          <button onClick={toggleCollapsed} title={t('filter.collapse')} aria-label={t('filter.collapse')}
+            style={collapseBtn}>«</button>
         </div>
 
         {/* Legend button */}
@@ -268,9 +277,9 @@ export default function FilterPanel() {
           </div>
         )}
       </div>
-
+      </>}
     </div>
-    {actorPanelOpen && <ActorPanel left={panelWidth} onClose={() => setActorPanelOpen(false)} />}
+    {actorPanelOpen && !collapsed && <ActorPanel left={panelWidth} onClose={() => setActorPanelOpen(false)} />}
     </>
   )
 }
@@ -508,6 +517,12 @@ const cardStyle = {
 
 const infoText = {
   fontSize: 10, color: 'var(--text-2)', fontFamily: 'monospace', lineHeight: 1.5, marginBottom: 6,
+}
+
+const COLLAPSED_W = 44
+const collapseBtn = {
+  background: 'var(--node-fill)', color: 'var(--text-1)', border: '1px solid var(--border-md)',
+  width: 28, height: 24, padding: 0, cursor: 'pointer', fontSize: 14, fontFamily: 'monospace', lineHeight: 1,
 }
 
 const cardTitle = {

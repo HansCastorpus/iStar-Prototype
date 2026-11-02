@@ -195,22 +195,13 @@ const LINK_DEFS = [
 
 export const LEGEND_W = SW   // width reserved for a legend icon in the filter panel
 
-// Actor sample: dashed boundary with a name tag; highlighted adds the striped fill (see Actor.jsx)
+// Actor sample: dashed boundary with a name tag; highlighted gets a solid, heavier boundary (see Actor.jsx)
 const AW = 48, AH_ = 22
 function ActorIcon({ highlighted }) {
-  const id = `legend-actor-stripes-${highlighted ? 'hl' : 'in'}`
   return (
     <svg width={AW} height={AH_} viewBox={`0 0 ${AW} ${AH_}`} style={{ flexShrink: 0, overflow: 'visible' }}>
-      {highlighted && (
-        <defs>
-          <pattern id={id} patternUnits="userSpaceOnUse" width={5} height={5} patternTransform="rotate(45)">
-            <rect width={5} height={5} fill="var(--actor-hl-fill)" />
-            <line x1={2.5} y1={0} x2={2.5} y2={5} stroke="var(--actor-hl-stripe)" strokeWidth={2} />
-          </pattern>
-        </defs>
-      )}
       <rect x={8.5} y={5.5} width={AW - 9} height={AH_ - 6} rx={4}
-        fill={highlighted ? `url(#${id})` : 'none'}
+        fill="none"
         stroke={highlighted ? 'var(--node-stroke)' : 'var(--text-3)'} strokeWidth={highlighted ? 1.5 : 1}
         strokeDasharray={highlighted ? undefined : '3 2'} />
       <rect x={0.5} y={0.5} width={18} height={9} rx={3}

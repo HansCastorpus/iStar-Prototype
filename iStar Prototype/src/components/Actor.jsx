@@ -1,7 +1,7 @@
 import { useRef, useMemo, useEffect } from 'react'
 import useStore from '../store/useStore.js'
 import {
-  actorLayout, actorNames, octilinearHull, inActor, topCenterOf, tagTextSize, LOGO_GAP,
+  actorLayout, actorNames, octilinearHull, inActor, chainOf, topCenterOf, tagTextSize, LOGO_GAP,
   extentsOf, hullsSeparated, logoSize, tagHeight,
   LINE_LEN, tagFontSize,
 } from '../utils/actorTree.js'
@@ -10,7 +10,6 @@ import { upstreamSet, focusLayers } from '../utils/dependencies.js'
 const LABEL_RADIUS = 6
 const TAG_SLIDE_STEP = 24  // a nested tag slides along its top edge in steps of this much
 const TAG_CLEARANCE = 8    // least space between a name tag and its actor's area
-const STRIPE_GAP = 8       // spacing of the diagonal stripes in the highlight fill
 
 function buildHullPath(verts, r = 15) {
   const n = verts.length
@@ -74,8 +73,6 @@ function nameTag(name, logo, highlighted, nested, anchorCorner, lineDir, hullExt
 // Background of an actor's zone. With nothing nested it is the plain --actor-bg. In a nesting the deepest
 // actor is --actor-bg-light and each level out is mixed further towards --actor-bg-deep: a tree of 1
 // level steps by 75%; deeper trees spread up to a full 100% over their levels.
-const HL_TONE = 12      // % the highlighted background is pulled towards the blue-grey --actor-hl-tone
-const STRIPE_TINT = 20  // % the highlight stripes are pulled towards --actor-hl-stripe-mix (darker, in the light theme)
 const SHADE_STEP = 75
 function backgroundShade({ depth, levels }) {
   if (!levels) return 'var(--actor-bg)'
@@ -242,9 +239,39 @@ export default function Actor({ actor, linkPaths = {} }) {
     useStore.getState().beginBatch()  // the whole drag is one undo step
 
     const world = clientToWorld(e.clientX, e.clientY)
-    const leadNode = useStore.getState().nodes[memberIds[0]]
+    const st = useStore.getState()
+    const leadNode = st.nodes[memberIds[0]]
+
+    // A highlighted actor drags together with every other highlighted (visible) actor
+    let groupIds = memberIds
+    const allLit = st.highlightTypes.includes('actor')
+    if (allLit || st.highlightedActorIds.includes(actor.id)) {
+      const litIds = new Set(allLit ? Object.keys(st.actors) : st.highlightedActorIds)
+      const visible = id => st.isolateTypes.includes('actor') && !st.hiddenActorIds.includes(id)
+      const group = new Set(memberIds)
+      for (const n of Object.values(st.nodes)) {
+        for (const id of litIds) if (visible(id) && inActor(n, id)) { group.add(n.id); break }
+      }
+      // Elements outside every actor that link to elements of two or more different highlighted actors
+      // (a dependum sitting between them) come along
+      if (group.size > memberIds.length) {
+        const owner = {}  // element id -> its primary actor, for the elements being moved
+        for (const id of group) owner[id] = st.nodes[id].actorId
+        for (const n of Object.values(st.nodes)) {
+          if (group.has(n.id) || chainOf(n).length) continue
+          const owners = new Set()
+          for (const l of Object.values(st.links)) {
+            const other = l.sourceId === n.id ? l.targetId : l.targetId === n.id ? l.sourceId : null
+            if (other && owner[other]) owners.add(owner[other])
+          }
+          if (owners.size >= 2) group.add(n.id)
+        }
+      }
+      groupIds = [...group]
+    }
 
     dragRef.current = {
+      groupIds,
       pointerId: e.pointerId,
       startWorld: world,
       startLead: { x: leadNode.x, y: leadNode.y },
@@ -262,7 +289,7 @@ export default function Actor({ actor, linkPaths = {} }) {
     const newLeadX = ds.startLead.x + (world.x - ds.startWorld.x)
     const newLeadY = ds.startLead.y + (world.y - ds.startWorld.y)
     if (Math.abs(newLeadX - ds.startLead.x) > 1 || Math.abs(newLeadY - ds.startLead.y) > 1) ds.hasMoved = true
-    moveNodeGroup(memberIds[0], newLeadX, newLeadY, memberIds)
+    moveNodeGroup(memberIds[0], newLeadX, newLeadY, ds.groupIds)
   }
 
   const onGroupPointerUp = (e) => {
@@ -284,11 +311,8 @@ export default function Actor({ actor, linkPaths = {} }) {
 
   // Highlighted (incl. selected): solid line matching the name tag's stroke
   const bg = backgroundShade(shade)
-  // Highlighted: the actor's own shade, pulled towards blue-grey (the stripes are drawn over this)
-  const hlBg = `color-mix(in srgb, var(--actor-hl-tone) ${HL_TONE}%, ${bg})`
   const hullStroke = isHighlighted ? 'var(--node-stroke)' : 'var(--text-3)'
   const hullStrokeW = isHighlighted ? 2 : 1
-  const stripeId = `actor-stripes-${actor.id}`
 
   return (
     <g ref={gRef}
@@ -300,18 +324,6 @@ export default function Actor({ actor, linkPaths = {} }) {
       {/* Light grey background. With nesting it gets darker towards the primary actor: the deepest
           nested actor is the lightest, each level out is darker (see backgroundShade) */}
       <path d={d} stroke="none" style={{ fill: bg, pointerEvents: 'none' }} />
-      {/* Highlighted: light fill with diagonal stripes */}
-      {isHighlighted && <>
-        <defs>
-          <pattern id={stripeId} patternUnits="userSpaceOnUse" width={STRIPE_GAP} height={STRIPE_GAP}
-            patternTransform="rotate(45)">
-            <rect width={STRIPE_GAP} height={STRIPE_GAP} style={{ fill: hlBg }} />
-            <line x1={STRIPE_GAP / 2} y1={0} x2={STRIPE_GAP / 2} y2={STRIPE_GAP} strokeWidth={3}
-              style={{ stroke: `color-mix(in srgb, var(--actor-hl-stripe-mix) ${STRIPE_TINT}%, ${hlBg})` }} />
-          </pattern>
-        </defs>
-        <path d={d} fill={`url(#${stripeId})`} stroke="none" style={{ pointerEvents: 'none' }} />
-      </>}
       {/* Wide invisible hit area on the hull outline */}
       <path
         d={d} fill="none" stroke="transparent" strokeWidth={14}

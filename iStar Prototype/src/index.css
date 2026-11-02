@@ -29,11 +29,11 @@ button:hover:not(:disabled) {
   --node-text-hl: #222;  /* label on a highlighted (filled) element */
   --link-def:   #555;
   /* node highlight fills */
-  --hl-goal:      #E2C29C;
-  --hl-task:      #A2BBD9;
-  --hl-softgoal:  #EBC2AD;
-  --hl-resource:  #AFD2AF;
-  --hl-subactor:  #cdd8ea;
+  --hl-goal:      #F0E1CD;
+  --hl-task:      #D0DDEC;
+  --hl-softgoal:  #F5E1D6;
+  --hl-resource:  #D7E8D7;
+  --hl-subactor:  #ffffff;
   /* link highlight colors */
   --hl-hurt:      #EE3131;
   --hl-help:      #457DF5;

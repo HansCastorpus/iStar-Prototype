@@ -4,7 +4,7 @@ import { upstreamSet, focusLayers } from '../utils/dependencies.js'
 import { inActor } from '../utils/actorTree.js'
 import { useT } from '../i18n.js'
 import {
-  wrapLabel, NODE_LINE_H, NODE_BADGE_H, NODE_PAD_X, GOAL_PAD_X, TASK_TIP_X,
+  wrapLabel, NODE_LINE_H, NODE_BADGE_H, NODE_PAD_X, NODE_FONT, nodePadXFor, TASK_TIP_X,
   SUB_FONT, SUB_PAD_X, SUB_LOGO_H, SUB_LOGO_GAP, subLogoWidth, measureSub, fitSubLabel,
 } from '../utils/grid.js'
 
@@ -162,8 +162,12 @@ export default function Node({ node }) {
   }
 
   const { stroke } = NODE_TYPES[node.type] ?? NODE_TYPES.goal
+  // Highlighted body: slightly thicker outline in a darker shade of its own fill
+  const hlStroke = `color-mix(in srgb, ${hlFill} 75%, black)`
+  const bodyStroke = accent ?? (isFillHighlighted ? hlStroke : stroke)
+  const bodyStrokeW = (base) => accent ? 2 : isFillHighlighted ? 2 : base
 
-  const nodePadX = (node.type === 'goal' || node.type === 'task' || node.type === 'softgoal') ? GOAL_PAD_X : NODE_PAD_X
+  const nodePadX = nodePadXFor(node.type)
   const lines = wrapLabel(node.label || `[${typeName}]`, node.width, nodePadX)
   const cx = node.width / 2
   const textAreaH = node.height - NODE_BADGE_H / 2
@@ -184,7 +188,7 @@ export default function Node({ node }) {
     subBody = (
       <>
         <rect width={node.width} height={node.height} rx={8} fill={hlFill}
-          stroke={accent ?? stroke} strokeWidth={accent ? 2 : 1.5} />
+          stroke={bodyStroke} strokeWidth={bodyStrokeW(1.5)} />
         <text x={startX} y={rowY} dominantBaseline="central" fontSize={SUB_FONT} fontWeight={600} fontFamily="sans-serif"
           fill={isFillHighlighted ? 'var(--node-text-hl)' : 'var(--node-text)'}
           style={{ pointerEvents: 'none', userSelect: 'none' }}>{name}</text>
@@ -221,8 +225,8 @@ export default function Node({ node }) {
         <path
           d={`M ${TASK_TIP_X},0 L ${node.width - TASK_TIP_X},0 L ${node.width},${node.height / 2} L ${node.width - TASK_TIP_X},${node.height} L ${TASK_TIP_X},${node.height} L 0,${node.height / 2} Z`}
           fill={hlFill}
-          stroke={accent ?? stroke}
-          strokeWidth={accent ? 2 : 1}
+          stroke={bodyStroke}
+          strokeWidth={bodyStrokeW(1)}
         />
       ) : (
         <>
@@ -231,8 +235,8 @@ export default function Node({ node }) {
             height={node.height}
             rx={(node.type === 'goal' || node.type === 'softgoal') ? node.height / 2 : 0}
             fill={hlFill}
-            stroke={accent ?? stroke}
-            strokeWidth={accent ? 2 : 1}
+            stroke={bodyStroke}
+            strokeWidth={bodyStrokeW(1)}
           />
           {node.type === 'softgoal' && (
             <>
@@ -273,7 +277,7 @@ export default function Node({ node }) {
       {!isSub && <text
         textAnchor="middle"
         dominantBaseline="central"
-        fontSize={11}
+        fontSize={NODE_FONT}
         fontFamily="sans-serif"
         fill={isFillHighlighted ? 'var(--node-text-hl)' : 'var(--node-text)'}
         style={{ pointerEvents: 'none', userSelect: 'none' }}
@@ -298,8 +302,8 @@ export default function Node({ node }) {
         height={NODE_BADGE_H}
         rx={NODE_BADGE_H / 2}
         fill="var(--node-fill)"
-        stroke={accent ?? stroke}
-        strokeWidth={accent ? 2 : 1}
+        stroke={bodyStroke}
+        strokeWidth={bodyStrokeW(1)}
         style={{ pointerEvents: 'none' }}
       />
       <text

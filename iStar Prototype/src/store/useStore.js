@@ -227,6 +227,8 @@ const useStore = create((set, get) => ({
   toggleDarkMode: () => set(s => ({ darkMode: !s.darkMode })),
   legendOpen: true,
   toggleLegend: () => set(s => ({ legendOpen: !s.legendOpen })),
+  filterCollapsed: false,  // the left filter panel is minimised to a narrow strip
+  toggleFilterCollapsed: () => set(s => ({ filterCollapsed: !s.filterCollapsed })),
   hideTags: false,
   toggleHideTags: () => set(s => ({ hideTags: !s.hideTags })),
   setHideTags: (hide) => set({ hideTags: hide }),
@@ -614,7 +616,9 @@ const useStore = create((set, get) => ({
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'istar-diagram.json'
+    // Named after the main project (the root diagram), minus characters files can't hold
+    const base = (get().models[ROOT_MODEL]?.name ?? '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '').trim()
+    a.download = `${base || 'istar-diagram'}.json`
     a.click()
     URL.revokeObjectURL(url)
   },

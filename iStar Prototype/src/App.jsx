@@ -10,6 +10,7 @@ export default function App() {
   const darkMode = useStore(s => s.darkMode)
   const activeModelId = useStore(s => s.activeModelId)
   const filterPanelRight = useStore(s => s.filterPanelRight)
+  const filterCollapsed = useStore(s => s.filterCollapsed)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light')
@@ -44,10 +45,10 @@ export default function App() {
         <div style={{
           width: filterPanelRight ?? 300, flexShrink: 0, boxSizing: 'border-box',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: '8px 16px', background: 'var(--bg-panel)',
+          padding: filterCollapsed ? 0 : '8px 16px', background: 'var(--bg-panel)',
           borderRight: '1px solid var(--border)', borderBottom: '1px solid var(--border)',
         }}>
-          <Logo />
+          {!filterCollapsed && <Logo />}
         </div>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <Toolbar />

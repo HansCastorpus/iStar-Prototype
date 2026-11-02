@@ -8,7 +8,7 @@ export const TAG_ROOM = 55   // room above a nested actor, inside its parent, fo
 export const LINE_LEN = 15       // connector line from an actor's edge to its name tag
 export const LABEL_PAD_X = 10
 export const LABEL_PAD_Y = 6
-const FONT_SIZE_PRIMARY = 24      // name tag text size of a primary actor
+const FONT_SIZE_PRIMARY = 18     // name tag text size of a primary actor
 const FONT_SIZE_NESTED = 18       // ... and of a nested actor
 const FONT_SIZE_HL_BUMP = 1.5     // added when the actor is highlighted
 export const tagFontSize = (nested, highlighted) =>
