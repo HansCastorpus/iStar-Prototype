@@ -174,7 +174,13 @@ function buildPath(sourceNode, sourceSlot, targetNode, targetSlot, allNodes, exi
   const nodeArr = Object.values(allNodes)
   const srcId   = sourceNode.id, tgtId = targetNode.id
   const clear   = (pts) => !firstBlocker(pts, nodeArr, srcId, tgtId)
-  const score   = (pts) => countCrossings(pts, existingSegs)
+  // Each candidate is compared many times below; count its crossings once
+  const scores  = new Map()
+  const score   = (pts) => {
+    let v = scores.get(pts)
+    if (v === undefined) { v = countCrossings(pts, existingSegs); scores.set(pts, v) }
+    return v
+  }
 
   const dx = t.x - s.x, dy = t.y - s.y
   const mx = snap((s.x + t.x) / 2), my = snap((s.y + t.y) / 2)
