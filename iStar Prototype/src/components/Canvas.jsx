@@ -22,6 +22,8 @@ export default function Canvas() {
   const transformRef = useRef(transform)
   const [cursorWorld, setCursorWorld] = useState({ x: 0, y: 0 })
   const modeRef = useRef('select')
+  const zoomRef = useRef(null)
+  const fitRequest = useStore(s => s.fitRequest)
 
   const { nodes, links, actors, mode, addNode, deselect, deselectAll, clearConnect, draggingNodeId, selectedIds, selectedId, selectedType } = useStore()
 
@@ -49,9 +51,27 @@ export default function Canvas() {
       })
 
     svg.call(zoom)
+    zoomRef.current = zoom
     svg.on('dblclick.zoom', null)
     return () => svg.on('.zoom', null)
   }, [])
+
+  // Frame the whole graph, centred, on mount and whenever a project is loaded
+  useEffect(() => {
+    const { nodes: ns } = useStore.getState()
+    const list = Object.values(ns)
+    const svgEl = svgRef.current
+    if (!list.length || !svgEl || !zoomRef.current) return
+    const minX = Math.min(...list.map(n => n.x)), maxX = Math.max(...list.map(n => n.x + n.width))
+    const minY = Math.min(...list.map(n => n.y)), maxY = Math.max(...list.map(n => n.y + n.height))
+    const { width, height } = svgEl.getBoundingClientRect()
+    const margin = 80
+    const k = Math.min(1, (width - margin * 2) / (maxX - minX), (height - margin * 2) / (maxY - minY))
+    const t = d3.zoomIdentity
+      .translate(width / 2, height / 2).scale(Math.max(k, 0.1))
+      .translate(-(minX + maxX) / 2, -(minY + maxY) / 2)
+    d3.select(svgEl).call(zoomRef.current.transform, t)
+  }, [fitRequest])
 
   const screenToWorld = useCallback((cx, cy) => ({
     x: (cx - transformRef.current.x) / transformRef.current.k,

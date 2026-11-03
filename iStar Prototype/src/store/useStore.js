@@ -150,6 +150,7 @@ const useStore = create((set, get) => ({
   // ── Models (tabs) ────────────────────────────────────────────────────────────
   models: { [ROOT_MODEL]: emptyModel(ROOT_MODEL, 'Main') },
   activeModelId: ROOT_MODEL,
+  fitRequest: 0,  // bumped whenever a project is loaded, so the canvas re-frames the whole graph
 
   switchModel: (id) => {
     const s = get()
@@ -728,6 +729,7 @@ const useStore = create((set, get) => ({
         selectedId: null, selectedType: null, selectedIds: [], selectedActorId: null, mode: 'select',
         connectSource: null, pendingLink: null, focusNodeId: null, focusDeep: false,
         editingActorId: null, editingActorTag: null, canUndo: false, canRedo: false,
+        fitRequest: get().fitRequest + 1,
       })
       history.restoring = false
     } catch (e) {
@@ -741,7 +743,7 @@ const useStore = create((set, get) => ({
     try {
       const project = loadProject(JSON.parse(saved))
       history.restoring = true  // loading isn't an undo step
-      set(project)
+      set({ ...project, fitRequest: get().fitRequest + 1 })
       history.restoring = false
     } catch (_) {}
   },
