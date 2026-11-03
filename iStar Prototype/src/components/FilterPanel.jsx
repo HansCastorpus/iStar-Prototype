@@ -4,7 +4,7 @@ import useStore, { ALL_TYPES } from '../store/useStore.js'
 import { LegendIcon, LEGEND_W } from './LegendIcons.jsx'
 import { upstreamLayerCount } from '../utils/dependencies.js'
 import { useT } from '../i18n.js'
-import { actorLayout } from '../utils/actorTree.js'
+import { actorLayout, measureText } from '../utils/actorTree.js'
 
 const NODE_TYPES = ['goal', 'task', 'softgoal', 'resource', 'subactor']
 const LINK_TYPES = ['depends-on', 'or', 'xor', 'and', 'help', 'hurt', 'make', 'break', 'needed-by', 'part-of']
@@ -364,7 +364,7 @@ function TypeRow({ label, indent = 0, legendType = label, wrap = false, cols, le
       {indent > 0 && <span aria-hidden style={{ color: 'var(--text-3)', fontFamily: 'monospace', fontSize: 12, marginRight: 4, userSelect: 'none' }}>└</span>}
       <span title={label} style={{ flex: 1, minWidth: 0, fontSize: 12, fontFamily: 'monospace', color: 'var(--text-1)', userSelect: 'none', textAlign: 'left', paddingRight: 8,
         ...(wrap
-          ? { overflowWrap: 'anywhere', lineHeight: 1.35 }
+          ? { whiteSpace: 'nowrap' }
           : { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }) }}>
         {label}
       </span>
@@ -411,6 +411,10 @@ function ActorListToggle({ open, onToggle }) {
 
 const NEST_INDENT = 16  // px each nesting level is shifted right in the actor list
 const ACTOR_PANEL_W = 280
+// Everything in a row besides the name text: panel + card padding and border, the two checkbox
+// columns, zoom column, name gap, nesting arrow and scrollbar room
+const ROW_EXTRA = 24 + 24 + 2 + 56 + 56 + 32 + 8 + 16 + 16
+const LOGO_SLOT = 28
 // Narrow checkbox columns for the actor panel: just the checkbox and its small column label
 const ACTOR_COL = { width: 56, flexShrink: 0, borderLeft: '1px solid var(--border-lt)', padding: '0 2px' }
 const ACTOR_COLS = { i: ACTOR_COL, h: ACTOR_COL }
@@ -452,9 +456,13 @@ function ActorPanel({ left, onClose }) {
   }, [actors, nodes])
   const colLabel = { fontSize: 9, color: 'var(--text-3)', fontFamily: 'monospace', textAlign: 'center' }
 
+  // Wide enough that no actor name is cut or broken: the longest row decides
+  const panelW = Math.max(ACTOR_PANEL_W, ...list.map(({ actor: a, indent }) =>
+    Math.ceil(measureText(a.name || t('actors.unnamed'), '12px monospace')) + indent * NEST_INDENT + ROW_EXTRA + (a.logo ? LOGO_SLOT : 0)))
+
   return (
     <div className="panel-slide-in" style={{
-      position: 'absolute', left, top: 0, bottom: 0, width: ACTOR_PANEL_W, zIndex: 150,
+      position: 'absolute', left, top: 0, bottom: 0, width: panelW, maxWidth: `calc(100% - ${left}px)`, zIndex: 150,
       background: 'var(--bg-panel)', borderRight: '1px solid var(--border)',
       overflowY: 'auto', padding: 12,
     }}>
@@ -485,7 +493,7 @@ function ActorPanel({ left, onClose }) {
             inHighlight={actorsHighlighted || highlightedActorIds.includes(a.id)}
             onToggleI={() => toggleActorHidden(a.id)}
             onToggleH={() => toggleActorHighlight(a.id)}
-            onZoom={() => zoomToActor(a.id, ACTOR_PANEL_W)}
+            onZoom={() => zoomToActor(a.id, panelW)}
             logo={a.logo}
           />
         ))}
