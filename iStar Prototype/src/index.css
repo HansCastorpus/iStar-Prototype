@@ -30,7 +30,7 @@ button:hover:not(:disabled) {
   --link-def:   #555;
   /* node highlight fills */
   --hl-goal:      #c0d5a5;
-  --hl-task:      #bee2ee;
+  --hl-task:      #c7deff;
   --hl-softgoal:  #acba9b;
   --hl-resource:  #ffc561;
   --hl-subactor:  #ffffff;
