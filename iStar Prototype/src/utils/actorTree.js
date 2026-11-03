@@ -214,6 +214,23 @@ export function hullsSeparated(e1, e2, gap) {
   )
 }
 
+// Elements that touch an actor's area without being part of that actor: { elementId: [actorId, …] }
+export function strayElements(nodes, names = {}) {
+  const L = actorLayout(nodes, names)
+  const out = {}
+  for (const [id, pts] of Object.entries(L.points)) {
+    if (!pts.length) continue
+    const area = extentsOf(pts)
+    const memberIds = new Set(L.members[id].map(n => n.id))
+    for (const n of Object.values(nodes)) {
+      if (memberIds.has(n.id)) continue
+      const r = extentsOf([{ x: n.x, y: n.y }, { x: n.x + n.width, y: n.y }, { x: n.x, y: n.y + n.height }, { x: n.x + n.width, y: n.y + n.height }])
+      if (!hullsSeparated(r, area, 0)) (out[n.id] ??= []).push(id)
+    }
+  }
+  return out
+}
+
 // Everything wrong with the current arrangement, as a set of keys (so a change can be judged by
 // whether it adds a problem, rather than by whether any problem exists):
 //  - two actors that aren't nested in each other have areas closer than ACTOR_GAP

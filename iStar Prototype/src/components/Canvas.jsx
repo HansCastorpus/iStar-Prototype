@@ -9,7 +9,7 @@ import LinkPreview from './LinkPreview.jsx'
 import PropertyPopover from './PropertyPopover.jsx'
 import LinkTypePopup from './LinkTypePopup.jsx'
 import ActorPopover from './ActorPopover.jsx'
-import { actorLayout, inActor } from '../utils/actorTree.js'
+import { actorLayout, actorNames, strayElements, inActor } from '../utils/actorTree.js'
 import { computeLinkSlots } from '../utils/layout.js'
 import { computeAllPaths } from '../utils/routing.js'
 import { computeCrossings } from '../utils/crossings.js'
@@ -120,6 +120,7 @@ export default function Canvas() {
   const linkSlots = useMemo(() => computeLinkSlots(nodes, links), [nodes, links])
   const linkPaths = useMemo(() => computeAllPaths(nodes, linkSlots, links), [nodes, linkSlots, links])
 
+  const strays = useMemo(() => strayElements(nodes, actorNames(actors)), [nodes, actors])
   const crossings = useMemo(() => computeCrossings(links, linkPaths), [links, linkPaths])
 
   // AND-bar: group AND links by target+side, compute one spanning perpendicular
@@ -252,7 +253,7 @@ export default function Canvas() {
 
           {/* Nodes on top */}
           {Object.values(nodes).map((node) => (
-            <Node key={node.id} node={node} />
+            <Node key={node.id} node={node} strayActors={strays[node.id]} />
           ))}
 
           {/* Rubber-band preview while connecting */}

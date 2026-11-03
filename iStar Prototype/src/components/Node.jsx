@@ -31,7 +31,7 @@ function computeBestPorts(src, tgt) {
   return dy >= 0 ? { srcSide: 'bottom', tgtSide: 'top' } : { srcSide: 'top', tgtSide: 'bottom' }
 }
 
-export default function Node({ node }) {
+export default function Node({ node, strayActors }) {
   const gRef = useRef(null)
   const nodeRef = useRef(node)
   nodeRef.current = node
@@ -88,6 +88,7 @@ export default function Node({ node }) {
   const highlightTypes = useStore(s => s.highlightTypes)
   const isolateTypes = useStore(s => s.isolateTypes)
   const hideTags = useStore(s => s.hideTags)
+  const actors = useStore(s => s.actors)
   const t = useT()
   const typeName = t(`type.${node.type}`)
 
@@ -376,6 +377,16 @@ export default function Node({ node }) {
         {typeName.toUpperCase()}
       </text>
       </>}
+
+      {/* Warning: inside an actor's area without being attached to that actor */}
+      {strayActors?.length > 0 && (
+        <g transform={`translate(${node.width + 6},-6)`}>
+          <title>{t('node.stray', { actors: strayActors.map(id => actors[id]?.name).filter(Boolean).join(', ') })}</title>
+          <circle r={8} fill="#f59e0b" stroke="white" strokeWidth={1.5} />
+          <text textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={700} fontFamily="sans-serif"
+            fill="white" style={{ pointerEvents: 'none', userSelect: 'none' }}>!</text>
+        </g>
+      )}
     </g>
   )
 }
