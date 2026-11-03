@@ -351,7 +351,7 @@ function Section({ label, first, legend, types, highlightTypes, isolateTypes, on
 // legendType: which sample to show when the legend is on (null = blank space, keeps checkboxes aligned)
 // wrap: let long labels run onto several lines instead of being cut off with "…"
 // cols: { i, h } styles to use instead of the filter panel's columns (the actor panel's are narrower)
-function TypeRow({ label, indent = 0, legendType = label, wrap = false, cols, legend, inHighlight, inIsolate, onToggleH, onToggleI, onZoom }) {
+function TypeRow({ label, indent = 0, legendType = label, wrap = false, cols, legend, inHighlight, inIsolate, onToggleH, onToggleI, onZoom, logo }) {
   const t = useT()
   const panelCols = useColumns()
   const iStyle = cols?.i ?? panelCols.colI(legend)
@@ -368,6 +368,7 @@ function TypeRow({ label, indent = 0, legendType = label, wrap = false, cols, le
           : { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }) }}>
         {label}
       </span>
+      {logo && <img src={logo} alt="" style={{ width: 20, height: 20, objectFit: 'contain', flexShrink: 0, marginRight: 8 }} />}
       <div style={{ ...iStyle, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: LEGEND_GAP }}>
         <Square active={inIsolate} onClick={onToggleI} />
         {slot(false)}
@@ -485,6 +486,7 @@ function ActorPanel({ left, onClose }) {
             onToggleI={() => toggleActorHidden(a.id)}
             onToggleH={() => toggleActorHighlight(a.id)}
             onZoom={() => zoomToActor(a.id, ACTOR_PANEL_W)}
+            logo={a.logo}
           />
         ))}
       </div>
