@@ -12,6 +12,7 @@ import ActorPopover from './ActorPopover.jsx'
 import { actorLayout, inActor } from '../utils/actorTree.js'
 import { computeLinkSlots } from '../utils/layout.js'
 import { computeAllPaths } from '../utils/routing.js'
+import { computeCrossings } from '../utils/crossings.js'
 import { GRID } from '../utils/grid.js'
 
 const MIN_CLEARANCE = GRID * 2
@@ -118,6 +119,8 @@ export default function Canvas() {
 
   const linkSlots = useMemo(() => computeLinkSlots(nodes, links), [nodes, links])
   const linkPaths = useMemo(() => computeAllPaths(nodes, linkSlots, links), [nodes, linkSlots, links])
+
+  const crossings = useMemo(() => computeCrossings(links, linkPaths), [links, linkPaths])
 
   // AND-bar: group AND links by target+side, compute one spanning perpendicular
   // bar per group so multiple AND links on the same node face share a continuous line.
@@ -244,7 +247,7 @@ export default function Canvas() {
 
           {/* Links above actors */}
           {Object.values(links).map((link) => (
-            <Link key={link.id} link={link} points={linkPaths[link.id]} andBar={andBarMap[link.id]} allPaths={linkPaths} />
+            <Link key={link.id} link={link} points={linkPaths[link.id]} andBar={andBarMap[link.id]} allPaths={linkPaths} crossings={crossings[link.id]} />
           ))}
 
           {/* Nodes on top */}

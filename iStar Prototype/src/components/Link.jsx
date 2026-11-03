@@ -230,7 +230,15 @@ function SourceIcon({ type, x, y, color, sw }) {
   }
 }
 
-export default function Link({ link, points, andBar, allPaths = {} }) {
+// Where a link crosses another, the one underneath breaks off to let the top one through; when the top
+// one is highlighted it casts a shadow onto the one underneath instead.
+const GAP = 4             // clear space either side of a top link that is not highlighted
+const SHADOW_REACH = 14   // how far along the top link its shadow extends from the crossing
+const SHADOW_LAYERS = [{ grow: 12, opacity: 0.05 }, { grow: 9, opacity: 0.07 }, { grow: 6, opacity: 0.1 }, { grow: 3, opacity: 0.14 }]
+const BASE_SW = 1.5
+const SELECTED_SW = 2
+
+export default function Link({ link, points, andBar, allPaths = {}, crossings = [] }) {
   const labelRef   = useRef(null)
   const pathRef    = useRef(null)
   const headDrag   = useRef(null)
@@ -244,6 +252,20 @@ export default function Link({ link, points, andBar, allPaths = {} }) {
   const focusNodeId    = useStore(s => s.focusNodeId)
   const hideTags       = useStore(s => s.hideTags)
   const tr             = useT()  // translate (t is the tag's position along the link)
+
+  // What each crossing link looks like right now: 'h' hidden, 'n<width>' plain, 'a<width>' highlighted
+  const otherLooks = useStore(s => {
+    if (!crossings.length) return ''
+    const focusSet = s.focusNodeId ? upstreamSet(s.links, s.focusNodeId, focusLayers(s)) : null
+    return [...new Set(crossings.map(c => c.otherId))].map(id => {
+      const o = s.links[id]
+      if (!o || !s.isolateTypes.includes(o.type)) return `${id}:h`
+      const active = (s.highlightTypes.length > 0 && s.highlightTypes.includes(o.type)) ||
+        !!(focusSet && focusSet.has(o.sourceId) && focusSet.has(o.targetId))
+      const sw = active ? HIGHLIGHT_STYLES[o.type]?.sw ?? BASE_SW : s.selectedId === id ? SELECTED_SW : BASE_SW
+      return `${id}:${active ? 'a' : 'n'}${sw}`
+    }).join('|')
+  })
 
   const isHidden   = !isolateTypes.includes(link.type)
   const isFocused = useStore(s => {
@@ -278,7 +300,23 @@ export default function Link({ link, points, andBar, allPaths = {} }) {
   const isFilterActive = (highlightTypes.length > 0 && highlightTypes.includes(link.type)) || isFocused
   const hlStyle        = isFilterActive ? HIGHLIGHT_STYLES[link.type] : null
   const color          = hlStyle?.color ?? (isSelected ? '#0070f3' : 'var(--link-def)')
-  const sw             = hlStyle?.sw    ?? (isSelected ? 2 : 1.5)
+  const sw             = hlStyle?.sw    ?? (isSelected ? SELECTED_SW : BASE_SW)
+
+  // Gaps in this link where a plain link passes over it; shadows from this link onto ones beneath it
+  const looks = Object.fromEntries(otherLooks.split('|').filter(Boolean).map(e => {
+    const [id, v] = e.split(':')
+    return [id, { hidden: v === 'h', active: v[0] === 'a', sw: parseFloat(v.slice(1)) }]
+  }))
+  const gaps = crossings.filter(c => c.above && looks[c.otherId] && !looks[c.otherId].hidden && !looks[c.otherId].active)
+  const shadows = isFilterActive ? crossings.filter(c => !c.above && looks[c.otherId] && !looks[c.otherId].hidden) : []
+  const gapMaskId = `gap-${link.id}`, shadowMaskId = `shadow-${link.id}`
+  const bounds = (() => {
+    const xs = points.map(p => p.x), ys = points.map(p => p.y)
+    const m = 60
+    return { x: Math.min(...xs) - m, y: Math.min(...ys) - m, width: Math.max(...xs) - Math.min(...xs) + m * 2, height: Math.max(...ys) - Math.min(...ys) + m * 2 }
+  })()
+  const segment = (c, dir, reach) =>
+    `M${c.x - dir.x * reach},${c.y - dir.y * reach} L${c.x + dir.x * reach},${c.y + dir.y * reach}`
 
   const clientToWorld = (cx, cy) => {
     const rect = labelRef.current.ownerSVGElement.getBoundingClientRect()
@@ -386,8 +424,36 @@ export default function Link({ link, points, andBar, allPaths = {} }) {
       <path ref={pathRef} d={d} fill="none" stroke="transparent" strokeWidth={10}
         style={{ cursor: 'pointer' }} onClick={handlePathClick} />
 
+      {gaps.length > 0 && (
+        <mask id={gapMaskId} maskUnits="userSpaceOnUse" {...bounds}>
+          <rect {...bounds} fill="white" />
+          {gaps.map((c, i) => (
+            <path key={i} d={segment(c, c.otherDir, sw / 2 + 1)} stroke="black" fill="none"
+              strokeWidth={looks[c.otherId].sw + GAP * 2} />
+          ))}
+        </mask>
+      )}
+
+      {/* Shadow on the links beneath this one (clipped to them, only near the crossing) */}
+      {shadows.length > 0 && (
+        <>
+          <mask id={shadowMaskId} maskUnits="userSpaceOnUse" {...bounds}>
+            {shadows.map((c, i) => (
+              <path key={i} d={pointsToPath(allPaths[c.otherId] ?? [])} stroke="white" fill="none" strokeWidth={looks[c.otherId].sw} />
+            ))}
+          </mask>
+          <g mask={`url(#${shadowMaskId})`} style={{ pointerEvents: 'none' }}>
+            {shadows.map((c, i) => SHADOW_LAYERS.map(({ grow, opacity }) => (
+              <path key={`${i}-${grow}`} d={segment(c, c.selfDir, SHADOW_REACH)} stroke="black" strokeOpacity={opacity} fill="none"
+                strokeWidth={sw + grow * 2} />
+            )))}
+          </g>
+        </>
+      )}
+
       {/* Visible path */}
-      <path d={d} fill="none" stroke={color} strokeWidth={sw} strokeDasharray={hlStyle?.dash} />
+      <path d={d} fill="none" stroke={color} strokeWidth={sw} strokeDasharray={hlStyle?.dash}
+        mask={gaps.length > 0 ? `url(#${gapMaskId})` : undefined} />
 
       {/* Target end: triangle + icon */}
       {endArrow && (
