@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { GRID, snap, computeNodeSize } from '../utils/grid.js'
 import { getUsedOffsets, getNextSlot } from '../utils/ports.js'
+import { buildAnalysis } from '../utils/analysisExport.js'
 import { chainOf, layoutIssues, addsIssue, actorNames } from '../utils/actorTree.js'
 
 const MIN_CLEARANCE = GRID * 2
@@ -640,6 +641,19 @@ const useStore = create((set, get) => ({
     // Named after the main project (the root diagram), minus characters files can't hold
     const base = (get().models[ROOT_MODEL]?.name ?? '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '').trim()
     a.download = `${base || 'istar-diagram'}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  },
+
+  // A readable, layout-free version of the project for analysis (by a person or an AI agent)
+  exportForAnalysis: () => {
+    const project = projectData(get())
+    const analysis = buildAnalysis(project, reachableModels(project.models))
+    const url = URL.createObjectURL(new Blob([JSON.stringify(analysis, null, 2)], { type: 'application/json' }))
+    const a = document.createElement('a')
+    a.href = url
+    const base = (get().models[ROOT_MODEL]?.name ?? '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '').trim()
+    a.download = `${base || 'istar-diagram'} - analysis.json`
     a.click()
     URL.revokeObjectURL(url)
   },

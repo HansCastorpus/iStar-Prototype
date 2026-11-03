@@ -225,7 +225,7 @@ fr: [
 }
 
 export default function Toolbar() {
-  const { mode, setMode, exportDiagram, importDiagram, clearDiagram, exportAsImage, darkMode, toggleDarkMode } = useStore()
+  const { mode, setMode, exportDiagram, exportForAnalysis, importDiagram, clearDiagram, exportAsImage, darkMode, toggleDarkMode } = useStore()
   const lang = useStore(s => s.lang)
   const setLang = useStore(s => s.setLang)
   const t = useT()
@@ -399,6 +399,7 @@ export default function Toolbar() {
       {/* Export / Import */}
       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
         <button onClick={exportDiagram} style={actionBtn}>{t('toolbar.exportJson')}</button>
+        <button onClick={exportForAnalysis} style={actionBtn}>{t('toolbar.exportAnalysis')}</button>
         <button onClick={() => exportAsImage('png')} style={actionBtn}>PNG</button>
         <button onClick={() => exportAsImage('jpeg')} style={actionBtn}>JPEG</button>
         <button onClick={() => fileRef.current.click()} style={actionBtn}>{t('toolbar.import')}</button>
