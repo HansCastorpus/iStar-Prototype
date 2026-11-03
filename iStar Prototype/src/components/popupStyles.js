@@ -50,12 +50,12 @@ export const toggleBtnStyle = {
   padding: '2px 8px',
   cursor: 'pointer',
   fontSize: 11,
-  fontFamily: 'monospace',
+  fontFamily: 'Roboto Mono, monospace',
   lineHeight: 1.3,
 }
 
 export const summaryStyle = {
-  fontSize: 13, color: 'var(--text-1)', fontFamily: 'monospace',
+  fontSize: 13, color: 'var(--text-1)', fontFamily: 'Roboto Mono, monospace',
   maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
 }
 
@@ -84,5 +84,5 @@ export const btnStyle = (color) => ({
   padding: '4px 10px',
   cursor: 'pointer',
   fontSize: 12,
-  fontFamily: 'monospace',
+  fontFamily: 'Roboto Mono, monospace',
 })

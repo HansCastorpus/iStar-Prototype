@@ -57,6 +57,7 @@ export function buildAnalysis(project, models) {
       links: Object.values(m.links)
         .filter(l => refOf[l.sourceId] && refOf[l.targetId])
         .map(l => ({
+          key: l.id,
           type: l.type,
           from: refOf[l.sourceId],
           to: refOf[l.targetId],
@@ -71,29 +72,51 @@ export function buildAnalysis(project, models) {
       'Links are directed: "from" is where the link starts and "to" is where its arrowhead points. ' +
       "An element's `actor` is its main actor; `nestedActors` are actors nested inside it, outermost first. " +
       'Element ids (e1, e2, …) are only meaningful within their own diagram. Layout and images are left out. ' +
-      '`key` fields identify diagrams and elements when the file is imported back; the only thing that import reads is each element\'s `text`.',
+      '`key` fields identify diagrams and elements when the file is imported back; import reads only an element\'s `text` and `type` and a link\'s `type`; everything else is ignored.',
     elementTypes: ELEMENT_TYPES,
     linkTypes: LINK_TYPES,
     diagrams,
   }
 }
 
-// Apply edited `text` values from an analysis file back onto elements, matched by `key` (and type).
-// Nothing else in the file is read. → { updates: [{ modelId, nodeId, text }], skipped } or { error }
-export function readTextEdits(json, models) {
+// Read the edits in an analysis file: an element's `text` and `type`, and a link's `type`, matched by `key`.
+// Nothing else in the file is read, so nothing can be added, removed, moved or re-routed.
+// → { nodes: [{ modelId, nodeId, text?, type? }], links: [{ modelId, linkId, type }], skipped } or { error }
+const EDITABLE_ELEMENT_TYPES = ['goal', 'task', 'softgoal', 'resource']  // sub-actor boxes are tied to a diagram
+export function readEdits(json, models) {
   let data
   try { data = JSON.parse(json) } catch { return { error: 'notJson' } }
   if (data?.format !== 'istar-analysis' || !Array.isArray(data.diagrams)) return { error: 'notAnalysis' }
-  const updates = []
-  let skipped = 0
+  const nodes = [], links = []
+  // Why entries were ignored: no `key` in the entry (an older export), a key that matches nothing in this
+  // project, a sub-actor box, or a type that isn't allowed
+  const skipped = { noKey: 0, unknown: 0, subactor: 0, badType: 0 }
   for (const d of data.diagrams) {
-    const nodes = models[d?.key]?.nodes
+    const model = models[d?.key]
     for (const e of d?.elements ?? []) {
-      const node = nodes?.[e?.key]
-      if (!node || node.type !== e.type || node.type === 'subactor' || typeof e.text !== 'string') { skipped++; continue }
-      const text = e.text.replace(/\s+/g, ' ').trim()
-      if (text !== (node.label ?? '').trim()) updates.push({ modelId: d.key, nodeId: node.id, text })
+      if (!e?.key) { skipped.noKey++; continue }
+      const node = model?.nodes?.[e.key]
+      if (!node) { skipped.unknown++; continue }
+      if (node.type === 'subactor') { if (e.type !== node.type || (typeof e.text === 'string' && e.text.trim() !== (node.label ?? '').trim())) skipped.subactor++; continue }
+      const edit = {}
+      if (typeof e.text === 'string') {
+        const text = e.text.replace(/\s+/g, ' ').trim()
+        if (text !== (node.label ?? '').trim()) edit.text = text
+      }
+      if (e.type !== node.type) {
+        if (EDITABLE_ELEMENT_TYPES.includes(e.type)) edit.type = e.type
+        else skipped.badType++
+      }
+      if (Object.keys(edit).length) nodes.push({ modelId: d.key, nodeId: node.id, ...edit })
+    }
+    for (const l of d?.links ?? []) {
+      if (!l?.key) { skipped.noKey++; continue }
+      const link = model?.links?.[l.key]
+      if (!link) { skipped.unknown++; continue }
+      if (l.type === link.type) continue
+      if (Object.hasOwn(LINK_TYPES, l.type)) links.push({ modelId: d.key, linkId: link.id, type: l.type })
+      else skipped.badType++
     }
   }
-  return { updates, skipped }
+  return { nodes, links, skipped }
 }

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { GRID, snap, computeNodeSize } from '../utils/grid.js'
 import { getUsedOffsets, getNextSlot } from '../utils/ports.js'
-import { buildAnalysis, readTextEdits } from '../utils/analysisExport.js'
+import { buildAnalysis, readEdits } from '../utils/analysisExport.js'
 import { chainOf, layoutIssues, addsIssue, actorNames } from '../utils/actorTree.js'
 
 const MIN_CLEARANCE = GRID * 2
@@ -243,6 +243,20 @@ const useStore = create((set, get) => ({
     set({ lang })
   },
   toggleDarkMode: () => set(s => ({ darkMode: !s.darkMode })),
+
+  // ── View aids (remembered between visits): a light grid, and the zone around each element that others can't enter
+  ...(() => {
+    let saved = {}
+    try { saved = JSON.parse(localStorage.getItem('istar-view')) ?? {} } catch { /* storage unavailable */ }
+    return { showGrid: !!saved.showGrid, showClearance: !!saved.showClearance }
+  })(),
+  setViewAid: (key, on) => {
+    set({ [key]: on })
+    try {
+      const { showGrid, showClearance } = get()
+      localStorage.setItem('istar-view', JSON.stringify({ showGrid, showClearance }))
+    } catch { /* storage unavailable */ }
+  },
   legendOpen: true,
   toggleLegend: () => set(s => ({ legendOpen: !s.legendOpen })),
   filterCollapsed: false,  // the left filter panel is minimised to a narrow strip
@@ -415,8 +429,8 @@ const useStore = create((set, get) => ({
   updateNode: (id, updates) => set((s) => {
     const node = s.nodes[id]
     const merged = { ...node, ...updates }
-    if ('label' in updates || 'logo' in updates) {
-      const { width, height } = computeNodeSize(merged.label, node.type, merged.logo ? merged.logoAspect ?? 1 : 0)
+    if ('label' in updates || 'logo' in updates || 'type' in updates) {
+      const { width, height } = computeNodeSize(merged.label, merged.type, merged.logo ? merged.logoAspect ?? 1 : 0)
       merged.width  = width
       merged.height = height
     }
@@ -658,34 +672,43 @@ const useStore = create((set, get) => ({
     URL.revokeObjectURL(url)
   },
 
-  // Update only the text of elements from an edited analysis file. → { error } or { updated, skipped }
-  importTexts: (json) => {
+  // Apply edits from an analysis file: element text and type, link type. Nothing else changes, and nothing is
+  // moved. → { error } or { updated, skipped }
+  importEdits: (json) => {
     const s = get()
-    const result = readTextEdits(json, withLive(s))
+    const result = readEdits(json, withLive(s))
     if (result.error) return result
-    const { updates, skipped } = result
-    const { beginBatch, endBatch, updateNode } = get()
+    const { nodes, links, skipped } = result
+    const { beginBatch, endBatch, updateNode, updateLink } = get()
     beginBatch()  // the open diagram's changes are one undo step
     const others = {}
-    for (const u of updates) {
-      if (u.modelId === s.activeModelId) updateNode(u.nodeId, { label: u.text })
-      else (others[u.modelId] ??= []).push(u)
+    const other = (modelId) => (others[modelId] ??= { nodes: [], links: [] })
+    for (const u of nodes) {
+      if (u.modelId === s.activeModelId) updateNode(u.nodeId, { ...('text' in u && { label: u.text }), ...('type' in u && { type: u.type }) })
+      else other(u.modelId).nodes.push(u)
+    }
+    for (const u of links) {
+      if (u.modelId === s.activeModelId) updateLink(u.linkId, { type: u.type })
+      else other(u.modelId).links.push(u)
     }
     endBatch()
     for (const [modelId, list] of Object.entries(others)) {
       history.restoring = true  // other diagrams aren't part of the open diagram's undo history
       set(st => {
-        const nodes = { ...st.models[modelId].nodes }
-        for (const { nodeId, text } of list) {
-          const n = nodes[nodeId]
-          const { width, height } = computeNodeSize(text, n.type, n.logo ? n.logoAspect ?? 1 : 0)
-          nodes[nodeId] = { ...n, label: text, width, height }
+        const m = st.models[modelId]
+        const ns = { ...m.nodes }, ls = { ...m.links }
+        for (const u of list.nodes) {
+          const n = ns[u.nodeId]
+          const merged = { ...n, ...('text' in u && { label: u.text }), ...('type' in u && { type: u.type }) }
+          const { width, height } = computeNodeSize(merged.label, merged.type, merged.logo ? merged.logoAspect ?? 1 : 0)
+          ns[u.nodeId] = { ...merged, width, height }
         }
-        return { models: { ...st.models, [modelId]: { ...st.models[modelId], nodes } } }
+        for (const u of list.links) ls[u.linkId] = { ...ls[u.linkId], type: u.type }
+        return { models: { ...st.models, [modelId]: { ...m, nodes: ns, links: ls } } }
       })
       history.restoring = false
     }
-    return { updated: updates.length, skipped }
+    return { updated: nodes.length + links.length, skipped }  // skipped: counts by reason, see readEdits
   },
 
   exportAsImage: (format = 'png') => {
@@ -710,6 +733,7 @@ const useStore = create((set, get) => ({
     // those percentages have no containing block and collapse the SVG to 0×0.
     clone.removeAttribute('style')
     clone.querySelector('.canvas-bg')?.remove()
+    clone.querySelectorAll('[data-view-aid]').forEach(el => el.remove())  // grid and clearance zones aren't part of the diagram
     const zoomG = clone.querySelector('g')
     if (zoomG) zoomG.removeAttribute('transform')
 

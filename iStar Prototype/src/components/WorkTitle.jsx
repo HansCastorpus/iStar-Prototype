@@ -18,7 +18,7 @@ export default function WorkTitle() {
 
   const style = {
     position: 'absolute', top: 12, left: 16, zIndex: 5, maxWidth: '60%',
-    font: '700 22px monospace', color: 'var(--text-title)', margin: 0,
+    font: '700 22px Roboto Mono, monospace', color: 'var(--text-title)', margin: 0,
   }
 
   if (text != null) {

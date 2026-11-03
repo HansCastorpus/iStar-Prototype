@@ -25,13 +25,13 @@ function Tabs() {
   }
 
   return (
-    <div role="tablist" style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', minWidth: 0, fontFamily: 'monospace' }}>
+    <div role="tablist" style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', minWidth: 0, fontFamily: 'Roboto Mono, monospace' }}>
       {tabs.map(({ id, name, depth }) => {
         const active = id === activeId
         // Buttons like the header's: the open diagram is filled, like the selected mode
         const style = {
           display: 'flex', alignItems: 'center', gap: 4, padding: '5px 14px', cursor: 'pointer', whiteSpace: 'nowrap',
-          fontSize: 13, fontFamily: 'monospace', flexShrink: 0,
+          fontSize: 13, fontFamily: 'Roboto Mono, monospace', flexShrink: 0,
           border: '1px solid var(--border-md)',
           background: active ? 'var(--text-1)' : 'none',
           color: active ? 'var(--bg-popup)' : 'var(--text-1)',
@@ -69,7 +69,7 @@ function Path() {
   if (path.length < 2) return null
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-2)', fontFamily: 'monospace', whiteSpace: 'nowrap', flexShrink: 0 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-2)', fontFamily: 'Roboto Mono, monospace', whiteSpace: 'nowrap', flexShrink: 0 }}>
       <span style={{ color: 'var(--text-3)' }}>{t('tabs.path')}</span>
       {path.map((id, i) => (
         <span key={id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

@@ -71,7 +71,7 @@ export function Logo() {
   const goal = { x: 1, w: 52 }
   const res  = { x: 84, w: 62 }
   const tip = res.x, barX = tip - LOGO_ARROW_H - LOGO_ICON_GAP
-  const text = { fontSize: 12, fontFamily: 'monospace', fill: 'var(--node-text)',
+  const text = { fontSize: 12, fontFamily: 'Roboto Mono, monospace', fill: 'var(--node-text)',
     textAnchor: 'middle', dominantBaseline: 'central' }
   return (
     <svg viewBox={`0 0 ${res.x + res.w + 1} ${H}`}
@@ -280,7 +280,7 @@ function Menu({ label, active = false, align = 'left', width = 220, children }) 
           position: 'absolute', top: 'calc(100% + 4px)', [align]: 0, width, zIndex: 300,
           maxWidth: 'calc(100vw - 16px)', transform: `translateX(${shift}px)`,
           background: 'var(--bg-popup)', border: '1px solid var(--border-md)', padding: '4px 0',
-          boxShadow: '0 4px 14px rgba(0,0,0,0.15)', fontFamily: 'monospace', fontSize: 13,
+          boxShadow: '0 4px 14px rgba(0,0,0,0.15)', fontFamily: 'Roboto Mono, monospace', fontSize: 13,
         }}>
           {typeof children === 'function' ? children(() => setOpen(false)) : children}
         </div>
@@ -295,7 +295,7 @@ function MenuItem({ children, onClick, checked, danger, disabled }) {
     <button role="menuitem" onClick={onClick} disabled={disabled} style={{
       display: 'flex', alignItems: 'center', width: '100%', textAlign: 'left',
       background: 'none', border: 'none', padding: '6px 14px 6px 10px', gap: 6,
-      fontFamily: 'monospace', fontSize: 13, cursor: disabled ? 'default' : 'pointer',
+      fontFamily: 'Roboto Mono, monospace', fontSize: 13, cursor: disabled ? 'default' : 'pointer',
       color: danger ? '#c00' : disabled ? 'var(--text-3)' : 'var(--text-1)',
     }}>
       <span aria-hidden style={{ width: 12, flexShrink: 0, fontSize: 12 }}>{checked ? '✓' : ''}</span>
@@ -311,7 +311,7 @@ const Hint = ({ children }) => <span style={{ marginLeft: 'auto', paddingLeft: 1
 const MenuDivider = () => <div style={{ height: 1, background: 'var(--border-lt)', margin: '4px 0' }} />
 
 export default function Toolbar() {
-  const { mode, setMode, exportDiagram, exportForAnalysis, importTexts, importDiagram, clearDiagram, exportAsImage, darkMode, toggleDarkMode } = useStore()
+  const { mode, setMode, exportDiagram, exportForAnalysis, importEdits, importDiagram, clearDiagram, exportAsImage, darkMode, toggleDarkMode } = useStore()
   const lang = useStore(s => s.lang)
   const setLang = useStore(s => s.setLang)
   const t = useT()
@@ -319,6 +319,9 @@ export default function Toolbar() {
   const canRedo = useStore(s => s.canRedo)
   const undo = useStore(s => s.undo)
   const redo = useStore(s => s.redo)
+  const showGrid = useStore(s => s.showGrid)
+  const showClearance = useStore(s => s.showClearance)
+  const setViewAid = useStore(s => s.setViewAid)
   const fileRef  = useRef(null)
   const helpRef  = useRef(null)
   const timerRef = useRef(null)
@@ -373,9 +376,11 @@ export default function Toolbar() {
     if (!file) return
     const reader = new FileReader()
     reader.onload = (ev) => {
-      const r = importTexts(ev.target.result)
-      if (r.error) return alert(t(r.error === 'notJson' ? 'toolbar.importTextBadFile' : 'toolbar.importTextNotAnalysis'))
-      alert(t('toolbar.importTextDone', { n: r.updated, skipped: r.skipped }))
+      const r = importEdits(ev.target.result)
+      if (r.error) return alert(t(r.error === 'notJson' ? 'toolbar.importEditsBadFile' : 'toolbar.importEditsNotAnalysis'))
+      const reasons = Object.entries(r.skipped).filter(([, n]) => n > 0)
+        .map(([why, n]) => `• ${t(`toolbar.importEditsSkip.${why}`, { n })}`)
+      alert([t('toolbar.importEditsDone', { n: r.updated }), ...(reasons.length ? [t('toolbar.importEditsIgnored'), ...reasons] : [])].join('\n'))
     }
     reader.readAsText(file)
     e.target.value = ''
@@ -416,7 +421,7 @@ export default function Toolbar() {
               justifyContent: 'center',
               gap: 6,
               fontSize: 13,
-              fontFamily: 'monospace',
+              fontFamily: 'Roboto Mono, monospace',
               whiteSpace: 'nowrap',
             }}
           >
@@ -440,7 +445,7 @@ export default function Toolbar() {
               width: HELP_COL_W * helpCols,
               maxWidth: `calc(100vw - ${HELP_MARGIN * 2}px)`,
               overflow: 'hidden',
-              fontFamily: 'monospace',
+              fontFamily: 'Roboto Mono, monospace',
               fontSize: 12,
               color: 'var(--text-1)',
               lineHeight: 1.7,
@@ -485,7 +490,7 @@ export default function Toolbar() {
               padding: '5px 14px',
               cursor: 'pointer',
               fontSize: 13,
-              fontFamily: 'monospace',
+              fontFamily: 'Roboto Mono, monospace',
               whiteSpace: 'nowrap',
             }}
           >
@@ -507,7 +512,7 @@ export default function Toolbar() {
           <MenuLabel>{t('toolbar.import')}</MenuLabel>
           <MenuItem onClick={() => { fileRef.current.click(); close() }}>{t('menu.project')}</MenuItem>
           <MenuItem onClick={() => { textRef.current.click(); close() }}>
-            <span title={t('toolbar.importTextHint')}>{t('menu.textOnly')}</span>
+            <span title={t('toolbar.importEditsHint')}>{t('menu.editsOnly')}</span>
           </MenuItem>
         </>}
       </Menu>
@@ -515,7 +520,7 @@ export default function Toolbar() {
       <input ref={fileRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImport} />
       <input ref={textRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImportText} />
 
-      <Menu label={t('toolbar.options')} align="right" width={230}>
+      <Menu label={t('toolbar.options')} align="right" width={270}>
         {close => <>
           <MenuLabel>{t('toolbar.edit')}</MenuLabel>
           <MenuItem disabled={!canUndo} onClick={() => { undo(); close() }}>{t('toolbar.undoItem')}<Hint>Ctrl/⌘+Z</Hint></MenuItem>
@@ -529,6 +534,12 @@ export default function Toolbar() {
           <MenuLabel>{t('toolbar.theme')}</MenuLabel>
           <MenuItem checked={!darkMode} onClick={() => { if (darkMode) toggleDarkMode(); close() }}>{t('toolbar.themeLight')}</MenuItem>
           <MenuItem checked={darkMode} onClick={() => { if (!darkMode) toggleDarkMode(); close() }}>{t('toolbar.themeDark')}</MenuItem>
+          <MenuDivider />
+          <MenuLabel>{t('toolbar.view')}</MenuLabel>
+          <MenuItem checked={showGrid} onClick={() => setViewAid('showGrid', !showGrid)}>{t('toolbar.showGrid')}</MenuItem>
+          <MenuItem checked={showClearance} onClick={() => setViewAid('showClearance', !showClearance)}>
+            <span title={t('toolbar.showClearanceHint')}>{t('toolbar.showClearance')}</span>
+          </MenuItem>
           <MenuDivider />
           {!armed
             ? <MenuItem danger onClick={armClear}>{t('toolbar.clearCanvas')}</MenuItem>
@@ -551,5 +562,5 @@ const actionBtn = {
   padding: '5px 14px',
   cursor: 'pointer',
   fontSize: 13,
-  fontFamily: 'monospace',
+  fontFamily: 'Roboto Mono, monospace',
 }

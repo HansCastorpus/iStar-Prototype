@@ -22,7 +22,7 @@ const BTN_CHROME  = 22  // header button padding (2 × 10) + border (2)
 let measureCtx = null
 function buttonTextW(text) {
   if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d')
-  measureCtx.font = '10px monospace'
+  measureCtx.font = '10px Roboto Mono, monospace'
   return Math.ceil(measureCtx.measureText(text).width)
 }
 
@@ -192,7 +192,7 @@ export default function FilterPanel() {
               padding: '6px 10px',
               cursor: 'pointer',
               fontSize: 11,
-              fontFamily: 'monospace',
+              fontFamily: 'Roboto Mono, monospace',
               textAlign: 'left',
             }}
           >
@@ -268,7 +268,7 @@ export default function FilterPanel() {
         </button>
         {/* Current status */}
         {(!canFocus || isDirectActive || isDeepActive) && (
-          <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'monospace', marginTop: 2, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'Roboto Mono, monospace', marginTop: 2, lineHeight: 1.5 }}>
             {!canFocus
               ? t('deps.noSelection')
               : isDeepActive
@@ -293,7 +293,7 @@ function LayerStepper({ value, max, enabled, onChange }) {
   const canInc = enabled && value < max
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 2,
-      fontSize: 10, fontFamily: 'monospace', color: enabled ? 'var(--text-2)' : 'var(--text-3)' }}>
+      fontSize: 10, fontFamily: 'Roboto Mono, monospace', color: enabled ? 'var(--text-2)' : 'var(--text-3)' }}>
       <span style={{ whiteSpace: 'nowrap' }}>{t('deps.layers')}</span>
       {/* Arrow from the label to the buttons, stretching across the free space */}
       <span aria-hidden style={{ flex: 1, minWidth: 16, display: 'flex', alignItems: 'center' }}>
@@ -323,7 +323,7 @@ function StepIcon({ plus = false }) {
 
 function SectionLabel({ first, children }) {
   return (
-    <div style={{ fontSize: 12, fontWeight: 'bold', color: 'var(--text-1)', fontFamily: 'monospace', textTransform: 'uppercase', marginTop: first ? 6 : 12, marginBottom: 4,
+    <div style={{ fontSize: 12, fontWeight: 'bold', color: 'var(--text-1)', fontFamily: 'Roboto Mono, monospace', textTransform: 'uppercase', marginTop: first ? 6 : 12, marginBottom: 4,
       paddingBottom: 4, borderBottom: '1px solid var(--text-1)' }}>
       {children}
     </div>
@@ -361,8 +361,8 @@ function TypeRow({ label, indent = 0, legendType = label, wrap = false, cols, le
     : <div style={{ width: LEGEND_W, flexShrink: 0 }} />
   return (
     <div style={{ display: 'flex', alignItems: 'center', padding: '4px 0', paddingLeft: indent * NEST_INDENT }}>
-      {indent > 0 && <span aria-hidden style={{ color: 'var(--text-3)', fontFamily: 'monospace', fontSize: 12, marginRight: 4, userSelect: 'none' }}>└</span>}
-      <span title={label} style={{ flex: 1, minWidth: 0, fontSize: 12, fontFamily: 'monospace', color: 'var(--text-1)', userSelect: 'none', textAlign: 'left', paddingRight: 8,
+      {indent > 0 && <span aria-hidden style={{ color: 'var(--text-3)', fontFamily: 'Roboto Mono, monospace', fontSize: 12, marginRight: 4, userSelect: 'none' }}>└</span>}
+      <span title={label} style={{ flex: 1, minWidth: 0, fontSize: 12, fontFamily: 'Roboto Mono, monospace', color: 'var(--text-1)', userSelect: 'none', textAlign: 'left', paddingRight: 8,
         ...(wrap
           ? { whiteSpace: 'nowrap' }
           : { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }) }}>
@@ -454,11 +454,11 @@ function ActorPanel({ left, onClose }) {
     for (const r of roots.sort(byName)) walk(r, 0, new Set())
     return out
   }, [actors, nodes])
-  const colLabel = { fontSize: 9, color: 'var(--text-3)', fontFamily: 'monospace', textAlign: 'center' }
+  const colLabel = { fontSize: 9, color: 'var(--text-3)', fontFamily: 'Roboto Mono, monospace', textAlign: 'center' }
 
   // Wide enough that no actor name is cut or broken: the longest row decides
   const panelW = Math.max(ACTOR_PANEL_W, ...list.map(({ actor: a, indent }) =>
-    Math.ceil(measureText(a.name || t('actors.unnamed'), '12px monospace')) + indent * NEST_INDENT + ROW_EXTRA + (a.logo ? LOGO_SLOT : 0)))
+    Math.ceil(measureText(a.name || t('actors.unnamed'), '12px Roboto Mono, monospace')) + indent * NEST_INDENT + ROW_EXTRA + (a.logo ? LOGO_SLOT : 0)))
 
   return (
     <div className="panel-slide-in" style={{
@@ -484,7 +484,7 @@ function ActorPanel({ left, onClose }) {
         </div>
 
         {list.length === 0 && (
-          <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'monospace', padding: '6px 0' }}>{t('actors.none')}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'Roboto Mono, monospace', padding: '6px 0' }}>{t('actors.none')}</div>
         )}
         {list.map(({ actor: a, indent }) => (
           <TypeRow
@@ -543,17 +543,17 @@ const cardStyle = {
 }
 
 const infoText = {
-  fontSize: 10, color: 'var(--text-2)', fontFamily: 'monospace', lineHeight: 1.5, marginBottom: 6,
+  fontSize: 10, color: 'var(--text-2)', fontFamily: 'Roboto Mono, monospace', lineHeight: 1.5, marginBottom: 6,
 }
 
 const COLLAPSED_W = 44
 const collapseBtn = {
   background: 'var(--node-fill)', color: 'var(--text-1)', border: '1px solid var(--border-md)',
-  width: 28, height: 24, padding: 0, cursor: 'pointer', fontSize: 14, fontFamily: 'monospace', lineHeight: 1,
+  width: 28, height: 24, padding: 0, cursor: 'pointer', fontSize: 14, fontFamily: 'Roboto Mono, monospace', lineHeight: 1,
 }
 
 const cardTitle = {
-  fontSize: 13, fontWeight: 'bold', color: 'var(--text-1)', fontFamily: 'monospace', textTransform: 'uppercase', marginBottom: 6,
+  fontSize: 13, fontWeight: 'bold', color: 'var(--text-1)', fontFamily: 'Roboto Mono, monospace', textTransform: 'uppercase', marginBottom: 6,
 }
 
 const colBtn = {
@@ -563,7 +563,7 @@ const colBtn = {
   padding: '6px 10px',
   cursor: 'pointer',
   fontSize: 10,
-  fontFamily: 'monospace',
+  fontFamily: 'Roboto Mono, monospace',
   color: 'var(--text-1)',
   textAlign: 'center',
   whiteSpace: 'nowrap',

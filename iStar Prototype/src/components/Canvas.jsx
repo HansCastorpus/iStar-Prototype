@@ -27,6 +27,8 @@ export default function Canvas() {
   const fitRequest = useStore(s => s.fitRequest)
   const zoomRequest = useStore(s => s.zoomRequest)
 
+  const showGrid = useStore(s => s.showGrid)
+  const showClearance = useStore(s => s.showClearance)
   const { nodes, links, actors, mode, addNode, deselect, deselectAll, clearConnect, draggingNodeId, selectedIds, selectedId, selectedType } = useStore()
 
   // Keep refs in sync with reactive values.
@@ -188,24 +190,17 @@ export default function Canvas() {
           width="100000" height="100000" fill="transparent" />
 
         <g transform={`translate(${x},${y}) scale(${k})`}>
-          {/* Clearance outlines — visible only while dragging a node */}
-          {draggingNodeId && Object.values(nodes)
-            .filter(n => n.id !== draggingNodeId && !selectedIds.includes(n.id))
-            .map(n => (
-              <rect
-                key={n.id}
-                x={n.x - MIN_CLEARANCE}
-                y={n.y - MIN_CLEARANCE}
-                width={n.width  + MIN_CLEARANCE * 2}
-                height={n.height + MIN_CLEARANCE * 2}
-                fill="none"
-                stroke="#94a3b8"
-                strokeWidth={1}
-                strokeDasharray="5 3"
-                style={{ pointerEvents: 'none' }}
-              />
-            ))
-          }
+          {/* Light grid (a view aid); skipped when zoomed out so far that the lines would just be a smear */}
+          {showGrid && k * GRID >= 6 && (
+            <g data-view-aid style={{ pointerEvents: 'none' }}>
+              <defs>
+                <pattern id="view-grid" width={GRID} height={GRID} patternUnits="userSpaceOnUse">
+                  <path d={`M ${GRID} 0 L 0 0 0 ${GRID}`} fill="none" stroke="var(--grid-line)" strokeWidth={1 / k} />
+                </pattern>
+              </defs>
+              <rect x="-50000" y="-50000" width="100000" height="100000" fill="url(#view-grid)" />
+            </g>
+          )}
 
           {/* Port zone overlay — hidden; keep for debugging (re-enable by removing `false &&`) */}
           {false && selectedType === 'node' && selectedId && nodes[selectedId] && (() => {
@@ -245,6 +240,27 @@ export default function Canvas() {
           })().map((actor) => (
             <Actor key={actor.id} actor={actor} linkPaths={linkPaths} />
           ))}
+
+          {/* Clearance outlines — the zone no other element may enter; always shown when switched on in
+              Options, otherwise only while dragging a node */}
+          {(showClearance || draggingNodeId) && Object.values(nodes)
+            .filter(n => showClearance || (n.id !== draggingNodeId && !selectedIds.includes(n.id)))
+            .map(n => (
+              <rect
+                key={n.id}
+                data-view-aid
+                x={n.x - MIN_CLEARANCE}
+                y={n.y - MIN_CLEARANCE}
+                width={n.width  + MIN_CLEARANCE * 2}
+                height={n.height + MIN_CLEARANCE * 2}
+                fill="none"
+                stroke="#94a3b8"
+                strokeWidth={1}
+                strokeDasharray="5 3"
+                style={{ pointerEvents: 'none' }}
+              />
+            ))
+          }
 
           {/* Links above actors */}
           {Object.values(links).map((link) => (

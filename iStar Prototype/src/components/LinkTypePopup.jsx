@@ -96,7 +96,7 @@ export default function LinkTypePopup({ linkPaths = {} }) {
             cursor: 'pointer',
             fontSize: 13,
             textAlign: 'left',
-            fontFamily: 'monospace',
+            fontFamily: 'Roboto Mono, monospace',
           }}
         >
           {t(`type.${type}`)}
@@ -106,7 +106,7 @@ export default function LinkTypePopup({ linkPaths = {} }) {
         onClick={clearConnect}
         onPointerDown={e => e.stopPropagation()}
         style={{ background: 'none', border: 'none', color: 'var(--text-2)',
-          cursor: 'pointer', fontSize: 12, marginTop: 4, fontFamily: 'monospace' }}
+          cursor: 'pointer', fontSize: 12, marginTop: 4, fontFamily: 'Roboto Mono, monospace' }}
       >
         {t('linkType.cancel')}
       </button>
