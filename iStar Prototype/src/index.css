@@ -29,10 +29,10 @@ button:hover:not(:disabled) {
   --node-text-hl: #222;  /* label on a highlighted (filled) element */
   --link-def:   #555;
   /* node highlight fills */
-  --hl-goal:      #F0E1CD;
-  --hl-task:      #D0DDEC;
-  --hl-softgoal:  #F5E1D6;
-  --hl-resource:  #D7E8D7;
+  --hl-goal:      #c0d5a5;
+  --hl-task:      #bee2ee;
+  --hl-softgoal:  #acba9b;
+  --hl-resource:  #ffc561;
   --hl-subactor:  #ffffff;
   /* link highlight colors */
   --hl-hurt:      #EE3131;
@@ -73,10 +73,10 @@ button:hover:not(:disabled) {
   --node-text-hl: #1e1e1e;  /* dark on the lighter, pastel highlight fills */
   --link-def:   #999;
   /* node highlight fills – muted, visible on dark bg */
-  --hl-goal:      #e58a6c;
+  --hl-goal:      #80b282;
   --hl-task:      #80a0c5;
-  --hl-softgoal:  #edab7b;
-  --hl-resource:  #80b282;
+  --hl-softgoal:  #80b282;
+  --hl-resource:  #e59a9a;
   --hl-subactor:  #8fa8cf;
   /* link highlight colors – lightened */
   --hl-hurt:      #d63737;
