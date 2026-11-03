@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import useStore from '../store/useStore.js'
 import { useZoom, worldToScreen } from '../contexts/ZoomContext.jsx'
 import { usePopupPlacement, screenBounds, diagramObstacles } from '../utils/usePopupPlacement.js'
@@ -183,21 +183,6 @@ export default function PropertyPopover({ linkPaths = {} }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [collapsed, setCollapsed] = useState(false)  // kept across selections so a minimized popup stays out of the way
 
-  // Label edits are one undo step per editing session. The session also ends if the popup switches
-  // element or closes while the field is focused (blur isn't guaranteed when the field is removed).
-  const labelBatchOpen = useRef(false)
-  const startLabelEdit = () => {
-    if (labelBatchOpen.current) return
-    labelBatchOpen.current = true
-    useStore.getState().beginBatch()
-  }
-  const endLabelEdit = () => {
-    if (!labelBatchOpen.current) return
-    labelBatchOpen.current = false
-    useStore.getState().endBatch()
-  }
-  useEffect(() => endLabelEdit, [selectedId])
-
   const anchor = selectionAnchor({ selectedId, selectedIds, selectedType, nodes, links, linkPaths, transform })
   const { pos, popRef, handleRef, dragProps, connector } = usePopupPlacement({
     id: 'properties',
@@ -310,10 +295,6 @@ export default function PropertyPopover({ linkPaths = {} }) {
   const node = nodes[selectedId]
   if (!node) return null
 
-  const handleLabelChange = (e) => {
-    updateNode(node.id, { label: e.target.value })
-  }
-
   const handleTypeChange = (e) => {
     updateNode(node.id, { type: e.target.value })
   }
@@ -328,18 +309,6 @@ export default function PropertyPopover({ linkPaths = {} }) {
       {collapsed ? (
         <div style={summaryStyle}>{node.label || t(`type.${node.type}`)}</div>
       ) : <>
-      <label style={labelStyle}>{t(isSub ? 'actorPopup.name' : 'popup.label')}</label>
-      <input
-        autoFocus
-        value={node.label}
-        onChange={handleLabelChange}
-        onFocus={startLabelEdit}
-        onBlur={endLabelEdit}
-        onKeyDown={confirmOnEnter}
-        style={inputStyle}
-        placeholder={t('popup.labelPlaceholder')}
-      />
-
       {isSub ? <>
         <label style={labelStyle}>{t('actorPopup.logo')}</label>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

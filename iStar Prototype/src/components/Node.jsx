@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import useStore from '../store/useStore.js'
 import { upstreamSet, focusLayers } from '../utils/dependencies.js'
 import { inActor } from '../utils/actorTree.js'
@@ -37,6 +37,43 @@ export default function Node({ node }) {
   nodeRef.current = node
 
   const pointerRef = useRef(null)
+
+  // Double-click edits the label in place; the whole edit is one undo step
+  const [editing, setEditing] = useState(false)
+  const originalLabel = useRef('')
+  const startEdit = (e) => {
+    if (useStore.getState().mode.startsWith('add-')) return
+    e.stopPropagation()
+    const st = useStore.getState()
+    st.clearConnect()  // the clicks of the double-click may have started a link
+    st.select(nodeRef.current.id, 'node')
+    originalLabel.current = nodeRef.current.label
+    st.beginBatch()
+    setEditing(true)
+  }
+  const endEdit = (cancel = false) => {
+    if (cancel) useStore.getState().updateNode(nodeRef.current.id, { label: originalLabel.current })
+    useStore.getState().endBatch()
+    setEditing(false)
+  }
+  const editorKeyDown = (e) => {
+    e.stopPropagation()
+    if (e.nativeEvent.isComposing) return
+    if (e.key === 'Enter') { e.preventDefault(); endEdit() }
+    else if (e.key === 'Escape') endEdit(true)
+  }
+  const editorProps = {
+    autoFocus: true,
+    value: node.label,
+    placeholder: undefined,
+    onFocus: e => e.target.select(),
+    onChange: e => useStore.getState().updateNode(node.id, { label: e.target.value.replace(/\s+/g, ' ') }),
+    onBlur: () => endEdit(),
+    onKeyDown: editorKeyDown,
+    onPointerDown: e => e.stopPropagation(),
+    onDoubleClick: e => e.stopPropagation(),
+    spellCheck: false,
+  }
 
   const { mode, selectedId, select, deselect, moveNode, moveNodeGroup,
     addToSelection, setPendingLink, setDraggingNode, openSubactor } = useStore()
@@ -189,10 +226,17 @@ export default function Node({ node }) {
       <>
         <rect width={node.width} height={node.height} rx={8} fill={hlFill}
           stroke={bodyStroke} strokeWidth={bodyStrokeW(1.5)} />
-        <text x={startX} y={rowY} dominantBaseline="central" fontSize={SUB_FONT} fontWeight={600} fontFamily="sans-serif"
+        {editing ? (
+          <foreignObject x={SUB_PAD_X} y={rowY - 12} width={node.width - SUB_PAD_X * 2} height={24}>
+            <input {...editorProps} placeholder={`[${typeName}]`} style={{
+              width: '100%', height: '100%', border: 'none', outline: 'none', background: 'transparent',
+              textAlign: 'center', font: `600 ${SUB_FONT}px sans-serif`, color: 'var(--node-text)', padding: 0,
+            }} />
+          </foreignObject>
+        ) : <text x={startX} y={rowY} dominantBaseline="central" fontSize={SUB_FONT} fontWeight={600} fontFamily="sans-serif"
           fill={isFillHighlighted ? 'var(--node-text-hl)' : 'var(--node-text)'}
-          style={{ pointerEvents: 'none', userSelect: 'none' }}>{name}</text>
-        {node.logo && (
+          style={{ pointerEvents: 'none', userSelect: 'none' }}>{name}</text>}
+        {node.logo && !editing && (
           <image href={node.logo} x={startX + textW + SUB_LOGO_GAP} y={rowY - SUB_LOGO_H / 2}
             width={logoW} height={SUB_LOGO_H} preserveAspectRatio="xMidYMid meet" style={{ pointerEvents: 'none' }} />
         )}
@@ -220,6 +264,7 @@ export default function Node({ node }) {
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
+      onDoubleClick={startEdit}
     >
       {isSub ? subBody : node.type === 'task' ? (
         <path
@@ -274,7 +319,19 @@ export default function Node({ node }) {
         </>
       )}
 
-      {!isSub && <text
+      {!isSub && editing && (
+        <foreignObject x={nodePadX} y={0} width={node.width - nodePadX * 2} height={textAreaH}>
+          <div style={{ height: '100%', display: 'flex', alignItems: 'center' }}>
+            <textarea {...editorProps} placeholder={`[${typeName}]`} rows={lines.length} style={{
+              width: '100%', height: lines.length * NODE_LINE_H, border: 'none', outline: 'none', resize: 'none',
+              overflow: 'hidden', background: 'transparent', textAlign: 'center', padding: 0, display: 'block',
+              font: `${NODE_FONT}px sans-serif`, lineHeight: `${NODE_LINE_H}px`, color: 'var(--node-text)',
+            }} />
+          </div>
+        </foreignObject>
+      )}
+
+      {!isSub && !editing && <text
         textAnchor="middle"
         dominantBaseline="central"
         fontSize={NODE_FONT}

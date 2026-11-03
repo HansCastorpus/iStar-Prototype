@@ -131,7 +131,7 @@ en: [
     title: 'Building the diagram',
     steps: [
       <>Add intentional elements <GoalShape /> with the <B>+</B> buttons, then click on the canvas to place them.</>,
-      <>Click an element to select it: it gets a <B>blue</B> outline <BlueShape /> and a popup opens to edit its label, type and actor. Press <B>Enter</B> to confirm what you typed.</>,
+      <>Click an element to select it: it gets a <B>blue</B> outline <BlueShape /> and a popup opens to edit its type and actor. <B>Double-click</B> an element to type its text right on it; <B>Enter</B> confirms, <B>Esc</B> cancels.</>,
       <>Click the selected element again to deselect it.</>,
       <>The popup places itself so it covers as little of the diagram as possible. Drag it by its top bar, or use <B>hide</B> / <B>show</B> to minimise it.</>,
       <><B>Ctrl/⌘+Z</B> undoes your last change and <B>Shift+Ctrl/⌘+Z</B> redoes it, or use <B>↶</B> / <B>↷</B> in the header. A whole drag counts as one step.</>,
