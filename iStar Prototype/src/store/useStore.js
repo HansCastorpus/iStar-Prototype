@@ -150,6 +150,8 @@ const useStore = create((set, get) => ({
   // ── Models (tabs) ────────────────────────────────────────────────────────────
   models: { [ROOT_MODEL]: emptyModel(ROOT_MODEL, 'Main') },
   activeModelId: ROOT_MODEL,
+  zoomRequest: null,  // { actorId, insetLeft, n }: asks the canvas to frame one actor, clear of the side panel covering insetLeft px
+  zoomToActor: (actorId, insetLeft = 0) => set(st => ({ zoomRequest: { actorId, insetLeft, n: (st.zoomRequest?.n ?? 0) + 1 } })),
   fitRequest: 0,  // bumped whenever a project is loaded, so the canvas re-frames the whole graph
 
   switchModel: (id) => {

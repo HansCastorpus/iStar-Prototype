@@ -68,6 +68,7 @@ export const STRINGS = {
     'actors.close': 'Close actor panel',
     'actors.visible': 'visible',
     'actors.highlight': 'highlight',
+    'actors.zoom': 'zoom',
     'actors.none': 'No actors yet.',
     'actors.unnamed': '(unnamed)',
 
@@ -203,6 +204,7 @@ export const STRINGS = {
     'actors.close': 'Fermer le panneau des acteurs',
     'actors.visible': 'visible',
     'actors.highlight': 'surligner',
+    'actors.zoom': 'zoom',
     'actors.none': "Pas encore d'acteur.",
     'actors.unnamed': '(sans nom)',
 

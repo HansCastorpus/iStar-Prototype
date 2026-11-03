@@ -351,7 +351,8 @@ function Section({ label, first, legend, types, highlightTypes, isolateTypes, on
 // legendType: which sample to show when the legend is on (null = blank space, keeps checkboxes aligned)
 // wrap: let long labels run onto several lines instead of being cut off with "…"
 // cols: { i, h } styles to use instead of the filter panel's columns (the actor panel's are narrower)
-function TypeRow({ label, indent = 0, legendType = label, wrap = false, cols, legend, inHighlight, inIsolate, onToggleH, onToggleI }) {
+function TypeRow({ label, indent = 0, legendType = label, wrap = false, cols, legend, inHighlight, inIsolate, onToggleH, onToggleI, onZoom }) {
+  const t = useT()
   const panelCols = useColumns()
   const iStyle = cols?.i ?? panelCols.colI(legend)
   const hStyle = cols?.h ?? panelCols.colH(legend)
@@ -375,6 +376,18 @@ function TypeRow({ label, indent = 0, legendType = label, wrap = false, cols, le
         <Square active={inHighlight} onClick={onToggleH} />
         {slot(true)}
       </div>
+      {onZoom && (
+        <div style={ZOOM_COL}>
+          <button type="button" onClick={onZoom} title={t('actors.zoom')} aria-label={t('actors.zoom')} style={{
+            background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: 'var(--text-2)', display: 'flex',
+          }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+              <circle cx="5.5" cy="5.5" r="4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+              <line x1="8.5" y1="8.5" x2="13" y2="13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -400,6 +413,7 @@ const ACTOR_PANEL_W = 280
 // Narrow checkbox columns for the actor panel: just the checkbox and its small column label
 const ACTOR_COL = { width: 56, flexShrink: 0, borderLeft: '1px solid var(--border-lt)', padding: '0 2px' }
 const ACTOR_COLS = { i: ACTOR_COL, h: ACTOR_COL }
+const ZOOM_COL = { width: 32, flexShrink: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }
 
 // Side panel next to the filter panel: every actor with its own hide / highlight checkboxes
 function ActorPanel({ left, onClose }) {
@@ -409,6 +423,7 @@ function ActorPanel({ left, onClose }) {
   const highlightedActorIds = useStore(s => s.highlightedActorIds)
   const toggleActorHidden    = useStore(s => s.toggleActorHidden)
   const toggleActorHighlight = useStore(s => s.toggleActorHighlight)
+  const zoomToActor          = useStore(s => s.zoomToActor)
   // The "actor" type row applies to every actor, so the per-actor boxes show the combined state
   const actorsVisible       = useStore(s => s.isolateTypes.includes('actor'))
   const actorsHighlighted   = useStore(s => s.highlightTypes.includes('actor'))
@@ -456,6 +471,7 @@ function ActorPanel({ left, onClose }) {
           <div style={{ flex: 1 }} />
           <div style={{ ...ACTOR_COL, ...colLabel }}>{t('actors.visible')}</div>
           <div style={{ ...ACTOR_COL, ...colLabel }}>{t('actors.highlight')}</div>
+          <div style={{ ...ZOOM_COL, ...colLabel }}>{t('actors.zoom')}</div>
         </div>
 
         {list.length === 0 && (
@@ -468,6 +484,7 @@ function ActorPanel({ left, onClose }) {
             inHighlight={actorsHighlighted || highlightedActorIds.includes(a.id)}
             onToggleI={() => toggleActorHidden(a.id)}
             onToggleH={() => toggleActorHighlight(a.id)}
+            onZoom={() => zoomToActor(a.id, ACTOR_PANEL_W)}
           />
         ))}
       </div>

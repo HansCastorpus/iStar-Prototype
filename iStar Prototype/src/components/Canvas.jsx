@@ -9,7 +9,7 @@ import LinkPreview from './LinkPreview.jsx'
 import PropertyPopover from './PropertyPopover.jsx'
 import LinkTypePopup from './LinkTypePopup.jsx'
 import ActorPopover from './ActorPopover.jsx'
-import { actorLayout } from '../utils/actorTree.js'
+import { actorLayout, inActor } from '../utils/actorTree.js'
 import { computeLinkSlots } from '../utils/layout.js'
 import { computeAllPaths } from '../utils/routing.js'
 import { GRID } from '../utils/grid.js'
@@ -24,6 +24,7 @@ export default function Canvas() {
   const modeRef = useRef('select')
   const zoomRef = useRef(null)
   const fitRequest = useStore(s => s.fitRequest)
+  const zoomRequest = useStore(s => s.zoomRequest)
 
   const { nodes, links, actors, mode, addNode, deselect, deselectAll, clearConnect, draggingNodeId, selectedIds, selectedId, selectedType } = useStore()
 
@@ -56,22 +57,33 @@ export default function Canvas() {
     return () => svg.on('.zoom', null)
   }, [])
 
-  // Frame the whole graph, centred, on mount and whenever a project is loaded
-  useEffect(() => {
-    const { nodes: ns } = useStore.getState()
-    const list = Object.values(ns)
+  // Frame the given elements, centred in the visible area (animated when asked); never zooms in past 100%
+  const frameNodes = useCallback((list, animate = false, insetLeft = 0) => {
     const svgEl = svgRef.current
     if (!list.length || !svgEl || !zoomRef.current) return
     const minX = Math.min(...list.map(n => n.x)), maxX = Math.max(...list.map(n => n.x + n.width))
     const minY = Math.min(...list.map(n => n.y)), maxY = Math.max(...list.map(n => n.y + n.height))
-    const { width, height } = svgEl.getBoundingClientRect()
+    const rect = svgEl.getBoundingClientRect()
+    const width = rect.width - insetLeft, height = rect.height  // insetLeft: part of the canvas covered by an open side panel
     const margin = 80
     const k = Math.min(1, (width - margin * 2) / (maxX - minX), (height - margin * 2) / (maxY - minY))
     const t = d3.zoomIdentity
-      .translate(width / 2, height / 2).scale(Math.max(k, 0.1))
+      .translate(insetLeft + width / 2, height / 2).scale(Math.max(k, 0.1))
       .translate(-(minX + maxX) / 2, -(minY + maxY) / 2)
-    d3.select(svgEl).call(zoomRef.current.transform, t)
-  }, [fitRequest])
+    const sel = d3.select(svgEl)
+    ;(animate ? sel.transition().duration(400) : sel).call(zoomRef.current.transform, t)
+  }, [])
+
+  // Frame the whole graph on mount and whenever a project is loaded
+  useEffect(() => {
+    frameNodes(Object.values(useStore.getState().nodes))
+  }, [fitRequest, frameNodes])
+
+  // Zoom to one actor when asked (the actor panel's magnifier button)
+  useEffect(() => {
+    if (!zoomRequest) return
+    frameNodes(Object.values(useStore.getState().nodes).filter(n => inActor(n, zoomRequest.actorId)), true, zoomRequest.insetLeft)
+  }, [zoomRequest, frameNodes])
 
   const screenToWorld = useCallback((cx, cy) => ({
     x: (cx - transformRef.current.x) / transformRef.current.k,
