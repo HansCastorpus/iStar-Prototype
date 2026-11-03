@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useLayoutEffect } from 'react'
 import { flushSync } from 'react-dom'
 import useStore from '../store/useStore.js'
 import { useT, LANGS } from '../i18n.js'
@@ -224,8 +224,94 @@ fr: [
 ],
 }
 
+// Drop-down menu: a button that opens a panel of items below it. Closes on outside click, Esc, or
+// after an item is chosen (an item can keep it open with `keepOpen`).
+function Menu({ label, active = false, align = 'left', width = 220, children }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const panelRef = useRef(null)
+  const [shift, setShift] = useState(0)  // keeps the panel inside the window
+  useLayoutEffect(() => {
+    if (!open || !panelRef.current) return
+    // Measured before the browser paints, so the panel opens in its final position
+    const fit = () => {
+      const el = panelRef.current
+      if (!el) return
+      const applied = el.style.transform
+      el.style.transform = 'none'  // measure from the unshifted position
+      const r = el.getBoundingClientRect()
+      const m = 8
+      el.style.transform = applied
+      setShift(r.right > window.innerWidth - m ? window.innerWidth - m - r.right : r.left < m ? m - r.left : 0)
+    }
+    fit()
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+  }, [open])
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
+    // Capture phase: the canvas stops mouse events from bubbling, so a bubbling listener never sees clicks on it
+    document.addEventListener('pointerdown', onDown, true)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('pointerdown', onDown, true); document.removeEventListener('keydown', onKey) }
+  }, [open])
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        aria-haspopup="menu" aria-expanded={open}
+        style={{
+          ...actionBtn,
+          display: 'flex', alignItems: 'center', gap: 8,
+          background: active || open ? 'var(--text-1)' : 'none',
+          color: active || open ? 'var(--bg-popup)' : 'var(--text-1)',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {label}
+        <svg width="9" height="6" viewBox="0 0 9 6" aria-hidden style={{ flexShrink: 0 }}>
+          <path d="M1,1 L4.5,5 L8,1" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <div ref={panelRef} role="menu" style={{
+          position: 'absolute', top: 'calc(100% + 4px)', [align]: 0, width, zIndex: 300,
+          maxWidth: 'calc(100vw - 16px)', transform: `translateX(${shift}px)`,
+          background: 'var(--bg-popup)', border: '1px solid var(--border-md)', padding: '4px 0',
+          boxShadow: '0 4px 14px rgba(0,0,0,0.15)', fontFamily: 'monospace', fontSize: 13,
+        }}>
+          {typeof children === 'function' ? children(() => setOpen(false)) : children}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// One row of a menu. checked: shows a tick (the current choice); danger: red
+function MenuItem({ children, onClick, checked, danger, disabled }) {
+  return (
+    <button role="menuitem" onClick={onClick} disabled={disabled} style={{
+      display: 'flex', alignItems: 'center', width: '100%', textAlign: 'left',
+      background: 'none', border: 'none', padding: '6px 14px 6px 10px', gap: 6,
+      fontFamily: 'monospace', fontSize: 13, cursor: disabled ? 'default' : 'pointer',
+      color: danger ? '#c00' : disabled ? 'var(--text-3)' : 'var(--text-1)',
+    }}>
+      <span aria-hidden style={{ width: 12, flexShrink: 0, fontSize: 12 }}>{checked ? '✓' : ''}</span>
+      {children}
+    </button>
+  )
+}
+
+const MenuLabel = ({ children }) => (
+  <div style={{ padding: '6px 14px 2px', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-2)' }}>{children}</div>
+)
+const Hint = ({ children }) => <span style={{ marginLeft: 'auto', paddingLeft: 12, fontSize: 11, color: 'var(--text-2)' }}>{children}</span>
+const MenuDivider = () => <div style={{ height: 1, background: 'var(--border-lt)', margin: '4px 0' }} />
+
 export default function Toolbar() {
-  const { mode, setMode, exportDiagram, exportForAnalysis, importDiagram, clearDiagram, exportAsImage, darkMode, toggleDarkMode } = useStore()
+  const { mode, setMode, exportDiagram, exportForAnalysis, importTexts, importDiagram, clearDiagram, exportAsImage, darkMode, toggleDarkMode } = useStore()
   const lang = useStore(s => s.lang)
   const setLang = useStore(s => s.setLang)
   const t = useT()
@@ -277,9 +363,23 @@ export default function Toolbar() {
     const handler = (e) => {
       if (helpRef.current && !helpRef.current.contains(e.target)) setHelpOpen(false)
     }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    document.addEventListener('pointerdown', handler, true)  // capture: the canvas stops events from bubbling
+    return () => document.removeEventListener('pointerdown', handler, true)
   }, [helpOpen])
+
+  const textRef = useRef(null)
+  const handleImportText = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const r = importTexts(ev.target.result)
+      if (r.error) return alert(t(r.error === 'notJson' ? 'toolbar.importTextBadFile' : 'toolbar.importTextNotAnalysis'))
+      alert(t('toolbar.importTextDone', { n: r.updated, skipped: r.skipped }))
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
 
   const handleImport = (e) => {
     const file = e.target.files[0]
@@ -396,47 +496,49 @@ export default function Toolbar() {
 
       <OrConnector />
 
-      {/* Export / Import */}
-      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-        <button onClick={exportDiagram} style={actionBtn}>{t('toolbar.exportJson')}</button>
-        <button onClick={exportForAnalysis} style={actionBtn}>{t('toolbar.exportAnalysis')}</button>
-        <button onClick={() => exportAsImage('png')} style={actionBtn}>PNG</button>
-        <button onClick={() => exportAsImage('jpeg')} style={actionBtn}>JPEG</button>
-        <button onClick={() => fileRef.current.click()} style={actionBtn}>{t('toolbar.import')}</button>
-        <input ref={fileRef} type="file" accept=".json"
-          style={{ display: 'none' }} onChange={handleImport} />
-      </div>
+      <Menu label={t('toolbar.file')} width={250}>
+        {close => <>
+          <MenuLabel>{t('toolbar.export')}</MenuLabel>
+          <MenuItem onClick={() => { exportDiagram(); close() }}>{t('menu.project')}</MenuItem>
+          <MenuItem onClick={() => { exportForAnalysis(); close() }}>{t('menu.analysis')}</MenuItem>
+          <MenuItem onClick={() => { exportAsImage('png'); close() }}>{t('menu.png')}</MenuItem>
+          <MenuItem onClick={() => { exportAsImage('jpeg'); close() }}>{t('menu.jpeg')}</MenuItem>
+          <MenuDivider />
+          <MenuLabel>{t('toolbar.import')}</MenuLabel>
+          <MenuItem onClick={() => { fileRef.current.click(); close() }}>{t('menu.project')}</MenuItem>
+          <MenuItem onClick={() => { textRef.current.click(); close() }}>
+            <span title={t('toolbar.importTextHint')}>{t('menu.textOnly')}</span>
+          </MenuItem>
+        </>}
+      </Menu>
 
-      <OrConnector />
+      <input ref={fileRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImport} />
+      <input ref={textRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImportText} />
 
-      {/* Undo / Redo + Language + Dark mode + Clear */}
-      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-        <button onClick={undo} disabled={!canUndo} title={t('toolbar.undo')} aria-label={t('toolbar.undo')}
-          style={historyBtn(canUndo)}>↶</button>
-        <button onClick={redo} disabled={!canRedo} title={t('toolbar.redo')} aria-label={t('toolbar.redo')}
-          style={historyBtn(canRedo)}>↷</button>
-        <div role="group" aria-label={t('toolbar.language')} style={{ display: 'flex' }}>
-          {LANGS.map((l, i) => (
-            <button key={l} onClick={() => setLang(l)} aria-pressed={lang === l} style={{
-              ...actionBtn,
-              padding: '5px 10px',
-              marginLeft: i ? -1 : 0,  // share the border between the two halves
-              background: lang === l ? 'var(--text-1)' : 'none',
-              color: lang === l ? 'var(--bg-popup)' : 'var(--text-1)',
-            }}>{l.toUpperCase()}</button>
+      <Menu label={t('toolbar.options')} align="right" width={230}>
+        {close => <>
+          <MenuLabel>{t('toolbar.edit')}</MenuLabel>
+          <MenuItem disabled={!canUndo} onClick={() => { undo(); close() }}>{t('toolbar.undoItem')}<Hint>Ctrl/⌘+Z</Hint></MenuItem>
+          <MenuItem disabled={!canRedo} onClick={() => { redo(); close() }}>{t('toolbar.redoItem')}<Hint>Shift+Ctrl/⌘+Z</Hint></MenuItem>
+          <MenuDivider />
+          <MenuLabel>{t('toolbar.language')}</MenuLabel>
+          {LANGS.map(l => (
+            <MenuItem key={l} checked={lang === l} onClick={() => { setLang(l); close() }}>{t(`lang.${l}`)}</MenuItem>
           ))}
-        </div>
-        <button onClick={toggleDarkMode} style={actionBtn}>{darkMode ? t('toolbar.light') : t('toolbar.dark')}</button>
-        {!armed ? (
-          <button onClick={armClear} style={actionBtn}>{t('toolbar.clear')}</button>
-        ) : (
-          <>
-            <span style={{ fontSize: 13, fontFamily: 'monospace', color: '#c00', whiteSpace: 'nowrap' }}>{t('toolbar.wipe')}</span>
-            <button onClick={confirmClear} style={{ ...actionBtn, borderColor: '#c00', color: '#c00' }}>{t('toolbar.confirm')}</button>
-            <button onClick={cancelClear} style={actionBtn}>{t('toolbar.cancel')}</button>
-          </>
-        )}
-      </div>
+          <MenuDivider />
+          <MenuLabel>{t('toolbar.theme')}</MenuLabel>
+          <MenuItem checked={!darkMode} onClick={() => { if (darkMode) toggleDarkMode(); close() }}>{t('toolbar.themeLight')}</MenuItem>
+          <MenuItem checked={darkMode} onClick={() => { if (!darkMode) toggleDarkMode(); close() }}>{t('toolbar.themeDark')}</MenuItem>
+          <MenuDivider />
+          {!armed
+            ? <MenuItem danger onClick={armClear}>{t('toolbar.clearCanvas')}</MenuItem>
+            : <div style={{ padding: '6px 14px 6px 28px', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ color: '#c00', flexBasis: '100%' }}>{t('toolbar.wipe')}</span>
+                <button onClick={() => { confirmClear(); close() }} style={{ ...actionBtn, padding: '3px 10px', borderColor: '#c00', color: '#c00' }}>{t('toolbar.confirm')}</button>
+                <button onClick={cancelClear} style={{ ...actionBtn, padding: '3px 10px' }}>{t('toolbar.cancel')}</button>
+              </div>}
+        </>}
+      </Menu>
     </div>
   )
 }
@@ -451,11 +553,3 @@ const actionBtn = {
   fontSize: 13,
   fontFamily: 'monospace',
 }
-
-const historyBtn = (enabled) => ({
-  ...actionBtn,
-  padding: '5px 10px',
-  fontSize: 22,
-  lineHeight: '15px',  // bigger glyph, same button height as its neighbours
-  ...(!enabled && { color: 'var(--text-3)', borderColor: 'var(--border)', cursor: 'default' }),
-})

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Canvas from './components/Canvas.jsx'
 import Toolbar, { Logo } from './components/Toolbar.jsx'
 import FilterPanel from './components/FilterPanel.jsx'
@@ -11,6 +11,10 @@ export default function App() {
   const activeModelId = useStore(s => s.activeModelId)
   const filterPanelRight = useStore(s => s.filterPanelRight)
   const filterCollapsed = useStore(s => s.filterCollapsed)
+
+  // The logo keeps the width it had over the open filter panel, so it stays visible when that collapses
+  const [logoWidth, setLogoWidth] = useState(300)
+  useEffect(() => { if (!filterCollapsed && filterPanelRight) setLogoWidth(filterPanelRight) }, [filterCollapsed, filterPanelRight])
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light')
@@ -43,12 +47,12 @@ export default function App() {
           tab bar stack to its right */}
       <div style={{ display: 'flex', flexShrink: 0 }}>
         <div style={{
-          width: filterPanelRight ?? 300, flexShrink: 0, boxSizing: 'border-box',
+          width: filterCollapsed ? logoWidth : filterPanelRight ?? 300, flexShrink: 0, boxSizing: 'border-box',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: filterCollapsed ? 0 : '8px 16px', background: 'var(--bg-panel)',
+          padding: '8px 16px', background: 'var(--bg-panel)',
           borderRight: '1px solid var(--border)', borderBottom: '1px solid var(--border)',
         }}>
-          {!filterCollapsed && <Logo />}
+          <Logo />
         </div>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <Toolbar />

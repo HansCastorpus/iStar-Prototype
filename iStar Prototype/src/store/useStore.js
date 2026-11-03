@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { GRID, snap, computeNodeSize } from '../utils/grid.js'
 import { getUsedOffsets, getNextSlot } from '../utils/ports.js'
-import { buildAnalysis } from '../utils/analysisExport.js'
+import { buildAnalysis, readTextEdits } from '../utils/analysisExport.js'
 import { chainOf, layoutIssues, addsIssue, actorNames } from '../utils/actorTree.js'
 
 const MIN_CLEARANCE = GRID * 2
@@ -656,6 +656,36 @@ const useStore = create((set, get) => ({
     a.download = `${base || 'istar-diagram'} - analysis.json`
     a.click()
     URL.revokeObjectURL(url)
+  },
+
+  // Update only the text of elements from an edited analysis file. → { error } or { updated, skipped }
+  importTexts: (json) => {
+    const s = get()
+    const result = readTextEdits(json, withLive(s))
+    if (result.error) return result
+    const { updates, skipped } = result
+    const { beginBatch, endBatch, updateNode } = get()
+    beginBatch()  // the open diagram's changes are one undo step
+    const others = {}
+    for (const u of updates) {
+      if (u.modelId === s.activeModelId) updateNode(u.nodeId, { label: u.text })
+      else (others[u.modelId] ??= []).push(u)
+    }
+    endBatch()
+    for (const [modelId, list] of Object.entries(others)) {
+      history.restoring = true  // other diagrams aren't part of the open diagram's undo history
+      set(st => {
+        const nodes = { ...st.models[modelId].nodes }
+        for (const { nodeId, text } of list) {
+          const n = nodes[nodeId]
+          const { width, height } = computeNodeSize(text, n.type, n.logo ? n.logoAspect ?? 1 : 0)
+          nodes[nodeId] = { ...n, label: text, width, height }
+        }
+        return { models: { ...st.models, [modelId]: { ...st.models[modelId], nodes } } }
+      })
+      history.restoring = false
+    }
+    return { updated: updates.length, skipped }
   },
 
   exportAsImage: (format = 'png') => {
