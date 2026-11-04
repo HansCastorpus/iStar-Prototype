@@ -173,7 +173,7 @@ const useStore = create((set, get) => ({
       models, activeModelId: id,
       nodes: models[id].nodes, links: models[id].links, actors: models[id].actors,
       selectedId: null, selectedType: null, selectedIds: [], selectedActorId: null,
-      editingActorId: null, editingActorTag: null, focusNodeId: null, focusDeep: false,
+      editingActorId: null, editingActorTag: null, focusNodeId: null, focusDeep: false, pathOn: false,
       pendingLink: null, connectSource: null, draggingNodeId: null, mode: 'select',
       canUndo: h.past.length > 0, canRedo: h.future.length > 0,
     })
@@ -281,6 +281,7 @@ const useStore = create((set, get) => ({
   highlightTypes: [],              // types currently highlighted; empty = mode off
   isolateTypes:   [...ALL_TYPES],  // types currently isolated;   empty = mode off
   focusNodeId:    null,            // when set, dims all links not connected to this node
+  pathOn:         false,           // the Dependencies tab's path button: show the path between two selected elements
   focusDeep:      false,           // when true, use transitive closure instead of direct links only
   focusDepth:     1,               // layers of relationships shown when focusDeep is off
   highlightSnapshot: null,         // selection before the last "Highlight all"/"Clear all", to restore on a second click
@@ -341,6 +342,7 @@ const useStore = create((set, get) => ({
     return r ? { isolateTypes: r.types, hiddenActorIds: r.actorIds, isolateSnapshot: r.snapshot } : {}
   }),
 
+  togglePath: () => set(s => ({ pathOn: !s.pathOn })),
   setFocusDepth: (n) => set({ focusDepth: Math.max(1, Math.round(n)) }),
 
   setFocusNode: (id, deep = false) => set(s => {
@@ -353,8 +355,8 @@ const useStore = create((set, get) => ({
   setDraggingNode: (id) => set({ draggingNodeId: id }),
 
   // ── Selection ────────────────────────────────────────────────────────────────
-  select: (id, type) => set({ selectedId: id, selectedType: type, selectedIds: [], selectedActorId: null }),
-  deselect: () => set({ selectedId: null, selectedType: null, selectedIds: [], selectedActorId: null, focusNodeId: null, focusDeep: false,
+  select: (id, type) => set({ selectedId: id, selectedType: type, selectedIds: [], selectedActorId: null, pathOn: false }),
+  deselect: () => set({ selectedId: null, selectedType: null, selectedIds: [], selectedActorId: null, focusNodeId: null, focusDeep: false, pathOn: false,
     editingActorId: null, editingActorTag: null }),
 
   // A double click on empty canvas: also un-highlights the actors (clicking an actor's tag highlights it)
@@ -818,7 +820,7 @@ const useStore = create((set, get) => ({
   clearDiagram: () => set({
     actors: {}, nodes: {}, links: {},
     selectedId: null, selectedType: null, selectedIds: [], selectedActorId: null,
-    connectSource: null, pendingLink: null, mode: 'select', focusNodeId: null, focusDeep: false,
+    connectSource: null, pendingLink: null, mode: 'select', focusNodeId: null, focusDeep: false, pathOn: false,
   }),
 
   importDiagram: (json) => {
@@ -830,7 +832,7 @@ const useStore = create((set, get) => ({
       set({
         ...project,
         selectedId: null, selectedType: null, selectedIds: [], selectedActorId: null, mode: 'select',
-        connectSource: null, pendingLink: null, focusNodeId: null, focusDeep: false,
+        connectSource: null, pendingLink: null, focusNodeId: null, focusDeep: false, pathOn: false,
         editingActorId: null, editingActorTag: null, canUndo: false, canRedo: false,
         fitRequest: get().fitRequest + 1,
       })

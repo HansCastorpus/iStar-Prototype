@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import useStore from '../store/useStore.js'
-import { upstreamSet, focusLayers } from '../utils/dependencies.js'
+import { focusView } from '../utils/dependencies.js'
 import { inActor } from '../utils/actorTree.js'
 import { useT } from '../i18n.js'
 import {
@@ -97,11 +97,12 @@ export default function Node({ node, strayActors }) {
   const isHidden = !isolateTypes.includes(node.type)
   const isHighlighted = highlightActive && highlightTypes.includes(node.type)
 
-  // 'none' | 'focus' (the selected node) | 'connected' (in dependency set) | 'dimmed'
+  // 'none' | 'focus' (the selected node, or either end of a path) | 'connected' (in dependency set) | 'dimmed'
   const focusStatus = useStore(s => {
-    if (!s.focusNodeId) return 'none'
-    if (node.id === s.focusNodeId) return 'focus'
-    return upstreamSet(s.links, s.focusNodeId, focusLayers(s)).has(node.id) ? 'connected' : 'dimmed'
+    const view = focusView(s)
+    if (!view) return 'none'
+    if (view.ends.has(node.id)) return 'focus'
+    return view.nodes.has(node.id) ? 'connected' : 'dimmed'
   })
 
   const HIGHLIGHT_FILLS = { goal: 'var(--hl-goal)', task: 'var(--hl-task)', softgoal: 'var(--hl-softgoal)', resource: 'var(--hl-resource)', subactor: 'var(--hl-subactor)' }

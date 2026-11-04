@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import useStore from '../store/useStore.js'
-import { upstreamSet, focusLayers } from '../utils/dependencies.js'
+import { focusView } from '../utils/dependencies.js'
 import { useT } from '../i18n.js'
 import { useZoom } from '../contexts/ZoomContext.jsx'
 import { getSideForPoint } from '../utils/ports.js'
@@ -252,32 +252,27 @@ export default function Link({ link, points, andBar, allPaths = {}, crossings = 
   const { transformRef } = useZoom()
   const highlightTypes = useStore(s => s.highlightTypes)
   const isolateTypes   = useStore(s => s.isolateTypes)
-  const focusNodeId    = useStore(s => s.focusNodeId)
   const hideTags       = useStore(s => s.hideTags)
   const tr             = useT()  // translate (t is the tag's position along the link)
 
   // What each crossing link looks like right now: 'h' hidden, 'n<width>' plain, 'a<width>' highlighted
   const otherLooks = useStore(s => {
     if (!crossings.length) return ''
-    const focusSet = s.focusNodeId ? upstreamSet(s.links, s.focusNodeId, focusLayers(s)) : null
+    const view = focusView(s)
     return [...new Set(crossings.map(c => c.otherId))].map(id => {
       const o = s.links[id]
       if (!o || !s.isolateTypes.includes(o.type)) return `${id}:h`
       const active = (s.highlightTypes.length > 0 && s.highlightTypes.includes(o.type)) ||
-        !!(focusSet && focusSet.has(o.sourceId) && focusSet.has(o.targetId))
+        !!view?.links.has(id)
       const sw = active ? HIGHLIGHT_STYLES[o.type]?.sw ?? BASE_SW : s.selectedId === id ? SELECTED_SW : BASE_SW
       return `${id}:${active ? 'a' : 'n'}${sw}`
     }).join('|')
   })
 
   const isHidden   = !isolateTypes.includes(link.type)
-  const isFocused = useStore(s => {
-    if (!s.focusNodeId) return false
-    // A link is part of the view when both of its ends are
-    const set = upstreamSet(s.links, s.focusNodeId, focusLayers(s))
-    return set.has(link.sourceId) && set.has(link.targetId)
-  })
-  const isDimmed = !!focusNodeId && !isFocused
+  // A link is part of the view (dependency view or path) when it is in its link set
+  const isFocused = useStore(s => !!focusView(s)?.links.has(link.id))
+  const isDimmed = useStore(s => !!focusView(s)) && !isFocused
 
   if (!points || points.length < 2) return null
 

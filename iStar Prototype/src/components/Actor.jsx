@@ -5,7 +5,7 @@ import {
   extentsOf, hullsSeparated, logoSize, tagHeight,
   LINE_LEN, tagFontSize, actorTintVar,
 } from '../utils/actorTree.js'
-import { upstreamSet, focusLayers } from '../utils/dependencies.js'
+import { focusView } from '../utils/dependencies.js'
 
 const LABEL_RADIUS = 6
 const TAG_SLIDE_STEP = 24  // a nested tag slides along its top edge in steps of this much
@@ -126,11 +126,10 @@ export default function Actor({ actor, linkPaths = {} }) {
   // Clicking the actor toggles the same per-actor highlight as the filter panel, so the two always agree
   // While a dependency view (Dependencies section) is on, actors holding any of its elements light up
   // and every other actor fades, like the elements and links outside the view
-  const focusActive = useStore(s => !!s.focusNodeId)
+  const focusActive = useStore(s => !!focusView(s))
   const inDependencyView = useStore(s => {
-    if (!s.focusNodeId) return false
-    const set = upstreamSet(s.links, s.focusNodeId, focusLayers(s))
-    return Object.values(s.nodes).some(n => inActor(n, actor.id) && set.has(n.id))
+    const view = focusView(s)
+    return !!view && Object.values(s.nodes).some(n => inActor(n, actor.id) && view.nodes.has(n.id))
   })
   const isHighlighted = useStore(s =>
     s.highlightTypes.includes('actor') || s.highlightedActorIds.includes(actor.id)) || inDependencyView

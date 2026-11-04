@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { flushSync } from 'react-dom'
 import useStore, { ALL_TYPES } from '../store/useStore.js'
 import { LegendIcon, LEGEND_W } from './LegendIcons.jsx'
-import { upstreamLayerCount } from '../utils/dependencies.js'
+import { upstreamLayerCount, focusView } from '../utils/dependencies.js'
 import { useT } from '../i18n.js'
 import { actorLayout, measureText, actorTintVar } from '../utils/actorTree.js'
 
@@ -76,11 +76,17 @@ export default function FilterPanel() {
   const setFocusDepth       = useStore(s => s.setFocusDepth)
   const selectedId          = useStore(s => s.selectedId)
   const selectedType        = useStore(s => s.selectedType)
+  const selectedActorId     = useStore(s => s.selectedActorId)
 
   const legendOpen   = useStore(s => s.legendOpen)
   const hideTags     = useStore(s => s.hideTags)
   const setHideTags    = useStore(s => s.setHideTags)
 
+  const pathOn         = useStore(s => s.pathOn)
+  const togglePath     = useStore(s => s.togglePath)
+  const selectedIds    = useStore(s => s.selectedIds)
+  const canPath        = selectedIds.length === 2 && !selectedActorId
+  const hasPath        = useStore(s => pathOn && canPath && !!focusView(s))
   const canFocus       = selectedType === 'node' && !!selectedId
   const isDirectActive = !!focusNodeId && focusNodeId === selectedId && !focusDeep
   const isDeepActive   = !!focusNodeId && focusNodeId === selectedId && focusDeep
@@ -248,6 +254,18 @@ export default function FilterPanel() {
         >
           {isDeepActive ? t('deps.clear') : t('deps.all')}
         </button>
+        <button
+          onClick={() => (canPath || pathOn) && togglePath()}
+          disabled={!canPath && !pathOn}
+          style={focusBtnStyle(pathOn, canPath || pathOn)}
+        >
+          {pathOn ? t('deps.pathClear') : t('deps.path')}
+        </button>
+        {(pathOn || canPath || canFocus || selectedIds.length > 0) && (
+          <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'Roboto Mono, monospace', lineHeight: 1.5 }}>
+            {pathOn && canPath ? (hasPath ? t('deps.pathShowing') : t('deps.pathNone')) : t('deps.pathHint')}
+          </div>
+        )}
         {/* Current status */}
         {(!canFocus || isDirectActive || isDeepActive) && (
           <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'Roboto Mono, monospace', marginTop: 2, lineHeight: 1.5 }}>
