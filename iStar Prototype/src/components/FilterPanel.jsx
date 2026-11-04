@@ -4,7 +4,7 @@ import useStore, { ALL_TYPES } from '../store/useStore.js'
 import { LegendIcon, LEGEND_W } from './LegendIcons.jsx'
 import { upstreamLayerCount } from '../utils/dependencies.js'
 import { useT } from '../i18n.js'
-import { actorLayout, measureText } from '../utils/actorTree.js'
+import { actorLayout, measureText, actorTintVar } from '../utils/actorTree.js'
 
 const NODE_TYPES = ['goal', 'task', 'softgoal', 'resource', 'subactor']
 const LINK_TYPES = ['depends-on', 'or', 'xor', 'and', 'help', 'hurt', 'make', 'break', 'needed-by', 'part-of']
@@ -406,7 +406,7 @@ function Section({ label, first, legend, types, highlightTypes, isolateTypes, on
 // legendType: which sample to show when the legend is on (null = blank space, keeps checkboxes aligned)
 // wrap: let long labels run onto several lines instead of being cut off with "…"
 // cols: { i, h } styles to use instead of the filter panel's columns (the actor panel's are narrower)
-function TypeRow({ label, indent = 0, legendType = label, wrap = false, cols, legend, inHighlight, inIsolate, onToggleH, onToggleI, onZoom, logo }) {
+function TypeRow({ label, tint, indent = 0, legendType = label, wrap = false, cols, legend, inHighlight, inIsolate, onToggleH, onToggleI, onZoom, logo }) {
   const t = useT()
   const panelCols = useColumns()
   const iStyle = cols?.i ?? panelCols.colI(legend)
@@ -415,7 +415,8 @@ function TypeRow({ label, indent = 0, legendType = label, wrap = false, cols, le
     : legendType ? <LegendSlot type={legendType} highlighted={highlighted} />
     : <div style={{ width: LEGEND_W, flexShrink: 0 }} />
   return (
-    <div style={{ display: 'flex', alignItems: 'center', padding: '4px 0', paddingLeft: indent * NEST_INDENT }}>
+    <div style={{ display: 'flex', alignItems: 'center', padding: '4px 0', paddingLeft: indent * NEST_INDENT,
+      ...(tint && { background: `color-mix(in srgb, ${tint} 16%, transparent)`, borderLeft: `4px solid ${tint}`, paddingLeft: indent * NEST_INDENT + 6 }) }}>
       {indent > 0 && <span aria-hidden style={{ color: 'var(--text-3)', fontFamily: 'Roboto Mono, monospace', fontSize: 12, marginRight: 4, userSelect: 'none' }}>└</span>}
       <span title={label} style={{ flex: 1, minWidth: 0, fontSize: 12, fontFamily: 'Roboto Mono, monospace', color: 'var(--text-1)', userSelect: 'none', textAlign: 'left', paddingRight: 8,
         ...(wrap
@@ -468,7 +469,7 @@ const NEST_INDENT = 16  // px each nesting level is shifted right in the actor l
 const ACTOR_PANEL_W = 280
 // Everything in a row besides the name text: panel + card padding and border, the two checkbox
 // columns, zoom column, name gap, nesting arrow and scrollbar room
-const ROW_EXTRA = 24 + 24 + 2 + 56 + 56 + 32 + 8 + 16 + 16
+const ROW_EXTRA = 24 + 24 + 2 + 56 + 56 + 32 + 8 + 16 + 16 + 10  // + colour bar
 const LOGO_SLOT = 28
 // Narrow checkbox columns for the actor panel: just the checkbox and its small column label
 const ACTOR_COL = { width: 56, flexShrink: 0, borderLeft: '1px solid var(--border-lt)', padding: '0 2px' }
@@ -543,7 +544,7 @@ function ActorPanel({ left, onClose }) {
         )}
         {list.map(({ actor: a, indent }) => (
           <TypeRow
-            key={a.id} label={a.name || t('actors.unnamed')} indent={indent} legendType={null} legend={false} wrap cols={ACTOR_COLS}
+            key={a.id} label={a.name || t('actors.unnamed')} tint={actorTintVar(actors, a.id)} indent={indent} legendType={null} legend={false} wrap cols={ACTOR_COLS}
             inIsolate={actorsVisible && !hiddenActorIds.includes(a.id)}
             inHighlight={actorsHighlighted || highlightedActorIds.includes(a.id)}
             onToggleI={() => toggleActorHidden(a.id)}

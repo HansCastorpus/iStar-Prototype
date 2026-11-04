@@ -52,6 +52,15 @@ button:hover:not(:disabled) {
   --actor-hl-stripe-mix: #2f4766;  /* highlight stripes darken towards this */
   --actor-bg-light:  #fbfcfd;  /* deepest nested actor */
   --actor-bg-deep:   #e0e5ec;  /* what it darkens towards for each level out of a nesting */
+  /* one colour per actor (mixed into its background and shown in the actor list) */
+  --actor-tint-0: #4f8ef7;
+  --actor-tint-1: #4cb36b;
+  --actor-tint-2: #f2994a;
+  --actor-tint-3: #a66bdc;
+  --actor-tint-4: #2bb5b0;
+  --actor-tint-5: #e5668f;
+  --actor-tint-6: #d4b400;
+  --actor-tint-7: #9a7b6b;
 }
 
 /* ── Dark theme ─────────────────────────────────────────────────────────────── */
@@ -96,6 +105,14 @@ button:hover:not(:disabled) {
   --actor-hl-stripe-mix: #a9c0e0;
   --actor-bg-light:  #2a2f37;
   --actor-bg-deep:   #15181d;
+  --actor-tint-0: #5b8fe0;
+  --actor-tint-1: #4fa16b;
+  --actor-tint-2: #d98a45;
+  --actor-tint-3: #9468c4;
+  --actor-tint-4: #34a5a0;
+  --actor-tint-5: #cc5f85;
+  --actor-tint-6: #b9a000;
+  --actor-tint-7: #8a7064;
 }
 
 /* Side panels that open next to the filter panel */

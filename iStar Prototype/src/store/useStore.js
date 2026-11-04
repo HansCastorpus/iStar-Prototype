@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { GRID, snap, computeNodeSize } from '../utils/grid.js'
 import { getUsedOffsets, getNextSlot } from '../utils/ports.js'
 import { buildAnalysis, readEdits } from '../utils/analysisExport.js'
-import { chainOf, layoutIssues, addsIssue, actorNames } from '../utils/actorTree.js'
+import { chainOf, layoutIssues, addsIssue, actorNames, nextTintIndex } from '../utils/actorTree.js'
 
 const MIN_CLEARANCE = GRID * 2
 
@@ -566,7 +566,7 @@ const useStore = create((set, get) => ({
     const existing = Object.values(get().actors).find((a) => a.name === name)
     if (existing) return existing.id
     const id = crypto.randomUUID()
-    set((s) => ({ actors: { ...s.actors, [id]: { id, name, type, level: 1 } } }))
+    set((s) => ({ actors: { ...s.actors, [id]: { id, name, type, level: 1, colorIdx: nextTintIndex(s.actors) } } }))
     return id
   },
 

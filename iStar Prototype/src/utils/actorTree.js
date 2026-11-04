@@ -4,17 +4,32 @@
 // Shared by the actor drawing (Actor.jsx) and the overlap checks in the store.
 
 export const PAD = 20        // space between an actor's edge and what is directly inside it
-export const TAG_ROOM = 55   // room above a nested actor, inside its parent, for its name tag and connector line
+export const TAG_ROOM = 62   // room above a nested actor, inside its parent, for its name tag and connector line
 export const LINE_LEN = 15       // connector line from an actor's edge to its name tag
-export const LABEL_PAD_X = 10
-export const LABEL_PAD_Y = 6
-const FONT_SIZE_PRIMARY = 18     // name tag text size of a primary actor
-const FONT_SIZE_NESTED = 18       // ... and of a nested actor
+export const LABEL_PAD_X = 12
+export const LABEL_PAD_Y = 8
+const FONT_SIZE_PRIMARY = 23     // name tag text size of a primary actor
+const FONT_SIZE_NESTED = 23       // ... and of a nested actor
 const FONT_SIZE_HL_BUMP = 1.5     // added when the actor is highlighted
 export const tagFontSize = (nested, highlighted) =>
   (nested ? FONT_SIZE_NESTED : FONT_SIZE_PRIMARY) + (highlighted ? FONT_SIZE_HL_BUMP : 0)
 const TAG_MARGIN = 8              // space kept around a nested actor's tag
 export const ACTOR_GAP = 20  // required clearance between unrelated actor areas
+
+// Each actor gets one of ACTOR_TINTS colours (--actor-tint-N in index.css), kept on the actor as `colorIdx`;
+// actors from before that existed take the colour of their position in the list
+export const ACTOR_TINTS = 8
+export const actorTintIndex = (actors, id) => {
+  const a = actors[id]
+  return (a?.colorIdx ?? Math.max(0, Object.keys(actors).indexOf(id))) % ACTOR_TINTS
+}
+export const actorTintVar = (actors, id) => `var(--actor-tint-${actorTintIndex(actors, id)})`
+// The colour not yet used (or least used) by the existing actors
+export function nextTintIndex(actors) {
+  const counts = Array(ACTOR_TINTS).fill(0)
+  Object.keys(actors).forEach(id => counts[actorTintIndex(actors, id)]++)
+  return counts.indexOf(Math.min(...counts))
+}
 
 // The actors an element belongs to, outermost first (empty if it has no primary actor)
 export function chainOf(node) {
