@@ -78,7 +78,6 @@ export default function FilterPanel() {
   const selectedType        = useStore(s => s.selectedType)
 
   const legendOpen   = useStore(s => s.legendOpen)
-  const toggleLegend = useStore(s => s.toggleLegend)
   const hideTags     = useStore(s => s.hideTags)
   const setHideTags    = useStore(s => s.setHideTags)
 
@@ -95,6 +94,11 @@ export default function FilterPanel() {
   }
 
   const [actorPanelOpen, setActorPanelOpen] = useState(false)
+  const [filterOpen, setFilterOpen] = useState(true)
+  const [depsOpen, setDepsOpen] = useState(true)
+  // Kept here (not in Section) so the choices survive the whole panel being minimised
+  const [sectionOpen, setSectionOpen] = useState({ elements: true, links: true, actors: true })
+  const sectionProps = (key) => ({ open: sectionOpen[key], onToggle: () => setSectionOpen(o => ({ ...o, [key]: !o[key] })) })
 
   // Pressing anywhere on the diagram canvas closes the actor panel
   useEffect(() => {
@@ -171,39 +175,14 @@ export default function FilterPanel() {
       {/* Filter container */}
       {!collapsed && <>
       <div ref={setFilterCardEl} style={cardStyle}>
-        <div style={{ ...cardTitle, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <DropHeader open={filterOpen} onToggle={() => setFilterOpen(o => !o)} style={{ ...cardTitle, marginBottom: filterOpen ? 6 : 0 }}
+          extra={<button onClick={toggleCollapsed} title={t('filter.collapse')} aria-label={t('filter.collapse')}
+            style={collapseBtn}>«</button>}>
           {t('filter.title')}
-          <button onClick={toggleCollapsed} title={t('filter.collapse')} aria-label={t('filter.collapse')}
-            style={collapseBtn}>«</button>
-        </div>
+        </DropHeader>
+        {filterOpen && <>
 
-        {/* Legend button */}
-        <div style={{ marginBottom: 10 }}>
-          <button
-            onClick={toggleLegend}
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              background: legendOpen ? 'var(--text-1)' : 'var(--node-fill)',
-              color: legendOpen ? 'var(--bg-popup)' : 'var(--text-1)',
-              border: '1px solid var(--border-md)',
-              padding: '6px 10px',
-              cursor: 'pointer',
-              fontSize: 11,
-              fontFamily: 'Roboto Mono, monospace',
-              textAlign: 'left',
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-              <rect x="1" y="2" width="11" height="1.5" rx="0.75" fill="currentColor"/>
-              <rect x="1" y="5.75" width="11" height="1.5" rx="0.75" fill="currentColor"/>
-              <rect x="1" y="9.5" width="11" height="1.5" rx="0.75" fill="currentColor"/>
-            </svg>
-            {legendOpen ? t('filter.hideLegend') : t('filter.showLegend')}
-          </button>
-        </div>
+        <NumberTools />
 
         {/* Column headers */}
         <div style={{ display: 'flex', alignItems: 'flex-end' }}>
@@ -224,25 +203,28 @@ export default function FilterPanel() {
           </div>
         </div>
 
-        <Section label={t('filter.elements')} types={NODE_TYPES} first legend={legendOpen}
+        <Section label={t('filter.elements')} types={NODE_TYPES} first legend={legendOpen} {...sectionProps('elements')}
           highlightTypes={highlightTypes} isolateTypes={isolateTypes}
           onToggleH={toggleHighlightType} onToggleI={toggleIsolateType} />
 
-        <Section label={t('filter.links')} types={LINK_TYPES} legend={legendOpen}
+        <Section label={t('filter.links')} types={LINK_TYPES} legend={legendOpen} {...sectionProps('links')}
           highlightTypes={highlightTypes} isolateTypes={isolateTypes}
           onToggleH={toggleHighlightType} onToggleI={toggleIsolateType} />
 
-        <Section label={t('filter.actors')} types={ACTOR_TYPES} legend={legendOpen}
+        <Section label={t('filter.actors')} types={ACTOR_TYPES} legend={legendOpen} {...sectionProps('actors')}
           highlightTypes={highlightTypes} isolateTypes={isolateTypes}
-          onToggleH={toggleHighlightType} onToggleI={toggleIsolateType} />
-        <ActorListToggle open={actorPanelOpen} onToggle={() => setActorPanelOpen(o => !o)} />
+          onToggleH={toggleHighlightType} onToggleI={toggleIsolateType}>
+          <ActorListToggle open={actorPanelOpen} onToggle={() => setActorPanelOpen(o => !o)} />
+        </Section>
+        </>}
       </div>
 
       {/* Dependencies container */}
       <div style={{ ...cardStyle, gap: 6 }}>
-        <div style={cardTitle}>
+        <DropHeader open={depsOpen} onToggle={() => setDepsOpen(o => !o)} style={{ ...cardTitle, marginBottom: depsOpen ? 6 : 0 }}>
           {t('deps.title')}
-        </div>
+        </DropHeader>
+        {depsOpen && <>
         <div style={infoText}>
           <strong style={{ color: 'var(--text-1)' }}>{t('deps.infoLead')}</strong> {t('deps.info')}
         </div>
@@ -276,11 +258,60 @@ export default function FilterPanel() {
               : layers === 1 ? t('deps.showingLayer') : t('deps.showingLayers', { n: layers })}
           </div>
         )}
+        </>}
       </div>
       </>}
     </div>
     {actorPanelOpen && !collapsed && <ActorPanel left={panelWidth} onClose={() => setActorPanelOpen(false)} />}
     </>
+  )
+}
+
+// Switch for the element numbers + a box to find an element by its number and zoom in on it
+function NumberTools() {
+  const t = useT()
+  const showNumbers = useStore(s => s.showNumbers)
+  const setShowNumbers = useStore(s => s.setShowNumbers)
+  const [query, setQuery] = useState('')
+  const [missing, setMissing] = useState(false)
+  const find = (e) => {
+    e.preventDefault()
+    const n = parseInt(query.replace(/^\D+/, ''), 10)
+    const st = useStore.getState()
+    const node = Object.values(st.nodes).find(x => x.num === n)
+    setMissing(!node)
+    if (!node) return
+    st.select(node.id, 'node')
+    st.zoomToNode(node.id)
+  }
+  return (
+    <div style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 11,
+        fontFamily: 'Roboto Mono, monospace', color: 'var(--text-1)', userSelect: 'none' }}>
+        <button type="button" role="switch" aria-checked={showNumbers} onClick={() => setShowNumbers(!showNumbers)} style={{
+          width: 30, height: 16, borderRadius: 8, padding: 0, flexShrink: 0, cursor: 'pointer', position: 'relative',
+          border: '1px solid var(--border-md)', background: showNumbers ? 'var(--text-1)' : 'var(--node-fill)',
+        }}>
+          <span style={{ position: 'absolute', top: 2, left: showNumbers ? 16 : 2, width: 10, height: 10, borderRadius: 5,
+            background: showNumbers ? 'var(--bg-popup)' : 'var(--text-1)', transition: 'left 0.12s' }} />
+        </button>
+        {t('filter.numbers')}
+      </label>
+      <form onSubmit={find} style={{ display: 'flex', gap: 4 }}>
+        <input value={query} onChange={e => { setQuery(e.target.value); setMissing(false) }}
+          placeholder={t('filter.findPlaceholder')} inputMode="numeric" spellCheck={false} aria-label={t('filter.findPlaceholder')}
+          style={{ flex: 1, minWidth: 0, padding: '5px 8px', fontSize: 11, fontFamily: 'Roboto Mono, monospace',
+            background: 'var(--node-fill)', color: 'var(--text-1)', border: `1px solid ${missing ? '#dc2626' : 'var(--border-md)'}` }} />
+        <button type="submit" title={t('actors.zoom')} aria-label={t('actors.zoom')} style={{
+          background: 'var(--node-fill)', border: '1px solid var(--border-md)', cursor: 'pointer', padding: '0 8px', color: 'var(--text-1)', display: 'flex', alignItems: 'center' }}>
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+            <circle cx="5.5" cy="5.5" r="4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <line x1="8.5" y1="8.5" x2="13" y2="13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
+        </button>
+      </form>
+      {missing && <div style={{ fontSize: 10, color: '#dc2626', fontFamily: 'Roboto Mono, monospace' }}>{t('filter.findNone', { n: query })}</div>}
+    </div>
   )
 }
 
@@ -321,21 +352,44 @@ function StepIcon({ plus = false }) {
   )
 }
 
-function SectionLabel({ first, children }) {
+function Chevron({ open }) {
   return (
-    <div style={{ fontSize: 12, fontWeight: 'bold', color: 'var(--text-1)', fontFamily: 'Roboto Mono, monospace', textTransform: 'uppercase', marginTop: first ? 6 : 12, marginBottom: 4,
-      paddingBottom: 4, borderBottom: '1px solid var(--text-1)' }}>
-      {children}
+    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden style={{ flexShrink: 0, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.12s' }}>
+      <path d="M3 1 L7 5 L3 9" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+// Header that folds / unfolds the content under it
+function DropHeader({ open, onToggle, style, children, extra }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, ...style }}>
+      <button type="button" onClick={onToggle} aria-expanded={open} style={{
+        flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6, padding: 0, background: 'none', border: 'none',
+        cursor: 'pointer', color: 'inherit', font: 'inherit', textTransform: 'inherit', textAlign: 'left',
+      }}>
+        <Chevron open={open} />{children}
+      </button>
+      {extra}
     </div>
   )
 }
 
-function Section({ label, first, legend, types, highlightTypes, isolateTypes, onToggleH, onToggleI }) {
+function SectionLabel({ first, open, onToggle, children }) {
+  return (
+    <DropHeader open={open} onToggle={onToggle} style={{ fontSize: 12, fontWeight: 'bold', color: 'var(--text-1)', fontFamily: 'Roboto Mono, monospace', textTransform: 'uppercase', marginTop: first ? 6 : 12, marginBottom: 4,
+      paddingBottom: 4, borderBottom: '1px solid var(--text-1)' }}>
+      {children}
+    </DropHeader>
+  )
+}
+
+function Section({ label, first, legend, types, highlightTypes, isolateTypes, onToggleH, onToggleI, open, onToggle, children }) {
   const t = useT()
   return (
     <>
-      <SectionLabel first={first}>{label}</SectionLabel>
-      {types.map(type => (
+      <SectionLabel first={first} open={open} onToggle={onToggle}>{label}</SectionLabel>
+      {open && types.map(type => (
         <TypeRow
           key={type} label={t(`type.${type}`)} legendType={type} legend={legend}
           inHighlight={highlightTypes.includes(type)}
@@ -344,6 +398,7 @@ function Section({ label, first, legend, types, highlightTypes, isolateTypes, on
           onToggleI={() => onToggleI(type)}
         />
       ))}
+      {open && children}
     </>
   )
 }

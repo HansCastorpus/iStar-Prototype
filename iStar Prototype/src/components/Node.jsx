@@ -88,6 +88,7 @@ export default function Node({ node, strayActors }) {
   const highlightTypes = useStore(s => s.highlightTypes)
   const isolateTypes = useStore(s => s.isolateTypes)
   const hideTags = useStore(s => s.hideTags)
+  const showNumbers = useStore(s => s.showNumbers)
   const actors = useStore(s => s.actors)
   const t = useT()
   const typeName = t(`type.${node.type}`)
@@ -377,6 +378,14 @@ export default function Node({ node, strayActors }) {
         {typeName.toUpperCase()}
       </text>
       </>}
+
+      {/* Element number — small, inside the element, centred along the top */}
+      {showNumbers && node.num != null && (
+        <text x={cx} y={9} textAnchor="middle"
+          dominantBaseline="central" fontSize={9} fontFamily="Roboto Mono, monospace"
+          fill={isFillHighlighted ? 'var(--node-text-hl)' : 'var(--text-3)'}
+          style={{ pointerEvents: 'none', userSelect: 'none' }}>{node.num}</text>
+      )}
 
       {/* Warning: inside an actor's area without being attached to that actor */}
       {strayActors?.length > 0 && (

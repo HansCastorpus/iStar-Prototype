@@ -111,10 +111,14 @@ export function modelPath(models, id) {
   return path
 }
 
-const resizeNodes = (nodes) => Object.fromEntries(Object.entries(nodes || {}).map(([id, node]) => {
-  const { width, height } = computeNodeSize(node.label, node.type, node.logo ? node.logoAspect ?? 1 : 0)
-  return [id, { ...node, width, height }]
-}))
+// Elements saved before numbering existed get the next free number, in their stored order
+const resizeNodes = (nodes) => {
+  let next = Math.max(0, ...Object.values(nodes || {}).map(n => n.num ?? 0)) + 1
+  return Object.fromEntries(Object.entries(nodes || {}).map(([id, node]) => {
+    const { width, height } = computeNodeSize(node.label, node.type, node.logo ? node.logoAspect ?? 1 : 0)
+    return [id, { ...node, num: node.num ?? next++, width, height }]
+  }))
+}
 
 // What gets saved / exported: every reachable model, with the open one's live data
 function projectData(s) {
@@ -153,6 +157,7 @@ const useStore = create((set, get) => ({
   activeModelId: ROOT_MODEL,
   zoomRequest: null,  // { actorId, insetLeft, n }: asks the canvas to frame one actor, clear of the side panel covering insetLeft px
   zoomToActor: (actorId, insetLeft = 0) => set(st => ({ zoomRequest: { actorId, insetLeft, n: (st.zoomRequest?.n ?? 0) + 1 } })),
+  zoomToNode: (nodeId) => set(st => ({ zoomRequest: { nodeId, insetLeft: 0, n: (st.zoomRequest?.n ?? 0) + 1 } })),
   fitRequest: 0,  // bumped whenever a project is loaded, so the canvas re-frames the whole graph
 
   switchModel: (id) => {
@@ -261,6 +266,8 @@ const useStore = create((set, get) => ({
   toggleLegend: () => set(s => ({ legendOpen: !s.legendOpen })),
   filterCollapsed: false,  // the left filter panel is minimised to a narrow strip
   toggleFilterCollapsed: () => set(s => ({ filterCollapsed: !s.filterCollapsed })),
+  showNumbers: true,  // element numbers in the top-left corner of each element
+  setShowNumbers: (on) => set({ showNumbers: on }),
   hideTags: false,
   toggleHideTags: () => set(s => ({ hideTags: !s.hideTags })),
   setHideTags: (hide) => set({ hideTags: hide }),
@@ -416,7 +423,7 @@ const useStore = create((set, get) => ({
     set((s) => ({
       nodes: {
         ...s.nodes,
-        [id]: { id, type, label: '', actorId: null, x: nx, y: ny, width, height, ...(type === 'subactor' && { linkedModelId: null }) },
+        [id]: { id, num: Math.max(0, ...Object.values(s.nodes).map(n => n.num ?? 0)) + 1, type, label: '', actorId: null, x: nx, y: ny, width, height, ...(type === 'subactor' && { linkedModelId: null }) },
       },
       selectedId: id,
       selectedType: 'node',

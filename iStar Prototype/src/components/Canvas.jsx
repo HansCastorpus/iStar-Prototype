@@ -61,7 +61,7 @@ export default function Canvas() {
   }, [])
 
   // Frame the given elements, centred in the visible area (animated when asked); never zooms in past 100%
-  const frameNodes = useCallback((list, animate = false, insetLeft = 0) => {
+  const frameNodes = useCallback((list, animate = false, insetLeft = 0, maxK = 1) => {
     const svgEl = svgRef.current
     if (!list.length || !svgEl || !zoomRef.current) return
     const minX = Math.min(...list.map(n => n.x)), maxX = Math.max(...list.map(n => n.x + n.width))
@@ -69,7 +69,7 @@ export default function Canvas() {
     const rect = svgEl.getBoundingClientRect()
     const width = rect.width - insetLeft, height = rect.height  // insetLeft: part of the canvas covered by an open side panel
     const margin = 80
-    const k = Math.min(1, (width - margin * 2) / (maxX - minX), (height - margin * 2) / (maxY - minY))
+    const k = Math.min(maxK, (width - margin * 2) / (maxX - minX), (height - margin * 2) / (maxY - minY))
     const t = d3.zoomIdentity
       .translate(insetLeft + width / 2, height / 2).scale(Math.max(k, 0.1))
       .translate(-(minX + maxX) / 2, -(minY + maxY) / 2)
@@ -85,7 +85,11 @@ export default function Canvas() {
   // Zoom to one actor when asked (the actor panel's magnifier button)
   useEffect(() => {
     if (!zoomRequest) return
-    frameNodes(Object.values(useStore.getState().nodes).filter(n => inActor(n, zoomRequest.actorId)), true, zoomRequest.insetLeft)
+    const all = Object.values(useStore.getState().nodes)
+    if (zoomRequest.nodeId) {
+      const node = useStore.getState().nodes[zoomRequest.nodeId]
+      if (node) frameNodes([node], true, 0, 1.5)
+    } else frameNodes(all.filter(n => inActor(n, zoomRequest.actorId)), true, zoomRequest.insetLeft)
   }, [zoomRequest, frameNodes])
 
   const screenToWorld = useCallback((cx, cy) => ({

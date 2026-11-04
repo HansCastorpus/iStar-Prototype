@@ -32,7 +32,7 @@ export function buildAnalysis(project, models) {
     const { parentOf } = actorLayout(m.nodes)
 
     const refOf = {}
-    nodes.forEach((n, i) => { refOf[n.id] = `e${i + 1}` })
+    nodes.forEach((n, i) => { refOf[n.id] = `e${n.num ?? i + 1}` })
     const describe = (n) => `${n.type}: ${n.label?.trim() || '(no text)'}`
 
     return {
@@ -47,6 +47,7 @@ export function buildAnalysis(project, models) {
       })),
       elements: nodes.map(n => ({
         id: refOf[n.id],
+        number: n.num ?? null,
         key: n.id,
         type: n.type,
         text: n.label?.trim() || '',
@@ -71,7 +72,7 @@ export function buildAnalysis(project, models) {
     about: 'An iStar model. Each diagram lists its actors, the elements inside them and the links between elements. ' +
       'Links are directed: "from" is where the link starts and "to" is where its arrowhead points. ' +
       "An element's `actor` is its main actor; `nestedActors` are actors nested inside it, outermost first. " +
-      'Element ids (e1, e2, …) are only meaningful within their own diagram. Layout and images are left out. ' +
+      'Element ids (e1, e2, …) match the `number` shown in the corner of each element in the diagram, and are only meaningful within their own diagram. Layout and images are left out. ' +
       '`key` fields identify diagrams and elements when the file is imported back; import reads only an element\'s `text` and `type` and a link\'s `type`; everything else is ignored.',
     elementTypes: ELEMENT_TYPES,
     linkTypes: LINK_TYPES,
