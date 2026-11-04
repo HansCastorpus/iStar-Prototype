@@ -8,6 +8,8 @@ const ELEMENT_TYPES = {
   subactor: "An actor with its own diagram (see 'opensDiagram')",
 }
 
+const DEPENDUM = 'dependum'
+
 const LINK_TYPES = {
   'depends-on': 'dependency between elements',
   'needed-by': 'the element at "from" is needed by the element at "to"',
@@ -33,6 +35,9 @@ export function buildAnalysis(project, models) {
 
     const refOf = {}
     nodes.forEach((n, i) => { refOf[n.id] = `e${n.num ?? i + 1}` })
+    // Loosely, a dependum: an element outside every actor that is linked to other elements
+    const linked = new Set(Object.values(m.links).flatMap(l => [l.sourceId, l.targetId]))
+    const actorOf = (n) => actorName(n.actorId) ?? (linked.has(n.id) ? DEPENDUM : null)
     const describe = (n) => `${n.type}: ${n.label?.trim() || '(no text)'}`
 
     return {
@@ -51,7 +56,7 @@ export function buildAnalysis(project, models) {
         key: n.id,
         type: n.type,
         text: n.label?.trim() || '',
-        actor: actorName(n.actorId),
+        actor: actorOf(n),
         nestedActors: (n.nestedActorIds ?? []).map(actorName).filter(Boolean),
         ...(n.type === 'subactor' && { opensDiagram: project.models[n.linkedModelId]?.name ?? null }),
       })),
@@ -71,7 +76,7 @@ export function buildAnalysis(project, models) {
     format: 'istar-analysis',
     about: 'An iStar model. Each diagram lists its actors, the elements inside them and the links between elements. ' +
       'Links are directed: "from" is where the link starts and "to" is where its arrowhead points. ' +
-      "An element's `actor` is its main actor; `nestedActors` are actors nested inside it, outermost first. " +
+      "An element's `actor` is its main actor, or the word dependum for a linked element that is outside every actor; `nestedActors` are actors nested inside it, outermost first. " +
       'Element ids (e1, e2, …) match the `number` shown in the corner of each element in the diagram, and are only meaningful within their own diagram. Layout and images are left out. ' +
       '`key` fields identify diagrams and elements when the file is imported back; import reads only an element\'s `text` and `type` and a link\'s `type`; everything else is ignored.',
     elementTypes: ELEMENT_TYPES,
@@ -87,6 +92,10 @@ const EDITABLE_ELEMENT_TYPES = ['goal', 'task', 'softgoal', 'resource']  // sub-
 export function readEdits(json, models) {
   let data
   try { data = JSON.parse(json) } catch { return { error: 'notJson' } }
+  return readEditsFromData(data, models)
+}
+
+export function readEditsFromData(data, models) {
   if (data?.format !== 'istar-analysis' || !Array.isArray(data.diagrams)) return { error: 'notAnalysis' }
   const nodes = [], links = []
   // Why entries were ignored: no `key` in the entry (an older export), a key that matches nothing in this

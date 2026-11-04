@@ -311,7 +311,7 @@ const Hint = ({ children }) => <span style={{ marginLeft: 'auto', paddingLeft: 1
 const MenuDivider = () => <div style={{ height: 1, background: 'var(--border-lt)', margin: '4px 0' }} />
 
 export default function Toolbar() {
-  const { mode, setMode, exportDiagram, exportForAnalysis, importEdits, importDiagram, clearDiagram, exportAsImage, darkMode, toggleDarkMode } = useStore()
+  const { mode, setMode, exportDiagram, exportForAnalysis, exportForSpreadsheet, importEdits, importSpreadsheet, importDiagram, clearDiagram, exportAsImage, darkMode, toggleDarkMode } = useStore()
   const lang = useStore(s => s.lang)
   const setLang = useStore(s => s.setLang)
   const t = useT()
@@ -384,6 +384,18 @@ export default function Toolbar() {
     }
     reader.readAsText(file)
     e.target.value = ''
+  }
+
+  const sheetRef = useRef(null)
+  const handleImportSheet = async (e) => {
+    const file = e.target.files[0]
+    e.target.value = ''
+    if (!file) return
+    const r = await importSpreadsheet(await file.arrayBuffer())
+    if (r.error) return alert(t(r.error === 'notJson' ? 'toolbar.importSheetBadFile' : 'toolbar.importSheetNotOurs'))
+    const reasons = Object.entries(r.skipped).filter(([, n]) => n > 0)
+      .map(([why, n]) => `• ${t(`toolbar.importEditsSkip.${why}`, { n })}`)
+    alert([t('toolbar.importEditsDone', { n: r.updated }), ...(reasons.length ? [t('toolbar.importEditsIgnored'), ...reasons] : [])].join('\n'))
   }
 
   const handleImport = (e) => {
@@ -506,6 +518,7 @@ export default function Toolbar() {
           <MenuLabel>{t('toolbar.export')}</MenuLabel>
           <MenuItem onClick={() => { exportDiagram(); close() }}>{t('menu.project')}</MenuItem>
           <MenuItem onClick={() => { exportForAnalysis(); close() }}>{t('menu.analysis')}</MenuItem>
+          <MenuItem onClick={() => { exportForSpreadsheet(); close() }}>{t('menu.sheet')}</MenuItem>
           <MenuItem onClick={() => { exportAsImage('png'); close() }}>{t('menu.png')}</MenuItem>
           <MenuItem onClick={() => { exportAsImage('jpeg'); close() }}>{t('menu.jpeg')}</MenuItem>
           <MenuDivider />
@@ -514,10 +527,14 @@ export default function Toolbar() {
           <MenuItem onClick={() => { textRef.current.click(); close() }}>
             <span title={t('toolbar.importEditsHint')}>{t('menu.editsOnly')}</span>
           </MenuItem>
+          <MenuItem onClick={() => { sheetRef.current.click(); close() }}>
+            <span title={t('toolbar.importSheetHint')}>{t('menu.sheetEdits')}</span>
+          </MenuItem>
         </>}
       </Menu>
 
       <input ref={fileRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImport} />
+      <input ref={sheetRef} type="file" accept=".xlsx" style={{ display: 'none' }} onChange={handleImportSheet} />
       <input ref={textRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImportText} />
 
       <Menu label={t('toolbar.options')} align="right" width={270}>

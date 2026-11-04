@@ -682,9 +682,35 @@ const useStore = create((set, get) => ({
   // Apply edits from an analysis file: element text and type, link type. Nothing else changes, and nothing is
   // moved. → { error } or { updated, skipped }
   importEdits: (json) => {
-    const s = get()
-    const result = readEdits(json, withLive(s))
+    const result = readEdits(json, withLive(get()))
     if (result.error) return result
+    return get().applyEdits(result)
+  },
+
+  // Excel / Google Sheets file with the elements' text (see excelExport.js)
+  exportForSpreadsheet: async () => {
+    const project = projectData(get())
+    const analysis = buildAnalysis(project, reachableModels(project.models))
+    const { buildWorkbookBlob } = await import('../utils/excelExport.js')
+    const url = URL.createObjectURL(await buildWorkbookBlob(analysis))
+    const a = document.createElement('a')
+    a.href = url
+    const base = (get().models[ROOT_MODEL]?.name ?? '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '').trim()
+    a.download = `${base || 'istar-diagram'} - elements.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+  },
+
+  // → { error } or { updated, skipped }; only element text is read from the sheet
+  importSpreadsheet: async (buffer) => {
+    const { readSheetEdits } = await import('../utils/excelExport.js')
+    const result = await readSheetEdits(buffer, withLive(get()))
+    if (result.error) return result
+    return get().applyEdits(result)
+  },
+
+  applyEdits: (result) => {
+    const s = get()
     const { nodes, links, skipped } = result
     const { beginBatch, endBatch, updateNode, updateLink } = get()
     beginBatch()  // the open diagram's changes are one undo step
