@@ -18,7 +18,7 @@ export const ACTOR_GAP = 20  // required clearance between unrelated actor areas
 
 // Each actor gets one of ACTOR_TINTS colours (--actor-tint-N in index.css), kept on the actor as `colorIdx`;
 // actors from before that existed take the colour of their position in the list
-export const ACTOR_TINTS = 8
+export const ACTOR_TINTS = 12
 export const actorTintIndex = (actors, id) => {
   const a = actors[id]
   return (a?.colorIdx ?? Math.max(0, Object.keys(actors).indexOf(id))) % ACTOR_TINTS

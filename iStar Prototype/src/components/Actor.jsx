@@ -74,7 +74,7 @@ function nameTag(name, logo, highlighted, nested, anchorCorner, lineDir, hullExt
 // actor is --actor-bg-light and each level out is mixed further towards --actor-bg-deep: a tree of 1
 // level steps by 75%; deeper trees spread up to a full 100% over their levels.
 const SHADE_STEP = 75
-// Every actor also leans towards its own colour (tint), so neighbouring actors are told apart at a glance.
+// A highlighted actor also leans towards its own colour (tint), so neighbouring actors are told apart at a glance.
 const TINT_PCT = 30
 function backgroundShade({ depth, levels }, tint) {
   let base = 'var(--actor-bg)'
@@ -82,7 +82,7 @@ function backgroundShade({ depth, levels }, tint) {
     const pct = ((levels - depth) / levels) * Math.min(100, SHADE_STEP * levels)
     base = `color-mix(in srgb, var(--actor-bg-deep) ${pct}%, var(--actor-bg-light))`
   }
-  return `color-mix(in srgb, ${tint} ${TINT_PCT}%, ${base})`
+  return tint ? `color-mix(in srgb, ${tint} ${TINT_PCT}%, ${base})` : base
 }
 
 // Does a tag (box + connector line) touch a link or an element? Boxes are checked with a small margin.
@@ -315,7 +315,7 @@ export default function Actor({ actor, linkPaths = {} }) {
   }
 
   // Highlighted (incl. selected): solid line matching the name tag's stroke
-  const bg = backgroundShade(shade, actorTintVar(actors, actor.id))
+  const bg = backgroundShade(shade, isHighlighted ? actorTintVar(actors, actor.id) : null)
   const hullStroke = isHighlighted ? 'var(--node-stroke)' : 'var(--text-3)'
   const hullStrokeW = isHighlighted ? 2 : 1
 

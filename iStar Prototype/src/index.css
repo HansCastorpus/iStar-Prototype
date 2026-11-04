@@ -53,14 +53,18 @@ button:hover:not(:disabled) {
   --actor-bg-light:  #fbfcfd;  /* deepest nested actor */
   --actor-bg-deep:   #e0e5ec;  /* what it darkens towards for each level out of a nesting */
   /* one colour per actor (mixed into its background and shown in the actor list) */
-  --actor-tint-0: #4f8ef7;
-  --actor-tint-1: #4cb36b;
-  --actor-tint-2: #f2994a;
-  --actor-tint-3: #a66bdc;
-  --actor-tint-4: #2bb5b0;
-  --actor-tint-5: #e5668f;
-  --actor-tint-6: #d4b400;
-  --actor-tint-7: #9a7b6b;
+  --actor-tint-0: #8fd8d3;
+  --actor-tint-1: #f4a79a;
+  --actor-tint-2: #ecdc82;
+  --actor-tint-3: #b8b0ee;
+  --actor-tint-4: #f5c99b;
+  --actor-tint-5: #9cc8f2;
+  --actor-tint-6: #f0aec6;
+  --actor-tint-7: #a9dc9a;
+  --actor-tint-8: #d9b9a0;
+  --actor-tint-9: #e3a0d0;
+  --actor-tint-10: #d6e07a;
+  --actor-tint-11: #c3c8d6;
 }
 
 /* ── Dark theme ─────────────────────────────────────────────────────────────── */
@@ -105,14 +109,18 @@ button:hover:not(:disabled) {
   --actor-hl-stripe-mix: #a9c0e0;
   --actor-bg-light:  #2a2f37;
   --actor-bg-deep:   #15181d;
-  --actor-tint-0: #5b8fe0;
-  --actor-tint-1: #4fa16b;
-  --actor-tint-2: #d98a45;
-  --actor-tint-3: #9468c4;
-  --actor-tint-4: #34a5a0;
-  --actor-tint-5: #cc5f85;
-  --actor-tint-6: #b9a000;
-  --actor-tint-7: #8a7064;
+  --actor-tint-0: #5fb0ab;
+  --actor-tint-1: #c9786b;
+  --actor-tint-2: #b8a655;
+  --actor-tint-3: #8a84c4;
+  --actor-tint-4: #c99366;
+  --actor-tint-5: #6f9fcf;
+  --actor-tint-6: #c47f9b;
+  --actor-tint-7: #6fa862;
+  --actor-tint-8: #a8856f;
+  --actor-tint-9: #b57aa8;
+  --actor-tint-10: #9aa845;
+  --actor-tint-11: #8a90a3;
 }
 
 /* Side panels that open next to the filter panel */

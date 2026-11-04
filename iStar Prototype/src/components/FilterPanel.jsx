@@ -416,7 +416,7 @@ function TypeRow({ label, tint, indent = 0, legendType = label, wrap = false, co
     : <div style={{ width: LEGEND_W, flexShrink: 0 }} />
   return (
     <div style={{ display: 'flex', alignItems: 'center', padding: '4px 0', paddingLeft: indent * NEST_INDENT,
-      ...(tint && { background: `color-mix(in srgb, ${tint} 16%, transparent)`, borderLeft: `4px solid ${tint}`, paddingLeft: indent * NEST_INDENT + 6 }) }}>
+      ...(tint && { background: `color-mix(in srgb, ${tint} 20%, transparent)`, borderLeft: `4px solid ${tint}`, paddingLeft: indent * NEST_INDENT + 6 }) }}>
       {indent > 0 && <span aria-hidden style={{ color: 'var(--text-3)', fontFamily: 'Roboto Mono, monospace', fontSize: 12, marginRight: 4, userSelect: 'none' }}>└</span>}
       <span title={label} style={{ flex: 1, minWidth: 0, fontSize: 12, fontFamily: 'Roboto Mono, monospace', color: 'var(--text-1)', userSelect: 'none', textAlign: 'left', paddingRight: 8,
         ...(wrap
@@ -544,7 +544,7 @@ function ActorPanel({ left, onClose }) {
         )}
         {list.map(({ actor: a, indent }) => (
           <TypeRow
-            key={a.id} label={a.name || t('actors.unnamed')} tint={actorTintVar(actors, a.id)} indent={indent} legendType={null} legend={false} wrap cols={ACTOR_COLS}
+            key={a.id} label={a.name || t('actors.unnamed')} tint={actorsHighlighted || highlightedActorIds.includes(a.id) ? actorTintVar(actors, a.id) : null} indent={indent} legendType={null} legend={false} wrap cols={ACTOR_COLS}
             inIsolate={actorsVisible && !hiddenActorIds.includes(a.id)}
             inHighlight={actorsHighlighted || highlightedActorIds.includes(a.id)}
             onToggleI={() => toggleActorHidden(a.id)}
