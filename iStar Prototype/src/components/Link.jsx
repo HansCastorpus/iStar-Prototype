@@ -232,7 +232,10 @@ function SourceIcon({ type, x, y, color, sw }) {
 
 // Where a link crosses another, the one underneath breaks off to let the top one through; when the top
 // one is highlighted it casts a shadow onto the one underneath instead.
-const GAP = 4             // clear space either side of a top link that is not highlighted
+const GAP = 5             // clear space either side of a top link that is not highlighted (at a right-angle crossing)
+const DIAGONAL_GAP = 4    // extra clear space when the two links cross at a shallow angle, so they stay readable
+// How square-on a crossing is: 1 = perpendicular, → 0 = the links run nearly alongside each other
+const squareness = (c) => Math.max(0.3, Math.abs(c.selfDir.x * c.otherDir.y - c.selfDir.y * c.otherDir.x))
 const SHADOW_REACH = 14   // how far along the top link its shadow extends from the crossing
 const SHADOW_LAYERS = [{ grow: 12, opacity: 0.05 }, { grow: 9, opacity: 0.07 }, { grow: 6, opacity: 0.1 }, { grow: 3, opacity: 0.14 }]
 const BASE_SW = 1.5
@@ -428,8 +431,8 @@ export default function Link({ link, points, andBar, allPaths = {}, crossings = 
         <mask id={gapMaskId} maskUnits="userSpaceOnUse" {...bounds}>
           <rect {...bounds} fill="white" />
           {gaps.map((c, i) => (
-            <path key={i} d={segment(c, c.otherDir, sw / 2 + 1)} stroke="black" fill="none"
-              strokeWidth={looks[c.otherId].sw + GAP * 2} />
+            <path key={i} d={segment(c, c.otherDir, sw / 2 / squareness(c) + 1)} stroke="black" fill="none"
+              strokeWidth={looks[c.otherId].sw + (GAP + DIAGONAL_GAP * (1 - squareness(c))) * 2} />
           ))}
         </mask>
       )}
