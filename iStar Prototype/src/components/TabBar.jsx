@@ -89,12 +89,12 @@ function Path() {
 }
 
 
-export default function TabBar() {
+export default function TabBar({ inset = 0 }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-      background: 'var(--bg-header)', borderBottom: '1px solid var(--border)',
-      padding: 2, flexShrink: 0,
+      background: 'var(--bg-header)',
+      padding: 2, paddingLeft: 2 + inset, flexShrink: 0,
     }}>
       {/* tabs start at the left of the bar and use the width available */}
       <div style={{ minWidth: 0, display: 'flex' }}>

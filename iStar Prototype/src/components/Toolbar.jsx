@@ -263,7 +263,7 @@ function Menu({ label, active = false, align = 'left', width = 220, children }) 
         aria-haspopup="menu" aria-expanded={open}
         className="tbtn" data-on={active || open}
         style={{
-          padding: '5px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Roboto, sans-serif',
+          padding: '5px 14px', cursor: 'pointer', fontSize: 15, textTransform: 'uppercase', letterSpacing: 0.5, fontFamily: 'Roboto, sans-serif',
           display: 'flex', alignItems: 'center', gap: 8,
           whiteSpace: 'nowrap',
         }}
@@ -315,7 +315,7 @@ const MenuLabel = ({ children }) => (
 const Hint = ({ children }) => <span style={{ marginLeft: 'auto', paddingLeft: 12, fontSize: 11, color: 'var(--text-2)' }}>{children}</span>
 const MenuDivider = () => <div style={{ height: 4 }} />
 
-export default function Toolbar() {
+export default function Toolbar({ inset = 0 }) {
   const { mode, setMode, exportDiagram, exportForAnalysis, exportForSpreadsheet, importEdits, importSpreadsheet, importDiagram, clearDiagram, exportAsImage, darkMode, toggleDarkMode } = useStore()
   const lang = useStore(s => s.lang)
   const setLang = useStore(s => s.setLang)
@@ -419,8 +419,7 @@ export default function Toolbar() {
       display: 'flex',
       alignItems: 'center',
       gap: 0,
-      padding: 2,
-      borderBottom: '1px solid var(--border)',
+      padding: 2, paddingLeft: 2 + inset,
       background: 'var(--bg-header)',
       flexShrink: 0,
     }}>
@@ -496,7 +495,7 @@ export default function Toolbar() {
               alignItems: 'center',
               justifyContent: 'center',
               gap: 6,
-              fontSize: 13,
+              fontSize: 15, textTransform: 'uppercase', letterSpacing: 0.5,
               fontFamily: 'Roboto, sans-serif',
               whiteSpace: 'nowrap',
             }}
@@ -557,7 +556,7 @@ export default function Toolbar() {
         <OrConnector space={6} />
 
         {/* Select is the default mode (no button): an add button is armed until used, or clicked again */}
-        <span style={{ marginLeft: 'auto', fontSize: 13, fontFamily: 'Roboto, sans-serif', color: 'var(--text-1)', whiteSpace: 'nowrap' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 15, textTransform: 'uppercase', letterSpacing: 0.5, fontFamily: 'Roboto, sans-serif', color: 'var(--text-1)', whiteSpace: 'nowrap' }}>
           {t('toolbar.add')}
         </span>
         {MODES.filter(m => m.id !== 'select').map(({ id, label }) => (
@@ -569,7 +568,7 @@ export default function Toolbar() {
               '--btn-glow': id === 'add-subactor' ? undefined : `var(--hl-${id.replace('add-', '')})`,  // the element's own colour, as in the filter panel (sub-actor's is white: it keeps the default)
               padding: '5px 14px',
               cursor: 'pointer',
-              fontSize: 13,
+              fontSize: 15, textTransform: 'uppercase', letterSpacing: 0.5,
               fontFamily: 'Roboto, sans-serif',
               whiteSpace: 'nowrap',
             }}

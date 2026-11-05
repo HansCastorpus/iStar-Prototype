@@ -15,6 +15,7 @@ button:hover:not(:disabled) {
   --bg-panel:   #fafafa;
   --bg-header:  #ffffff;
   --bg-popup:   #ffffff;
+  --bg-logo:    #f6f6f6;   /* logo area: everything left of the header's diagonal */
   --radius:     6px;   /* slight corner rounding on the interface's rectangles */
   --text-1:     #333;
   --text-2:     #999;
@@ -80,6 +81,7 @@ button:hover:not(:disabled) {
   --bg-canvas:  #1a1a1a;
   --bg-panel:   #212121;
   --bg-header:  #262626;
+  --bg-logo:    #1f1f1f;
   --bg-popup:   #2a2a2a;
   --text-1:     #ddd;
   --text-2:     #777;
