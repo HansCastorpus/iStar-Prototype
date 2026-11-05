@@ -70,7 +70,7 @@ function ActorFields({ actor }) {
 
   return (
     <>
-      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-title)', fontFamily: 'Roboto Mono, monospace', marginBottom: 4 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-title)', fontFamily: 'Roboto, sans-serif', marginBottom: 4 }}>
         {t('actorPopup.title')} · {t(memberCount === 1 ? 'actorPopup.element' : 'actorPopup.elements', { n: memberCount })}
       </div>
 
@@ -85,7 +85,7 @@ function ActorFields({ actor }) {
         placeholder={t('popup.actorPlaceholder')}
       />
       {mergeTarget && (
-        <div style={{ fontSize: 11, color: 'var(--text-1)', fontFamily: 'Roboto Mono, monospace', lineHeight: 1.4 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-1)', fontFamily: 'Roboto, sans-serif', lineHeight: 1.4 }}>
           {t('actorPopup.mergeHint', { name: mergeTarget.name })}
         </div>
       )}

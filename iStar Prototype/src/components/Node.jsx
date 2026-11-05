@@ -383,7 +383,7 @@ export default function Node({ node, strayActors }) {
       {/* Element number — small, inside the element, centred along the top */}
       {showNumbers && node.num != null && (
         <text x={cx} y={9} textAnchor="middle"
-          dominantBaseline="central" fontSize={9} fontFamily="Roboto Mono, monospace"
+          dominantBaseline="central" fontSize={9} fontFamily="Roboto, sans-serif"
           fill={isFillHighlighted ? 'var(--node-text-hl)' : 'var(--text-3)'}
           style={{ pointerEvents: 'none', userSelect: 'none' }}>{node.num}</text>
       )}

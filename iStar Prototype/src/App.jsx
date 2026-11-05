@@ -49,7 +49,7 @@ export default function App() {
         <div style={{
           width: filterCollapsed ? logoWidth : filterPanelRight ?? 300, flexShrink: 0, boxSizing: 'border-box',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: '8px 16px', background: 'var(--bg-panel)',
+          padding: '8px 16px', background: 'var(--bg-header)',
           borderRight: '1px solid var(--border)', borderBottom: '1px solid var(--border)',
         }}>
           <Logo />

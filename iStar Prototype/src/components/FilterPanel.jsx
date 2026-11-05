@@ -10,46 +10,37 @@ const NODE_TYPES = ['goal', 'task', 'softgoal', 'resource', 'subactor']
 const LINK_TYPES = ['depends-on', 'or', 'xor', 'and', 'help', 'hurt', 'make', 'break', 'needed-by', 'part-of']
 const ACTOR_TYPES = ['actor']
 
-// Minimum column widths (they fit the English labels); columns grow when a language's labels are longer
-const MIN_LABEL_W = 82  // name column / Show-Hide tags buttons
-const MIN_COL_I   = 88  // visibility column (Show all / Hide all)
-const MIN_COL_H   = 112 // highlight column (Highlight all / Clear all)
+// Each header column holds one toggle button that is as wide as the longer of its two labels in the current language.
 const COL_I_PAD_L = 10  // extra room between the divider and the visibility column
 const PANEL_CHROME = 50 // panel padding (2 × 12) + card border (2) + card padding (2 × 12)
-const BTN_CHROME  = 22  // header button padding (2 × 10) + border (2)
+const BTN_CHROME  = 10  // header button padding (2 × 4) + border (2)
 
 // Width of `text` in the header buttons' font
 let measureCtx = null
 function buttonTextW(text) {
   if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d')
-  measureCtx.font = '10px Roboto Mono, monospace'
+  measureCtx.font = '10px Roboto, sans-serif'
   return Math.ceil(measureCtx.measureText(text).width)
 }
 
-// Width of a classic scrollbar on this system (0 with overlay scrollbars, e.g. macOS default)
-const SCROLLBAR_W = (() => {
-  const el = document.createElement('div')
-  el.style.cssText = 'position:absolute;top:-9999px;width:100px;height:100px;overflow:scroll'
-  document.body.appendChild(el)
-  const w = el.offsetWidth - el.clientWidth
-  el.remove()
-  return w
-})()
 const LEGEND_GAP = 6  // space between legend icon and checkbox
 const SQUARE = 16
 
 // Shared column styles so header buttons and row checkboxes line up exactly. Widths fit the current
 // language's button labels; with the legend on, columns grow just enough for checkbox + legend icon.
-const LEGEND_CONTENT = SQUARE + LEGEND_GAP + LEGEND_W
+// Cells hold only the legend icon (no checkbox): the same room on every side of it. The tallest element
+// sample is 18px, so a row is 18 + 2 × CELL_PAD high, and the legend columns are the widest sample + 2 × CELL_PAD.
+const CELL_PAD = 6
+const ROW_H = 18 + 2 * CELL_PAD
 function useColumns() {
   const t = useT()
   return useMemo(() => {
     const widest = (keys) => Math.max(...keys.map(k => buttonTextW(t(k)))) + BTN_CHROME
-    const label = Math.max(MIN_LABEL_W, widest(['filter.showTags', 'filter.hideTags']) + 8)
-    const i = Math.max(MIN_COL_I, widest(['filter.showAll', 'filter.hideAll']) + COL_I_PAD_L + 4)
-    const h = Math.max(MIN_COL_H, widest(['filter.highlightAll', 'filter.clearAll']) + 8)
-    const iW = (legend) => legend ? Math.max(i, LEGEND_CONTENT + COL_I_PAD_L + 4) : i
-    const hW = (legend) => legend ? Math.max(h, LEGEND_CONTENT + 8) : h
+    const label = widest(['filter.showTags', 'filter.hideTags']) + 16  // the name column keeps its original width
+    const i = widest(['filter.showAll', 'filter.hideAll'])
+    const h = widest(['filter.highlightAll', 'filter.clearAll'])
+    const iW = (legend) => legend ? Math.max(i, LEGEND_W + 2 * CELL_PAD) : i
+    const hW = (legend) => legend ? Math.max(h, LEGEND_W + 2 * CELL_PAD) : h
     return {
       panelWidth: (legend) => PANEL_CHROME + label + iW(legend) + hW(legend),
       colI: (legend) => ({ width: iW(legend), flexShrink: 0, borderLeft: '1px solid var(--border-lt)', padding: `0 4px 0 ${COL_I_PAD_L}px` }),
@@ -66,7 +57,6 @@ export default function FilterPanel() {
   const toggleHighlightType = useStore(s => s.toggleHighlightType)
   const toggleIsolateType   = useStore(s => s.toggleIsolateType)
   const hiddenActorIds      = useStore(s => s.hiddenActorIds)
-  const highlightedActorIds = useStore(s => s.highlightedActorIds)
   const setAllHighlight     = useStore(s => s.setAllHighlight)
   const setAllIsolate       = useStore(s => s.setAllIsolate)
   const focusNodeId         = useStore(s => s.focusNodeId)
@@ -129,13 +119,11 @@ export default function FilterPanel() {
 
   // A bulk button reads as active when the current state matches what it would set
   const allVisible      = ALL_TYPES.every(t => isolateTypes.includes(t)) && hiddenActorIds.length === 0
-  const noneVisible     = isolateTypes.length === 0
   const allHighlighted  = ALL_TYPES.every(t => highlightTypes.includes(t))
-  const noneHighlighted = highlightTypes.length === 0 && highlightedActorIds.length === 0
 
   const collapsed = useStore(s => s.filterCollapsed)
   const toggleCollapsed = useStore(s => s.toggleFilterCollapsed)
-  const panelWidth = collapsed ? COLLAPSED_W : basePanelWidth(legendOpen) + (overflows ? SCROLLBAR_W : 0)
+  const panelWidth = collapsed ? COLLAPSED_W : basePanelWidth(legendOpen)
 
   // Share the Filter card's on-screen position so the toolbar can centre the logo over it
   const [filterCardEl, setFilterCardEl] = useState(null)
@@ -152,7 +140,7 @@ export default function FilterPanel() {
     return () => { ro.disconnect(); window.removeEventListener('resize', publish) }
   }, [filterCardEl, setFilterCardBox])
 
-  // Share where the panel ends (its scrollbar strip included) so the header can carry the line on
+  // Share where the panel ends so the logo container lines up with the cards
   const setFilterPanelRight = useStore(s => s.setFilterPanelRight)
   useEffect(() => {
     if (panelEl) setFilterPanelRight(panelEl.getBoundingClientRect().right)
@@ -160,12 +148,13 @@ export default function FilterPanel() {
 
   return (
     <>
-    <div ref={setPanelEl} style={{
+    <div ref={setPanelEl} className="no-scrollbar" style={{
       // Equal padding around the cards; when the content overflows, the panel widens by the
       // scrollbar's width so the scrollbar sits in its own strip at the edge instead of squeezing the cards
       width: panelWidth,
-      borderRight: '1px solid var(--border)',
-      background: 'var(--bg-panel)',
+      // Floats over the canvas (diagram and grid show underneath). Only the cards take the mouse, except while
+      // the cards overflow: then the panel itself takes it, so it can scroll (the cards fill its height anyway)
+      position: 'absolute', top: 0, bottom: 0, left: 0, zIndex: 100, pointerEvents: overflows && !collapsed ? 'auto' : 'none',
       display: 'flex',
       flexDirection: 'column',
       flexShrink: 0,
@@ -192,20 +181,21 @@ export default function FilterPanel() {
 
         {/* Column headers */}
         <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-          {/* Show / hide tags, stacked like the column buttons on the right */}
-          <div style={{ flex: 1, minWidth: 0, paddingRight: 8, display: 'flex', alignItems: 'flex-end' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <button onClick={() => setHideTags(false)} style={colBtnStyle(!hideTags)}>{t('filter.showTags')}</button>
-              <button onClick={() => setHideTags(true)} style={colBtnStyle(hideTags)}>{t('filter.hideTags')}</button>
-            </div>
+          {/* One toggle per column: dark while on (labelled with what a click undoes), light while off */}
+          <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
+            <button onClick={() => setHideTags(!hideTags)} className="tbtn" data-on={!hideTags} style={filterBtnStyle}>
+              {t(hideTags ? 'filter.showTags' : 'filter.hideTags')}
+            </button>
           </div>
-          <div style={{ ...colI(legendOpen), display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <button onClick={() => setAllIsolate(true)} style={colBtnStyle(allVisible)}>{t('filter.showAll')}</button>
-            <button onClick={() => setAllIsolate(false)} style={colBtnStyle(noneVisible)}>{t('filter.hideAll')}</button>
+          <div style={{ ...colI(legendOpen), ...cellColumn, display: 'flex' }}>
+            <button onClick={() => setAllIsolate(!allVisible)} className="tbtn" data-on={allVisible} style={filterBtnStyle}>
+              {t(allVisible ? 'filter.hideAll' : 'filter.showAll')}
+            </button>
           </div>
-          <div style={{ ...colH(legendOpen), display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <button onClick={() => setAllHighlight(true)} style={colBtnStyle(allHighlighted)}>{t('filter.highlightAll')}</button>
-            <button onClick={() => setAllHighlight(false)} style={colBtnStyle(noneHighlighted)}>{t('filter.clearAll')}</button>
+          <div style={{ ...colH(legendOpen), ...cellColumn, display: 'flex' }}>
+            <button onClick={() => setAllHighlight(!allHighlighted)} className="tbtn" data-on={allHighlighted} style={filterBtnStyle}>
+              {t(allHighlighted ? 'filter.clearAll' : 'filter.highlightAll')}
+            </button>
           </div>
         </div>
 
@@ -262,13 +252,13 @@ export default function FilterPanel() {
           {pathOn ? t('deps.pathClear') : t('deps.path')}
         </button>
         {(pathOn || canPath || canFocus || selectedIds.length > 0) && (
-          <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'Roboto Mono, monospace', lineHeight: 1.5 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'Roboto, sans-serif', lineHeight: 1.5 }}>
             {pathOn && canPath ? (hasPath ? t('deps.pathShowing') : t('deps.pathNone')) : t('deps.pathHint')}
           </div>
         )}
         {/* Current status */}
         {(!canFocus || isDirectActive || isDeepActive) && (
-          <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'Roboto Mono, monospace', marginTop: 2, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'Roboto, sans-serif', marginTop: 2, lineHeight: 1.5 }}>
             {!canFocus
               ? t('deps.noSelection')
               : isDeepActive
@@ -305,10 +295,10 @@ function NumberTools() {
   return (
     <div style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 11,
-        fontFamily: 'Roboto Mono, monospace', color: 'var(--text-1)', userSelect: 'none' }}>
+        fontFamily: 'Roboto, sans-serif', color: 'var(--text-1)', userSelect: 'none' }}>
         <button type="button" role="switch" aria-checked={showNumbers} onClick={() => setShowNumbers(!showNumbers)} style={{
           width: 30, height: 16, borderRadius: 8, padding: 0, flexShrink: 0, cursor: 'pointer', position: 'relative',
-          border: '1px solid var(--border-md)', background: showNumbers ? 'var(--text-1)' : 'var(--node-fill)',
+          border: '1px solid var(--border-md)', background: showNumbers ? 'var(--bg-selected)' : 'var(--node-fill)',
         }}>
           <span style={{ position: 'absolute', top: 2, left: showNumbers ? 16 : 2, width: 10, height: 10, borderRadius: 5,
             background: showNumbers ? 'var(--bg-popup)' : 'var(--text-1)', transition: 'left 0.12s' }} />
@@ -318,7 +308,7 @@ function NumberTools() {
       <form onSubmit={find} style={{ display: 'flex', gap: 4 }}>
         <input value={query} onChange={e => { setQuery(e.target.value); setMissing(false) }}
           placeholder={t('filter.findPlaceholder')} inputMode="numeric" spellCheck={false} aria-label={t('filter.findPlaceholder')}
-          style={{ flex: 1, minWidth: 0, padding: '5px 8px', fontSize: 11, fontFamily: 'Roboto Mono, monospace',
+          style={{ flex: 1, minWidth: 0, padding: '5px 8px', fontSize: 11, fontFamily: 'Roboto, sans-serif',
             background: 'var(--node-fill)', color: 'var(--text-1)', border: `1px solid ${missing ? '#dc2626' : 'var(--border-md)'}` }} />
         <button type="submit" title={t('actors.zoom')} aria-label={t('actors.zoom')} style={{
           background: 'var(--node-fill)', border: '1px solid var(--border-md)', cursor: 'pointer', padding: '0 8px', color: 'var(--text-1)', display: 'flex', alignItems: 'center' }}>
@@ -328,7 +318,7 @@ function NumberTools() {
           </svg>
         </button>
       </form>
-      {missing && <div style={{ fontSize: 10, color: '#dc2626', fontFamily: 'Roboto Mono, monospace' }}>{t('filter.findNone', { n: query })}</div>}
+      {missing && <div style={{ fontSize: 10, color: '#dc2626', fontFamily: 'Roboto, sans-serif' }}>{t('filter.findNone', { n: query })}</div>}
     </div>
   )
 }
@@ -342,7 +332,7 @@ function LayerStepper({ value, max, enabled, onChange }) {
   const canInc = enabled && value < max
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 2,
-      fontSize: 10, fontFamily: 'Roboto Mono, monospace', color: enabled ? 'var(--text-2)' : 'var(--text-3)' }}>
+      fontSize: 10, fontFamily: 'Roboto, sans-serif', color: enabled ? 'var(--text-2)' : 'var(--text-3)' }}>
       <span style={{ whiteSpace: 'nowrap' }}>{t('deps.layers')}</span>
       {/* Arrow from the label to the buttons, stretching across the free space */}
       <span aria-hidden style={{ flex: 1, minWidth: 16, display: 'flex', alignItems: 'center' }}>
@@ -395,7 +385,7 @@ function DropHeader({ open, onToggle, style, children, extra }) {
 
 function SectionLabel({ first, open, onToggle, children }) {
   return (
-    <DropHeader open={open} onToggle={onToggle} style={{ fontSize: 12, fontWeight: 'bold', color: 'var(--text-1)', fontFamily: 'Roboto Mono, monospace', textTransform: 'uppercase', marginTop: first ? 6 : 12, marginBottom: 4,
+    <DropHeader open={open} onToggle={onToggle} style={{ fontSize: 12, fontWeight: 'bold', color: 'var(--text-1)', fontFamily: 'Roboto, sans-serif', textTransform: 'uppercase', marginTop: first ? 6 : 12, marginBottom: 4,
       paddingBottom: 4, borderBottom: '1px solid var(--text-1)' }}>
       {children}
     </DropHeader>
@@ -407,24 +397,42 @@ function Section({ label, first, legend, types, highlightTypes, isolateTypes, on
   return (
     <>
       <SectionLabel first={first} open={open} onToggle={onToggle}>{label}</SectionLabel>
-      {open && types.map(type => (
+      {/* Rows touch each other (the card's 4px gap would leave white strips between the cells) */}
+      {open && <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {types.map(type => (
         <TypeRow
-          key={type} label={t(`type.${type}`)} legendType={type} legend={legend}
+          key={type} label={t(`type.${type}`)} legendType={type} legend={legend} cells
           inHighlight={highlightTypes.includes(type)}
           inIsolate={isolateTypes.includes(type)}
           onToggleH={() => onToggleH(type)}
           onToggleI={() => onToggleI(type)}
         />
       ))}
+      </div>}
       {open && children}
     </>
   )
 }
 
+// With cells, the column spans the row's full height and has no padding, so the toggle fills it
+const cellColumn = { alignSelf: 'stretch', padding: 0 }
+
+// A column cell used as a toggle: darker background while on, tinted on hover (the global button hover)
+function Cell({ active, onClick, children }) {
+  return (
+    <button type="button" aria-pressed={active} onClick={onClick} style={{
+      flex: 1, alignSelf: 'stretch', padding: 0, border: 'none', borderRadius: 0, cursor: 'pointer',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: LEGEND_GAP,
+      background: active ? 'var(--cell-on)' : 'transparent', color: 'var(--text-1)',
+    }}>{children}</button>
+  )
+}
+
 // legendType: which sample to show when the legend is on (null = blank space, keeps checkboxes aligned)
+// cells: no checkbox; the whole column cell is the toggle, with a darker background while on
 // wrap: let long labels run onto several lines instead of being cut off with "…"
 // cols: { i, h } styles to use instead of the filter panel's columns (the actor panel's are narrower)
-function TypeRow({ label, tint, indent = 0, legendType = label, wrap = false, cols, legend, inHighlight, inIsolate, onToggleH, onToggleI, onZoom, logo }) {
+function TypeRow({ label, tint, indent = 0, legendType = label, wrap = false, cells = false, cols, legend, inHighlight, inIsolate, onToggleH, onToggleI, onZoom, logo }) {
   const t = useT()
   const panelCols = useColumns()
   const iStyle = cols?.i ?? panelCols.colI(legend)
@@ -433,23 +441,27 @@ function TypeRow({ label, tint, indent = 0, legendType = label, wrap = false, co
     : legendType ? <LegendSlot type={legendType} highlighted={highlighted} />
     : <div style={{ width: LEGEND_W, flexShrink: 0 }} />
   return (
-    <div style={{ display: 'flex', alignItems: 'center', padding: '4px 0', paddingLeft: indent * NEST_INDENT,
+    <div style={{ display: 'flex', alignItems: 'center', padding: cells ? 0 : '4px 0', minHeight: cells ? ROW_H : undefined, paddingLeft: indent * NEST_INDENT,
       ...(tint && { background: `color-mix(in srgb, ${tint} 20%, transparent)`, borderLeft: `4px solid ${tint}`, paddingLeft: indent * NEST_INDENT + 6 }) }}>
-      {indent > 0 && <span aria-hidden style={{ color: 'var(--text-3)', fontFamily: 'Roboto Mono, monospace', fontSize: 12, marginRight: 4, userSelect: 'none' }}>└</span>}
-      <span title={label} style={{ flex: 1, minWidth: 0, fontSize: 12, fontFamily: 'Roboto Mono, monospace', color: 'var(--text-1)', userSelect: 'none', textAlign: 'left', paddingRight: 8,
+      {indent > 0 && <span aria-hidden style={{ color: 'var(--text-3)', fontFamily: 'Roboto, sans-serif', fontSize: 12, marginRight: 4, userSelect: 'none' }}>└</span>}
+      <span title={label} style={{ flex: 1, minWidth: 0, fontSize: 12, fontFamily: 'Roboto, sans-serif', color: 'var(--text-1)', userSelect: 'none', textAlign: 'left', paddingRight: 8,
         ...(wrap
           ? { whiteSpace: 'nowrap' }
           : { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }) }}>
         {label}
       </span>
       {logo && <img src={logo} alt="" style={{ width: 20, height: 20, objectFit: 'contain', flexShrink: 0, marginRight: 8 }} />}
-      <div style={{ ...iStyle, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: LEGEND_GAP }}>
-        <Square active={inIsolate} onClick={onToggleI} />
-        {slot(false)}
+      <div style={{ ...iStyle, ...(cells && cellColumn), display: 'flex', justifyContent: 'center', alignItems: 'center', gap: LEGEND_GAP }}>
+        {cells ? <Cell active={inIsolate} onClick={onToggleI}>{slot(false)}</Cell> : <>
+          <Square active={inIsolate} onClick={onToggleI} />
+          {slot(false)}
+        </>}
       </div>
-      <div style={{ ...hStyle, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: LEGEND_GAP }}>
-        <Square active={inHighlight} onClick={onToggleH} />
-        {slot(true)}
+      <div style={{ ...hStyle, ...(cells && cellColumn), display: 'flex', justifyContent: 'center', alignItems: 'center', gap: LEGEND_GAP }}>
+        {cells ? <Cell active={inHighlight} onClick={onToggleH}>{slot(true)}</Cell> : <>
+          <Square active={inHighlight} onClick={onToggleH} />
+          {slot(true)}
+        </>}
       </div>
       {onZoom && (
         <div style={ZOOM_COL}>
@@ -528,11 +540,11 @@ function ActorPanel({ left, onClose }) {
     for (const r of roots.sort(byName)) walk(r, 0, new Set())
     return out
   }, [actors, nodes])
-  const colLabel = { fontSize: 9, color: 'var(--text-3)', fontFamily: 'Roboto Mono, monospace', textAlign: 'center' }
+  const colLabel = { fontSize: 9, color: 'var(--text-3)', fontFamily: 'Roboto, sans-serif', textAlign: 'center' }
 
   // Wide enough that no actor name is cut or broken: the longest row decides
   const panelW = Math.max(ACTOR_PANEL_W, ...list.map(({ actor: a, indent }) =>
-    Math.ceil(measureText(a.name || t('actors.unnamed'), '12px Roboto Mono, monospace')) + indent * NEST_INDENT + ROW_EXTRA + (a.logo ? LOGO_SLOT : 0)))
+    Math.ceil(measureText(a.name || t('actors.unnamed'), '12px Roboto, sans-serif')) + indent * NEST_INDENT + ROW_EXTRA + (a.logo ? LOGO_SLOT : 0)))
 
   return (
     <div className="panel-slide-in" style={{
@@ -558,7 +570,7 @@ function ActorPanel({ left, onClose }) {
         </div>
 
         {list.length === 0 && (
-          <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'Roboto Mono, monospace', padding: '6px 0' }}>{t('actors.none')}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'Roboto, sans-serif', padding: '6px 0' }}>{t('actors.none')}</div>
         )}
         {list.map(({ actor: a, indent }) => (
           <TypeRow
@@ -614,20 +626,23 @@ const cardStyle = {
   padding: 12,
   background: 'var(--bg-popup)',
   border: '1px solid var(--border)',
+  borderRadius: 'var(--radius)',
+  boxShadow: '0 2px 10px rgba(0, 0, 0, 0.12)',
+  pointerEvents: 'auto',
 }
 
 const infoText = {
-  fontSize: 10, color: 'var(--text-2)', fontFamily: 'Roboto Mono, monospace', lineHeight: 1.5, marginBottom: 6,
+  fontSize: 10, color: 'var(--text-2)', fontFamily: 'Roboto, sans-serif', lineHeight: 1.5, marginBottom: 6,
 }
 
 const COLLAPSED_W = 44
 const collapseBtn = {
   background: 'var(--node-fill)', color: 'var(--text-1)', border: '1px solid var(--border-md)',
-  width: 28, height: 24, padding: 0, cursor: 'pointer', fontSize: 14, fontFamily: 'Roboto Mono, monospace', lineHeight: 1,
+  width: 28, height: 24, padding: 0, cursor: 'pointer', pointerEvents: 'auto', fontSize: 14, fontFamily: 'Roboto, sans-serif', lineHeight: 1,
 }
 
 const cardTitle = {
-  fontSize: 13, fontWeight: 'bold', color: 'var(--text-1)', fontFamily: 'Roboto Mono, monospace', textTransform: 'uppercase', marginBottom: 6,
+  fontSize: 13, fontWeight: 'bold', color: 'var(--text-1)', fontFamily: 'Roboto, sans-serif', textTransform: 'uppercase', marginBottom: 6,
 }
 
 const colBtn = {
@@ -637,7 +652,7 @@ const colBtn = {
   padding: '6px 10px',
   cursor: 'pointer',
   fontSize: 10,
-  fontFamily: 'Roboto Mono, monospace',
+  fontFamily: 'Roboto, sans-serif',
   color: 'var(--text-1)',
   textAlign: 'center',
   whiteSpace: 'nowrap',
@@ -645,10 +660,22 @@ const colBtn = {
 
 const colBtnStyle = (active) => ({
   ...colBtn,
-  background: active ? 'var(--text-1)' : 'var(--node-fill)',
+  background: active ? 'var(--bg-selected)' : 'var(--node-fill)',
   color: active ? 'var(--bg-popup)' : 'var(--text-1)',
-  border: `1px solid ${active ? 'var(--text-1)' : 'var(--border-md)'}`,
+  border: `1px solid ${active ? 'var(--bg-selected)' : 'var(--border-md)'}`,
 })
+
+// Header toggle buttons across their columns: text only, with a pill on hover and while on (.tbtn in index.css)
+const filterBtnStyle = {
+  flex: 1, minWidth: 0,
+  padding: '6px 4px',
+  margin: 2,
+  cursor: 'pointer',
+  fontSize: 10,
+  fontFamily: 'Roboto, sans-serif',
+  textAlign: 'center',
+  whiteSpace: 'nowrap',
+}
 
 const focusBtnStyle = (active, enabled) => ({
   ...colBtnStyle(active),

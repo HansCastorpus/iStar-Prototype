@@ -2,7 +2,7 @@ import { useState } from 'react'
 import useStore from '../store/useStore.js'
 import { useT } from '../i18n.js'
 
-// Title of the open diagram, in the top left of the work area. It is the same name as the diagram's tab
+// Title of the open diagram, in the top right of the work area. It is the same name as the diagram's tab
 // (and its sub-actor box); double-click to rename it.
 export default function WorkTitle() {
   const t = useT()
@@ -17,8 +17,8 @@ export default function WorkTitle() {
   }
 
   const style = {
-    position: 'absolute', top: 12, left: 16, zIndex: 5, maxWidth: '60%',
-    font: '700 22px Roboto Mono, monospace', color: 'var(--text-title)', margin: 0,
+    position: 'absolute', top: 12, right: 16, zIndex: 5, maxWidth: '60%', textAlign: 'right',
+    font: '700 22px Roboto, sans-serif', color: 'var(--text-title)', margin: 0,
   }
 
   if (text != null) {

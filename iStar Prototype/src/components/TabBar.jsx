@@ -25,16 +25,14 @@ function Tabs() {
   }
 
   return (
-    <div role="tablist" style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', minWidth: 0, fontFamily: 'Roboto Mono, monospace' }}>
+    <div role="tablist" style={{ display: 'flex', alignItems: 'center', gap: 0, overflowX: 'auto', minWidth: 0, fontFamily: 'Roboto, sans-serif' }}>
       {tabs.map(({ id, name, depth }) => {
         const active = id === activeId
-        // Buttons like the header's: the open diagram is filled, like the selected mode
         const style = {
           display: 'flex', alignItems: 'center', gap: 4, padding: '5px 14px', cursor: 'pointer', whiteSpace: 'nowrap',
-          fontSize: 13, fontFamily: 'Roboto Mono, monospace', flexShrink: 0,
-          border: '1px solid var(--border-md)',
-          background: active ? 'var(--text-1)' : 'none',
-          color: active ? 'var(--bg-popup)' : 'var(--text-1)',
+          fontSize: 13, fontFamily: 'Roboto, sans-serif', flexShrink: 0,
+          background: 'transparent', color: 'var(--text-1)', border: 'none', boxShadow: 'none',
+          fontWeight: active ? 700 : 400,  // the open diagram is bold; tabs have no hover or selection patch
         }
         if (editing?.id === id) {
           return (
@@ -42,7 +40,7 @@ function Tabs() {
               onChange={e => setEditing({ id, text: e.target.value })}
               onBlur={commit}
               onKeyDown={e => { if (e.key === 'Enter') commit(); else if (e.key === 'Escape') setEditing(null) }}
-              style={{ ...style, cursor: 'text', width: 150, background: 'var(--node-fill)', color: 'var(--text-1)', outline: 'none' }} />
+              style={{ ...style, border: '1px solid var(--border-md)', cursor: 'text', width: 150, background: 'var(--node-fill)', color: 'var(--text-1)', outline: 'none' }} />
           )
         }
         return (
@@ -51,6 +49,9 @@ function Tabs() {
             onClick={() => switchModel(id)}
             onDoubleClick={() => setEditing({ id, text: name })}
             style={style}>
+            <svg width="13" height="10" viewBox="0 0 13 10" aria-hidden style={{ flexShrink: 0, opacity: active ? 1 : 0.5 }}>
+              <path d="M1.5 5 H11 M7 1.5 L11 5 L7 8.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
             {depth > 0 && <span aria-hidden style={{ opacity: 0.6 }}>↳</span>}
             <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
           </button>
@@ -69,7 +70,7 @@ function Path() {
   if (path.length < 2) return null
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-2)', fontFamily: 'Roboto Mono, monospace', whiteSpace: 'nowrap', flexShrink: 0 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-2)', fontFamily: 'Roboto, sans-serif', whiteSpace: 'nowrap', flexShrink: 0, padding: '0 8px' }}>
       <span style={{ color: 'var(--text-3)' }}>{t('tabs.path')}</span>
       {path.map((id, i) => (
         <span key={id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -86,14 +87,13 @@ function Path() {
   )
 }
 
-const BAR_PAD_X = 8
 
 export default function TabBar() {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-      background: 'var(--bg-panel)', borderBottom: '1px solid var(--border)',
-      padding: `6px ${BAR_PAD_X}px`, flexShrink: 0,
+      background: 'var(--bg-header)', borderBottom: '1px solid var(--border)',
+      padding: 0, flexShrink: 0,
     }}>
       {/* tabs start at the left of the bar and use the width available */}
       <div style={{ minWidth: 0, display: 'flex' }}>

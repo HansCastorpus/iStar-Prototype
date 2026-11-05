@@ -16,6 +16,7 @@ export const popoverStyle = (x, y) => ({
   top: y,
   background: 'var(--bg-popup)',
   border: '1px solid var(--border-md)',
+  borderRadius: 'var(--radius)',
   padding: '12px',
   display: 'flex',
   flexDirection: 'column',
@@ -50,12 +51,12 @@ export const toggleBtnStyle = {
   padding: '2px 8px',
   cursor: 'pointer',
   fontSize: 11,
-  fontFamily: 'Roboto Mono, monospace',
+  fontFamily: 'Roboto, sans-serif',
   lineHeight: 1.3,
 }
 
 export const summaryStyle = {
-  fontSize: 13, color: 'var(--text-1)', fontFamily: 'Roboto Mono, monospace',
+  fontSize: 13, color: 'var(--text-1)', fontFamily: 'Roboto, sans-serif',
   maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
 }
 
@@ -84,5 +85,5 @@ export const btnStyle = (color) => ({
   padding: '4px 10px',
   cursor: 'pointer',
   fontSize: 12,
-  fontFamily: 'Roboto Mono, monospace',
+  fontFamily: 'Roboto, sans-serif',
 })

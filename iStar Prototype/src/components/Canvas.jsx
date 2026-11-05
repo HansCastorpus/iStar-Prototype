@@ -67,7 +67,8 @@ export default function Canvas() {
     const minX = Math.min(...list.map(n => n.x)), maxX = Math.max(...list.map(n => n.x + n.width))
     const minY = Math.min(...list.map(n => n.y)), maxY = Math.max(...list.map(n => n.y + n.height))
     const rect = svgEl.getBoundingClientRect()
-    const width = rect.width - insetLeft, height = rect.height  // insetLeft: part of the canvas covered by an open side panel
+    insetLeft += useStore.getState().filterPanelRight ?? 0  // the filter panel floats over the canvas
+    const width = rect.width - insetLeft, height = rect.height  // insetLeft: part of the canvas covered by side panels
     const margin = 80
     const k = Math.min(maxK, (width - margin * 2) / (maxX - minX), (height - margin * 2) / (maxY - minY))
     const t = d3.zoomIdentity

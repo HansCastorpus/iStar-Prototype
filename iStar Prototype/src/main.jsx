@@ -5,7 +5,7 @@ import App from './App.jsx'
 
 // Wait (briefly) for the UI font, since panel and element widths are measured with it
 const fontReady = Promise.race([
-  Promise.all(['400', '600', '700'].map(w => document.fonts.load(`${w} 12px "Roboto Mono"`))),
+  Promise.all(['400', '600', '700'].map(w => document.fonts.load(`${w} 12px "Roboto"`))),
   new Promise(resolve => setTimeout(resolve, 1500)),
 ])
 

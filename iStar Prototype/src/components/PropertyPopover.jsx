@@ -57,7 +57,7 @@ function selectionAnchor({ selectedId, selectedIds, selectedType, nodes, links, 
   return node ? screenBounds([node], transform) : null
 }
 
-const blockedStyle = { fontSize: 11, color: '#c00', fontFamily: 'Roboto Mono, monospace', lineHeight: 1.4 }
+const blockedStyle = { fontSize: 11, color: '#c00', fontFamily: 'Roboto, sans-serif', lineHeight: 1.4 }
 
 // Primary actor and any nested actors of the selected element(s). Each slot has a text box (creates
 // the actor if the name is new) and a drop-down of the existing actors, and a choice is applied to
@@ -220,7 +220,7 @@ export default function PropertyPopover({ linkPaths = {} }) {
 
     return frame(<>
         {header()}
-        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-title)', marginBottom: 4, fontFamily: 'Roboto Mono, monospace' }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-title)', marginBottom: 4, fontFamily: 'Roboto, sans-serif' }}>
           {t('popup.selected', { n: selectedIds.length })}
         </div>
         {!collapsed && <>

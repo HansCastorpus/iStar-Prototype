@@ -12,8 +12,6 @@ const MODES = [
   { id: 'add-subactor',   label: 'toolbar.addSubactor' },
 ]
 
-const TOOLBAR_PAD_X = 8
-
 const iconStyle = { display: 'inline', verticalAlign: 'middle', margin: '0 2px' }
 
 // stroke: outline colour, e.g. the blue / green selection outlines
@@ -71,7 +69,7 @@ export function Logo() {
   const goal = { x: 1, w: 52 }
   const res  = { x: 84, w: 62 }
   const tip = res.x, barX = tip - LOGO_ARROW_H - LOGO_ICON_GAP
-  const text = { fontSize: 12, fontFamily: 'Roboto Mono, monospace', fill: 'var(--node-text)',
+  const text = { fontSize: 12, fontFamily: 'Roboto, sans-serif', fill: 'var(--node-text)',
     textAnchor: 'middle', dominantBaseline: 'central' }
   return (
     <svg viewBox={`0 0 ${res.x + res.w + 1} ${H}`}
@@ -99,6 +97,7 @@ export function Logo() {
 // take up whatever width the header has left over, while the buttons keep their spacing.
 // `space`: side margin; it adds to the parent's flex gap to make 10px each side (toolbar gap 8 → 2).
 const CONNECTOR_MIN_W = 34
+const CONNECTOR_LINE_W = 1   // thinner than the logo's lines
 function OrConnector({ space = 2 }) {
   const H = 14, MID = H / 2
   const R = LOGO_ICON_R
@@ -106,10 +105,10 @@ function OrConnector({ space = 2 }) {
   const cx = R, tip = W
   return (
     <div aria-hidden style={{ flex: `1 1 ${CONNECTOR_MIN_W}px`, minWidth: CONNECTOR_MIN_W, display: 'flex', alignItems: 'center', margin: `0 ${space}px` }}>
-      <div style={{ flex: 1, height: LOGO_LINE_W, background: 'var(--link-def)' }} />
+      <div style={{ flex: 1, height: CONNECTOR_LINE_W, background: 'var(--link-def)' }} />
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', flexShrink: 0, overflow: 'visible' }}>
-        <circle cx={cx} cy={MID} r={LOGO_ICON_R - LOGO_LINE_W / 2}
-          fill="var(--node-fill)" stroke="var(--link-def)" strokeWidth={LOGO_LINE_W} />
+        <circle cx={cx} cy={MID} r={LOGO_ICON_R - CONNECTOR_LINE_W / 2}
+          fill="var(--node-fill)" stroke="var(--link-def)" strokeWidth={CONNECTOR_LINE_W} />
         <polygon fill="var(--link-def)"
           points={`${tip},${MID} ${tip - LOGO_ARROW_H},${MID - LOGO_ARROW_HW} ${tip - LOGO_ARROW_H},${MID + LOGO_ARROW_HW}`} />
       </svg>
@@ -262,11 +261,10 @@ function Menu({ label, active = false, align = 'left', width = 220, children }) 
       <button
         onClick={() => setOpen(o => !o)}
         aria-haspopup="menu" aria-expanded={open}
+        className="tbtn" data-on={active || open}
         style={{
-          ...actionBtn,
+          padding: '5px 14px', cursor: 'pointer', fontSize: 13, fontFamily: 'Roboto, sans-serif',
           display: 'flex', alignItems: 'center', gap: 8,
-          background: active || open ? 'var(--text-1)' : 'none',
-          color: active || open ? 'var(--bg-popup)' : 'var(--text-1)',
           whiteSpace: 'nowrap',
         }}
       >
@@ -279,8 +277,8 @@ function Menu({ label, active = false, align = 'left', width = 220, children }) 
         <div ref={panelRef} role="menu" style={{
           position: 'absolute', top: 'calc(100% + 4px)', [align]: 0, width, zIndex: 300,
           maxWidth: 'calc(100vw - 16px)', transform: `translateX(${shift}px)`,
-          background: 'var(--bg-popup)', border: '1px solid var(--border-md)', padding: '4px 0',
-          boxShadow: '0 4px 14px rgba(0,0,0,0.15)', fontFamily: 'Roboto Mono, monospace', fontSize: 13,
+          background: 'var(--bg-popup)', border: '1px solid var(--border-md)', borderRadius: 'var(--radius)', padding: '4px 0',
+          boxShadow: '0 4px 14px rgba(0,0,0,0.15)', fontFamily: 'Roboto, sans-serif', fontSize: 13,
         }}>
           {typeof children === 'function' ? children(() => setOpen(false)) : children}
         </div>
@@ -289,31 +287,40 @@ function Menu({ label, active = false, align = 'left', width = 220, children }) 
   )
 }
 
-// One row of a menu. checked: shows a tick (the current choice); danger: red
-function MenuItem({ children, onClick, checked, danger, disabled }) {
+// One row of a menu. checked: shows a tick (the current choice); current: bold, no tick; faded: dimmed (an unused choice); danger: red
+function MenuItem({ children, onClick, checked, danger, disabled, desc, current, faded }) {
   return (
     <button role="menuitem" onClick={onClick} disabled={disabled} style={{
       display: 'flex', alignItems: 'center', width: '100%', textAlign: 'left',
       background: 'none', border: 'none', padding: '6px 14px 6px 10px', gap: 6,
-      fontFamily: 'Roboto Mono, monospace', fontSize: 13, cursor: disabled ? 'default' : 'pointer',
+      fontFamily: 'Roboto, sans-serif', fontSize: 13, cursor: disabled ? 'default' : 'pointer',
       color: danger ? '#c00' : disabled ? 'var(--text-3)' : 'var(--text-1)',
+      opacity: faded ? 0.3 : 1,
+      borderRadius: 0,
     }}>
-      <span aria-hidden style={{ width: 12, flexShrink: 0, fontSize: 12 }}>{checked ? '✓' : ''}</span>
-      {children}
+      <span aria-hidden style={{ width: 12, flexShrink: 0, fontSize: 12, alignSelf: desc ? 'flex-start' : 'center', marginTop: desc ? 2 : 0 }}>{checked ? '✓' : ''}</span>
+      {desc
+        ? <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <span style={{ fontWeight: checked || current ? 'bold' : 'normal' }}>{children}</span>
+            <span style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.3 }}>{desc}</span>
+          </span>
+        : children}
     </button>
   )
 }
 
 const MenuLabel = ({ children }) => (
-  <div style={{ padding: '6px 14px 2px', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-2)' }}>{children}</div>
+  <div style={{ padding: '5px 14px', background: 'var(--bg-menu-title)', fontSize: 13, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.8, color: 'var(--text-menu)' }}>{children}</div>
 )
 const Hint = ({ children }) => <span style={{ marginLeft: 'auto', paddingLeft: 12, fontSize: 11, color: 'var(--text-2)' }}>{children}</span>
-const MenuDivider = () => <div style={{ height: 1, background: 'var(--border-lt)', margin: '4px 0' }} />
+const MenuDivider = () => <div style={{ height: 4 }} />
 
 export default function Toolbar() {
   const { mode, setMode, exportDiagram, exportForAnalysis, exportForSpreadsheet, importEdits, importSpreadsheet, importDiagram, clearDiagram, exportAsImage, darkMode, toggleDarkMode } = useStore()
   const lang = useStore(s => s.lang)
   const setLang = useStore(s => s.setLang)
+  const language = useStore(s => s.language)
+  const setLanguage = useStore(s => s.setLanguage)
   const t = useT()
   const canUndo = useStore(s => s.canUndo)
   const canRedo = useStore(s => s.canRedo)
@@ -411,21 +418,78 @@ export default function Toolbar() {
     <div data-toolbar style={{
       display: 'flex',
       alignItems: 'center',
-      gap: 8,
-      padding: `8px ${TOOLBAR_PAD_X}px`,
+      gap: 0,
+      padding: 0,
       borderBottom: '1px solid var(--border)',
-      background: 'var(--bg-panel)',
+      background: 'var(--bg-header)',
       flexShrink: 0,
     }}>
-      {/* Mode buttons (the group grows, so its inner divider stretches like the other two) */}
-      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flex: '1 1 auto' }}>
+      <Menu label={t('toolbar.file')} width={280}>
+        {close => <>
+          <MenuLabel>{t('menu.language')}</MenuLabel>
+          <MenuItem current={language === 'istar2'} faded={language !== 'istar2'} desc={t('menu.langIstar2Desc')} onClick={() => { setLanguage('istar2'); close() }}>{t('menu.langIstar2')}</MenuItem>
+          <MenuItem current={language === 'custom'} faded={language !== 'custom'} desc={t('menu.langCustomDesc')} onClick={() => { setLanguage('custom'); close() }}>{t('menu.langCustom')}</MenuItem>
+          <MenuDivider />
+          <MenuLabel>{t('toolbar.export')}</MenuLabel>
+          <MenuItem onClick={() => { exportDiagram(); close() }}>{t('menu.project')}</MenuItem>
+          <MenuItem onClick={() => { exportForAnalysis(); close() }}>{t('menu.analysis')}</MenuItem>
+          <MenuItem onClick={() => { exportForSpreadsheet(); close() }}>{t('menu.sheet')}</MenuItem>
+          <MenuItem onClick={() => { exportAsImage('png'); close() }}>{t('menu.png')}</MenuItem>
+          <MenuItem onClick={() => { exportAsImage('jpeg'); close() }}>{t('menu.jpeg')}</MenuItem>
+          <MenuDivider />
+          <MenuLabel>{t('toolbar.import')}</MenuLabel>
+          <MenuItem onClick={() => { fileRef.current.click(); close() }}>{t('menu.project')}</MenuItem>
+          <MenuItem onClick={() => { textRef.current.click(); close() }}>
+            <span title={t('toolbar.importEditsHint')}>{t('menu.editsOnly')}</span>
+          </MenuItem>
+          <MenuItem onClick={() => { sheetRef.current.click(); close() }}>
+            <span title={t('toolbar.importSheetHint')}>{t('menu.sheetEdits')}</span>
+          </MenuItem>
+        </>}
+      </Menu>
+
+      <input ref={fileRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImport} />
+      <input ref={sheetRef} type="file" accept=".xlsx" style={{ display: 'none' }} onChange={handleImportSheet} />
+      <input ref={textRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImportText} />
+
+      <Menu label={t('toolbar.options')} width={270}>
+        {close => <>
+          <MenuLabel>{t('toolbar.edit')}</MenuLabel>
+          <MenuItem disabled={!canUndo} onClick={() => { undo(); close() }}>{t('toolbar.undoItem')}<Hint>Ctrl/⌘+Z</Hint></MenuItem>
+          <MenuItem disabled={!canRedo} onClick={() => { redo(); close() }}>{t('toolbar.redoItem')}<Hint>Shift+Ctrl/⌘+Z</Hint></MenuItem>
+          <MenuDivider />
+          <MenuLabel>{t('toolbar.language')}</MenuLabel>
+          {LANGS.map(l => (
+            <MenuItem key={l} checked={lang === l} onClick={() => { setLang(l); close() }}>{t(`lang.${l}`)}</MenuItem>
+          ))}
+          <MenuDivider />
+          <MenuLabel>{t('toolbar.theme')}</MenuLabel>
+          <MenuItem checked={!darkMode} onClick={() => { if (darkMode) toggleDarkMode(); close() }}>{t('toolbar.themeLight')}</MenuItem>
+          <MenuItem checked={darkMode} onClick={() => { if (!darkMode) toggleDarkMode(); close() }}>{t('toolbar.themeDark')}</MenuItem>
+          <MenuDivider />
+          <MenuLabel>{t('toolbar.view')}</MenuLabel>
+          <MenuItem checked={showGrid} onClick={() => setViewAid('showGrid', !showGrid)}>{t('toolbar.showGrid')}</MenuItem>
+          <MenuItem checked={showClearance} onClick={() => setViewAid('showClearance', !showClearance)}>
+            <span title={t('toolbar.showClearanceHint')}>{t('toolbar.showClearance')}</span>
+          </MenuItem>
+          <MenuDivider />
+          {!armed
+            ? <MenuItem danger onClick={armClear}>{t('toolbar.clearCanvas')}</MenuItem>
+            : <div style={{ padding: '6px 14px 6px 28px', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ color: '#c00', flexBasis: '100%' }}>{t('toolbar.wipe')}</span>
+                <button onClick={() => { confirmClear(); close() }} style={{ ...actionBtn, padding: '3px 10px', borderColor: '#c00', color: '#c00' }}>{t('toolbar.confirm')}</button>
+                <button onClick={cancelClear} style={{ ...actionBtn, padding: '3px 10px' }}>{t('toolbar.cancel')}</button>
+              </div>}
+        </>}
+      </Menu>
+
+      {/* Help + mode buttons */}
+      <div style={{ display: 'flex', gap: 0, alignItems: 'center', flex: '1 1 auto' }}>
         <div ref={helpRef} style={{ position: 'relative' }}>
           <button
             onClick={() => { setHelpCols(1); setHelpOpen(v => !v) }}
+            className="tbtn" data-on={helpOpen}
             style={{
-              background: helpOpen ? 'var(--text-1)' : 'none',
-              color: helpOpen ? 'var(--bg-popup)' : 'var(--text-1)',
-              border: '1px solid var(--border-md)',
               padding: '5px 12px',
               cursor: 'pointer',
               display: 'flex',
@@ -433,7 +497,7 @@ export default function Toolbar() {
               justifyContent: 'center',
               gap: 6,
               fontSize: 13,
-              fontFamily: 'Roboto Mono, monospace',
+              fontFamily: 'Roboto, sans-serif',
               whiteSpace: 'nowrap',
             }}
           >
@@ -452,12 +516,13 @@ export default function Toolbar() {
               left: helpShift,
               background: 'var(--bg-popup)',
               border: '1px solid var(--border-md)',
+              borderRadius: 'var(--radius)',
               padding: '10px 18px 0',  // bottom space comes from each section's paddingBottom
               zIndex: 300,
               width: HELP_COL_W * helpCols,
               maxWidth: `calc(100vw - ${HELP_MARGIN * 2}px)`,
               overflow: 'hidden',
-              fontFamily: 'Roboto Mono, monospace',
+              fontFamily: 'Roboto, sans-serif',
               fontSize: 12,
               color: 'var(--text-1)',
               lineHeight: 1.7,
@@ -491,18 +556,21 @@ export default function Toolbar() {
         {/* This group's gap is 4px, so 6px of margin makes 10px each side */}
         <OrConnector space={6} />
 
-        {MODES.map(({ id, label }) => (
+        {/* Select is the default mode (no button): an add button is armed until used, or clicked again */}
+        <span style={{ marginLeft: 'auto', fontSize: 13, fontFamily: 'Roboto, sans-serif', color: 'var(--text-1)', whiteSpace: 'nowrap' }}>
+          {t('toolbar.add')}
+        </span>
+        {MODES.filter(m => m.id !== 'select').map(({ id, label }) => (
           <button
             key={id}
-            onClick={() => setMode(id)}
+            onClick={() => setMode(mode === id ? 'select' : id)}
+            className="tbtn" data-on={mode === id}
             style={{
-              background: mode === id ? 'var(--text-1)' : 'none',
-              color: mode === id ? 'var(--bg-popup)' : 'var(--text-1)',
-              border: '1px solid var(--border-md)',
+              '--btn-glow': `var(--hl-${id.replace('add-', '')})`,  // the element's own colour, as in the filter panel
               padding: '5px 14px',
               cursor: 'pointer',
               fontSize: 13,
-              fontFamily: 'Roboto Mono, monospace',
+              fontFamily: 'Roboto, sans-serif',
               whiteSpace: 'nowrap',
             }}
           >
@@ -510,74 +578,17 @@ export default function Toolbar() {
           </button>
         ))}
       </div>
-
-      <OrConnector />
-
-      <Menu label={t('toolbar.file')} width={250}>
-        {close => <>
-          <MenuLabel>{t('toolbar.export')}</MenuLabel>
-          <MenuItem onClick={() => { exportDiagram(); close() }}>{t('menu.project')}</MenuItem>
-          <MenuItem onClick={() => { exportForAnalysis(); close() }}>{t('menu.analysis')}</MenuItem>
-          <MenuItem onClick={() => { exportForSpreadsheet(); close() }}>{t('menu.sheet')}</MenuItem>
-          <MenuItem onClick={() => { exportAsImage('png'); close() }}>{t('menu.png')}</MenuItem>
-          <MenuItem onClick={() => { exportAsImage('jpeg'); close() }}>{t('menu.jpeg')}</MenuItem>
-          <MenuDivider />
-          <MenuLabel>{t('toolbar.import')}</MenuLabel>
-          <MenuItem onClick={() => { fileRef.current.click(); close() }}>{t('menu.project')}</MenuItem>
-          <MenuItem onClick={() => { textRef.current.click(); close() }}>
-            <span title={t('toolbar.importEditsHint')}>{t('menu.editsOnly')}</span>
-          </MenuItem>
-          <MenuItem onClick={() => { sheetRef.current.click(); close() }}>
-            <span title={t('toolbar.importSheetHint')}>{t('menu.sheetEdits')}</span>
-          </MenuItem>
-        </>}
-      </Menu>
-
-      <input ref={fileRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImport} />
-      <input ref={sheetRef} type="file" accept=".xlsx" style={{ display: 'none' }} onChange={handleImportSheet} />
-      <input ref={textRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImportText} />
-
-      <Menu label={t('toolbar.options')} align="right" width={270}>
-        {close => <>
-          <MenuLabel>{t('toolbar.edit')}</MenuLabel>
-          <MenuItem disabled={!canUndo} onClick={() => { undo(); close() }}>{t('toolbar.undoItem')}<Hint>Ctrl/⌘+Z</Hint></MenuItem>
-          <MenuItem disabled={!canRedo} onClick={() => { redo(); close() }}>{t('toolbar.redoItem')}<Hint>Shift+Ctrl/⌘+Z</Hint></MenuItem>
-          <MenuDivider />
-          <MenuLabel>{t('toolbar.language')}</MenuLabel>
-          {LANGS.map(l => (
-            <MenuItem key={l} checked={lang === l} onClick={() => { setLang(l); close() }}>{t(`lang.${l}`)}</MenuItem>
-          ))}
-          <MenuDivider />
-          <MenuLabel>{t('toolbar.theme')}</MenuLabel>
-          <MenuItem checked={!darkMode} onClick={() => { if (darkMode) toggleDarkMode(); close() }}>{t('toolbar.themeLight')}</MenuItem>
-          <MenuItem checked={darkMode} onClick={() => { if (!darkMode) toggleDarkMode(); close() }}>{t('toolbar.themeDark')}</MenuItem>
-          <MenuDivider />
-          <MenuLabel>{t('toolbar.view')}</MenuLabel>
-          <MenuItem checked={showGrid} onClick={() => setViewAid('showGrid', !showGrid)}>{t('toolbar.showGrid')}</MenuItem>
-          <MenuItem checked={showClearance} onClick={() => setViewAid('showClearance', !showClearance)}>
-            <span title={t('toolbar.showClearanceHint')}>{t('toolbar.showClearance')}</span>
-          </MenuItem>
-          <MenuDivider />
-          {!armed
-            ? <MenuItem danger onClick={armClear}>{t('toolbar.clearCanvas')}</MenuItem>
-            : <div style={{ padding: '6px 14px 6px 28px', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <span style={{ color: '#c00', flexBasis: '100%' }}>{t('toolbar.wipe')}</span>
-                <button onClick={() => { confirmClear(); close() }} style={{ ...actionBtn, padding: '3px 10px', borderColor: '#c00', color: '#c00' }}>{t('toolbar.confirm')}</button>
-                <button onClick={cancelClear} style={{ ...actionBtn, padding: '3px 10px' }}>{t('toolbar.cancel')}</button>
-              </div>}
-        </>}
-      </Menu>
     </div>
   )
 }
 
 
 const actionBtn = {
-  background: 'none',
+  background: 'var(--bg-popup)',
   border: '1px solid var(--border-md)',
   color: 'var(--text-1)',
   padding: '5px 14px',
   cursor: 'pointer',
   fontSize: 13,
-  fontFamily: 'Roboto Mono, monospace',
+  fontFamily: 'Roboto, sans-serif',
 }

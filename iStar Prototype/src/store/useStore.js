@@ -133,10 +133,10 @@ function loadProject(data) {
   let models, activeModelId
   if (data.models) {
     models = Object.fromEntries(Object.entries(data.models).map(([id, m]) =>
-      [id, { ...emptyModel(id, m.name ?? 'Main', m.parent ?? null), ...m, nodes: resizeNodes(m.nodes) }]))
+      [id, { ...emptyModel(id, m.name ?? 'Model 1', m.parent ?? null), ...m, nodes: resizeNodes(m.nodes) }]))
     activeModelId = models[data.activeModelId] ? data.activeModelId : rootOf(models)
   } else {
-    models = { [ROOT_MODEL]: { ...emptyModel(ROOT_MODEL, 'Main'), nodes: resizeNodes(data.nodes), links: data.links || {}, actors: data.actors || {} } }
+    models = { [ROOT_MODEL]: { ...emptyModel(ROOT_MODEL, 'Model 1'), nodes: resizeNodes(data.nodes), links: data.links || {}, actors: data.actors || {} } }
     activeModelId = ROOT_MODEL
   }
   const active = models[activeModelId]
@@ -153,7 +153,7 @@ const useStore = create((set, get) => ({
   redo: () => restore(history.future, history.past),
 
   // ── Models (tabs) ────────────────────────────────────────────────────────────
-  models: { [ROOT_MODEL]: emptyModel(ROOT_MODEL, 'Main') },
+  models: { [ROOT_MODEL]: emptyModel(ROOT_MODEL, 'Model 1') },
   activeModelId: ROOT_MODEL,
   zoomRequest: null,  // { actorId, insetLeft, n }: asks the canvas to frame one actor, clear of the side panel covering insetLeft px
   zoomToActor: (actorId, insetLeft = 0) => set(st => ({ zoomRequest: { actorId, insetLeft, n: (st.zoomRequest?.n ?? 0) + 1 } })),
@@ -248,6 +248,20 @@ const useStore = create((set, get) => ({
     set({ lang })
   },
   toggleDarkMode: () => set(s => ({ darkMode: !s.darkMode })),
+
+  // ── Modeling language: 'istar2' (pure iStar 2.0) or 'custom' (the modified version under development).
+  // Remembered between visits. No tool behaviour depends on it yet.
+  language: (() => {
+    try {
+      const saved = localStorage.getItem('istar-language')
+      if (saved === 'istar2' || saved === 'custom') return saved
+    } catch { /* storage unavailable */ }
+    return 'istar2'
+  })(),
+  setLanguage: (language) => {
+    try { localStorage.setItem('istar-language', language) } catch { /* storage unavailable */ }
+    set({ language })
+  },
 
   // ── View aids (remembered between visits): a light grid, and the zone around each element that others can't enter
   ...(() => {
