@@ -22,7 +22,7 @@ button:hover:not(:disabled) {
   --bg-menu-title: #e7e4df;  /* band behind drop-down menu section titles */
   --bg-selected: #e7e4df;   /* selected buttons in the side panels */
   --bg-selected-text: #333;
-  --cell-on:    #e7e4df;   /* filter cells that are switched on */
+  --cell-on:    #f1efeb;   /* filter cells that are switched on */
   --btn-glow:   #e7e4df;   /* soft pill behind hovered / selected header buttons */
   --text-menu:  #000;     /* drop-down menu section titles */
   --text-title: #3a3a3a;  /* popup titles and field labels */
@@ -87,7 +87,7 @@ button:hover:not(:disabled) {
   --bg-menu-title: #1f1f1f;
   --bg-selected: #ddd;
   --bg-selected-text: #2a2a2a;
-  --cell-on:    #4a4845;
+  --cell-on:    #55524f;
   --btn-glow:   #625f5b;
   --text-menu:  #fff;
   --text-title: #d0d0d0;
