@@ -12,6 +12,14 @@ function useLiveModels() {
 
 // One tab per diagram (model) of the project, in a bar under the header. Sub-actor boxes open their
 // diagram's tab; double-click a tab to rename it.
+// Hierarchy of the tabs: the top diagram is bold and underlined, the next level bold, the one below it regular,
+// and every level after that regular and a size smaller
+const levelStyle = (depth) => ({
+  fontSize: depth <= 2 ? 13 : Math.max(9, 13 - (depth - 2) * 1.5),
+  fontWeight: depth <= 1 ? 700 : 400,
+  textDecoration: depth === 0 ? 'underline' : 'none',
+})
+
 function Tabs() {
   const t = useT()
   const { live, activeId } = useLiveModels()
@@ -30,10 +38,11 @@ function Tabs() {
         const active = id === activeId
         const style = {
           display: 'flex', alignItems: 'center', gap: 4, padding: '5px 14px', cursor: 'pointer', whiteSpace: 'nowrap',
-          fontSize: 13, fontFamily: 'Roboto, sans-serif', flexShrink: 0,
+          fontFamily: 'Roboto, sans-serif', flexShrink: 0,
           background: 'transparent', color: 'var(--text-1)', border: 'none', boxShadow: 'none',
           margin: 2,
-          fontWeight: active ? 700 : 400,  // the open diagram is bold; tabs have no hover or selection patch
+          ...levelStyle(depth),
+          opacity: active ? 1 : 0.6,  // the open diagram is at full strength; tabs have no hover or selection patch
         }
         if (editing?.id === id) {
           return (
@@ -50,10 +59,6 @@ function Tabs() {
             onClick={() => switchModel(id)}
             onDoubleClick={() => setEditing({ id, text: name })}
             style={style}>
-            <svg width="13" height="10" viewBox="0 0 13 10" aria-hidden style={{ flexShrink: 0, opacity: active ? 1 : 0.5 }}>
-              <path d="M1.5 5 H11 M7 1.5 L11 5 L7 8.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            {depth > 0 && <span aria-hidden style={{ opacity: 0.6 }}>↳</span>}
             <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
           </button>
         )
