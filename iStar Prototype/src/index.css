@@ -78,37 +78,37 @@ button:hover:not(:disabled) {
 
 /* ── Dark theme ─────────────────────────────────────────────────────────────── */
 [data-theme="dark"] {
-  --bg-canvas:  #1a1a1a;
-  --bg-panel:   #212121;
-  --bg-header:  #262626;
-  --bg-logo:    #1f1f1f;
-  --bg-popup:   #2a2a2a;
+  --bg-canvas:  #2b2b2b;
+  --bg-panel:   #323232;
+  --bg-header:  #353535;
+  --bg-logo:    #2d2d2d;
+  --bg-popup:   #3c3c3c;
   --text-1:     #ddd;
-  --text-2:     #777;
-  --text-3:     #555;
-  --bg-menu-title: #1f1f1f;
+  --text-2:     #8a8a8a;
+  --text-3:     #6a6a6a;
+  --bg-menu-title: #2d2d2d;
   --bg-selected: #ddd;
   --bg-selected-text: #2a2a2a;
-  --cell-on:    #55524f;
-  --btn-glow:   #625f5b;
+  --cell-on:    #6a6764;
+  --btn-glow:   #75726e;
   --text-menu:  #fff;
   --text-title: #d0d0d0;
   --text-node:  #ddd;
-  --border:     #3a3a3a;
-  --border-lt:  #2e2e2e;
-  --border-md:  #4a4a4a;
-  --border-ck:  #666;
-  --node-fill:  #2a2a2a;
+  --border:     #4c4c4c;
+  --border-lt:  #414141;
+  --border-md:  #5c5c5c;
+  --border-ck:  #7a7a7a;
+  --node-fill:  #3c3c3c;
   --node-stroke:#888;
   --node-text:  #ddd;
   --node-text-hl: #1e1e1e;  /* dark on the lighter, pastel highlight fills */
   --link-def:   #999;
-  --grid-line:  #2b2b2b;
+  --grid-line:  #3a3a3a;
   /* node highlight fills – muted, visible on dark bg */
   --hl-goal:      #80b282;
   --hl-task:      #80a0c5;
   --hl-softgoal:  #80b282;
-  --hl-resource:  #e59a9a;
+  --hl-resource:  #e8b056;
   --hl-subactor:  #8fa8cf;
   /* link highlight colors – lightened */
   --hl-hurt:      #d63737;
@@ -119,13 +119,13 @@ button:hover:not(:disabled) {
   --hl-xor:       #ff9f43;
   --hl-and:       #30a423;
   --hl-part-of:   #c34cb1;
-  --actor-hl-fill:   #2b2b2b;
-  --actor-hl-stripe: #383838;
-  --actor-bg:        #1f2329;
+  --actor-hl-fill:   #3c3c3c;
+  --actor-hl-stripe: #4a4a4a;
+  --actor-bg:        #2c333c;
   --actor-hl-tone:       #6f88ad;
   --actor-hl-stripe-mix: #a9c0e0;
-  --actor-bg-light:  #2a2f37;
-  --actor-bg-deep:   #15181d;
+  --actor-bg-light:  #3a414b;
+  --actor-bg-deep:   #222830;
   --actor-tint-0: #5fb0ab;
   --actor-tint-1: #c9786b;
   --actor-tint-2: #b8a655;
@@ -178,3 +178,6 @@ button, input, select, textarea {
 .menu-item + .menu-item::before {
   content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: var(--border-lt);
 }
+
+/* The logo is dark artwork: lighten it on the dark theme */
+[data-theme="dark"] .app-logo { filter: invert(1) hue-rotate(180deg) brightness(0.9); }

@@ -86,8 +86,7 @@ export default function App() {
           padding: '8px 16px', background: 'var(--bg-logo)',
           borderTop: '1px solid var(--border)',  // runs into the diagonal's top curve
         }}>
-          {/* Placeholder until there is a new logo (the previous one is still exported as Logo from Toolbar.jsx) */}
-          <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: 2, color: 'var(--text-1)', whiteSpace: 'nowrap', userSelect: 'none' }}>i* BUILDER</span>
+          <img src={`${import.meta.env.BASE_URL}Logo.svg`} alt="i* Builder" className="app-logo" draggable={false} style={{ height: 40, maxWidth: '100%', objectFit: 'contain', userSelect: 'none' }} />
         </div>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <Toolbar inset={TOOLBAR_INSET} />
