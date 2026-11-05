@@ -1,3 +1,4 @@
+import { typesFor } from '../utils/language.js'
 import { useState, useEffect, useMemo } from 'react'
 import { flushSync } from 'react-dom'
 import useStore, { ALL_TYPES } from '../store/useStore.js'
@@ -51,6 +52,7 @@ function useColumns() {
 
 export default function FilterPanel() {
   const t = useT()
+  const language = useStore(s => s.language)
   const { panelWidth: basePanelWidth, colI, colH } = useColumns()
   const highlightTypes      = useStore(s => s.highlightTypes)
   const isolateTypes        = useStore(s => s.isolateTypes)
@@ -199,11 +201,11 @@ export default function FilterPanel() {
           </div>
         </div>
 
-        <Section label={t('filter.elements')} types={NODE_TYPES} first legend={legendOpen} {...sectionProps('elements')}
+        <Section label={t('filter.elements')} types={typesFor(language, NODE_TYPES)} first legend={legendOpen} {...sectionProps('elements')}
           highlightTypes={highlightTypes} isolateTypes={isolateTypes}
           onToggleH={toggleHighlightType} onToggleI={toggleIsolateType} />
 
-        <Section label={t('filter.links')} types={LINK_TYPES} legend={legendOpen} {...sectionProps('links')}
+        <Section label={t('filter.links')} types={typesFor(language, LINK_TYPES)} legend={legendOpen} {...sectionProps('links')}
           highlightTypes={highlightTypes} isolateTypes={isolateTypes}
           onToggleH={toggleHighlightType} onToggleI={toggleIsolateType} />
 

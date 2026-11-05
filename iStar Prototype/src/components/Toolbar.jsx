@@ -2,6 +2,7 @@ import { useRef, useState, useEffect, useLayoutEffect } from 'react'
 import { flushSync } from 'react-dom'
 import useStore from '../store/useStore.js'
 import { useT, LANGS } from '../i18n.js'
+import { typesFor } from '../utils/language.js'
 
 const MODES = [
   { id: 'select',         label: 'toolbar.select' },
@@ -559,7 +560,7 @@ export default function Toolbar({ inset = 0 }) {
         <span style={{ marginLeft: 'auto', fontSize: 15, textTransform: 'uppercase', letterSpacing: 0.5, fontFamily: 'Roboto, sans-serif', color: 'var(--text-1)', whiteSpace: 'nowrap' }}>
           {t('toolbar.add')}
         </span>
-        {MODES.filter(m => m.id !== 'select').map(({ id, label }) => (
+        {MODES.filter(m => m.id !== 'select' && typesFor(language, [m.id.replace('add-', '')]).length).map(({ id, label }) => (
           <button
             key={id}
             onClick={() => setMode(mode === id ? 'select' : id)}

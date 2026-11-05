@@ -6,6 +6,7 @@ import { useT } from '../i18n.js'
 import { actorLayout } from '../utils/actorTree.js'
 import { shrinkImage } from '../utils/image.js'
 import PopupConnector from './PopupConnector.jsx'
+import { typesFor } from '../utils/language.js'
 import PopoverHeader from './PopoverHeader.jsx'
 import { HEADER_H, popoverStyle, labelStyle, inputStyle, summaryStyle, btnStyle, confirmOnEnter } from './popupStyles.js'
 
@@ -180,6 +181,7 @@ export default function PropertyPopover({ linkPaths = {} }) {
   const selectedIds = useStore(s => s.selectedIds)
   const { transform } = useZoom()
   const t = useT()
+  const language = useStore(s => s.language)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [collapsed, setCollapsed] = useState(false)  // kept across selections so a minimized popup stays out of the way
 
@@ -243,7 +245,7 @@ export default function PropertyPopover({ linkPaths = {} }) {
           onChange={e => updateLink(selectedId, { type: e.target.value })}
           style={inputStyle}
         >
-          {LINK_TYPES.map(type => <option key={type} value={type}>{t(`type.${type}`)}</option>)}
+          {typesFor(language, LINK_TYPES, link.type).map(type => <option key={type} value={type}>{t(`type.${type}`)}</option>)}
         </select>
 
         <button

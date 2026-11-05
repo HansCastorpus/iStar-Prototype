@@ -4,6 +4,7 @@ import { usePopupPlacement, diagramObstacles, segmentBounds } from '../utils/use
 import { computePendingPath } from '../utils/routing.js'
 import { useT } from '../i18n.js'
 import PopupConnector, { POPUP_Z } from './PopupConnector.jsx'
+import { typesFor } from '../utils/language.js'
 
 const LINK_TYPES = [
   'depends-on',
@@ -34,6 +35,7 @@ export default function LinkTypePopup({ linkPaths = {} }) {
   const { pendingLink, nodes, confirmLink, clearConnect } = useStore()
   const { transform } = useZoom()
   const t = useT()
+  const language = useStore(s => s.language)
 
   const src = pendingLink && nodes[pendingLink.sourceId]
   const tgt = pendingLink && nodes[pendingLink.targetId]
@@ -85,7 +87,7 @@ export default function LinkTypePopup({ linkPaths = {} }) {
       </div>
 
       <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-title)', marginBottom: 4 }}>{t('linkType.title')}</div>
-      {LINK_TYPES.map((type) => (
+      {typesFor(language, LINK_TYPES).map((type) => (
         <button
           key={type}
           onClick={() => confirmLink(type)}
