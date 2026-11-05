@@ -290,7 +290,7 @@ function Menu({ label, active = false, align = 'left', width = 220, children }) 
 // One row of a menu. checked: shows a tick (the current choice); current: bold, no tick; faded: dimmed (an unused choice); danger: red
 function MenuItem({ children, onClick, checked, danger, disabled, desc, current, faded }) {
   return (
-    <button role="menuitem" onClick={onClick} disabled={disabled} style={{
+    <button role="menuitem" className="menu-item" onClick={onClick} disabled={disabled} style={{
       display: 'flex', alignItems: 'center', width: '100%', textAlign: 'left',
       background: 'none', border: 'none', padding: '6px 14px 6px 10px', gap: 6,
       fontFamily: 'Roboto, sans-serif', fontSize: 13, cursor: disabled ? 'default' : 'pointer',
@@ -419,7 +419,7 @@ export default function Toolbar() {
       display: 'flex',
       alignItems: 'center',
       gap: 0,
-      padding: 0,
+      padding: 2,
       borderBottom: '1px solid var(--border)',
       background: 'var(--bg-header)',
       flexShrink: 0,
@@ -564,9 +564,9 @@ export default function Toolbar() {
           <button
             key={id}
             onClick={() => setMode(mode === id ? 'select' : id)}
-            className="tbtn" data-on={mode === id}
+            className="tbtn" data-rest data-on={mode === id}
             style={{
-              '--btn-glow': `var(--hl-${id.replace('add-', '')})`,  // the element's own colour, as in the filter panel
+              '--btn-glow': id === 'add-subactor' ? undefined : `var(--hl-${id.replace('add-', '')})`,  // the element's own colour, as in the filter panel (sub-actor's is white: it keeps the default)
               padding: '5px 14px',
               cursor: 'pointer',
               fontSize: 13,

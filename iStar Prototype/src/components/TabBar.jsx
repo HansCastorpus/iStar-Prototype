@@ -32,6 +32,7 @@ function Tabs() {
           display: 'flex', alignItems: 'center', gap: 4, padding: '5px 14px', cursor: 'pointer', whiteSpace: 'nowrap',
           fontSize: 13, fontFamily: 'Roboto, sans-serif', flexShrink: 0,
           background: 'transparent', color: 'var(--text-1)', border: 'none', boxShadow: 'none',
+          margin: 2,
           fontWeight: active ? 700 : 400,  // the open diagram is bold; tabs have no hover or selection patch
         }
         if (editing?.id === id) {
@@ -78,7 +79,7 @@ function Path() {
           {i === path.length - 1
             ? <strong style={{ color: 'var(--text-1)' }}>{live[id].name}</strong>
             : <button onClick={() => switchModel(id)}
-                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', color: '#0070f3' }}>
+                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', color: 'var(--text-1)', textDecoration: 'underline' }}>
                 {live[id].name}
               </button>}
         </span>
@@ -93,7 +94,7 @@ export default function TabBar() {
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
       background: 'var(--bg-header)', borderBottom: '1px solid var(--border)',
-      padding: 0, flexShrink: 0,
+      padding: 2, flexShrink: 0,
     }}>
       {/* tabs start at the left of the bar and use the width available */}
       <div style={{ minWidth: 0, display: 'flex' }}>

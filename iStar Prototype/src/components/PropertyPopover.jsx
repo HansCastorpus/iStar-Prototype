@@ -327,7 +327,7 @@ export default function PropertyPopover({ linkPaths = {} }) {
           </label>
           {node.logo && <button onClick={() => updateNode(node.id, { logo: null, logoAspect: null })} style={btnStyle('#888')}>{t('actorPopup.logoRemove')}</button>}
         </div>
-        <button onClick={() => useStore.getState().openSubactor(node.id)} style={{ ...btnStyle('#0070f3'), marginTop: 4 }}>
+        <button onClick={() => useStore.getState().openSubactor(node.id)} style={{ ...btnStyle('var(--text-1)'), marginTop: 4 }}>
           {t('subactor.openDiagram')} ›
         </button>
       </> : <>

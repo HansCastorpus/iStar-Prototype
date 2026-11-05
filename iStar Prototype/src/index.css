@@ -19,16 +19,11 @@ button:hover:not(:disabled) {
   --text-1:     #333;
   --text-2:     #999;
   --text-3:     #aaa;
-  --bg-menu-title: #dde3e9;  /* band behind drop-down menu section titles */
-  --bg-selected: #456680;   /* selected / open buttons: desaturated prussian blue */
-  --btn-on-bg:     #6585a3;   /* filter buttons: on */
-  --btn-on-text:   #fff;
-  --btn-on-border: #5a7a98;
-  --btn-off-bg:    #f0f3f6;   /* off: light and faded */
-  --btn-off-text:  #8b95a0;
-  --btn-off-border: #d3d9df;
-  --cell-on:    #e3e9ef;   /* filter cells that are switched on */
-  --btn-glow:   #c4d5e3;   /* soft pill behind hovered / selected header buttons */
+  --bg-menu-title: #e7e4df;  /* band behind drop-down menu section titles */
+  --bg-selected: #e7e4df;   /* selected buttons in the side panels */
+  --bg-selected-text: #333;
+  --cell-on:    #e7e4df;   /* filter cells that are switched on */
+  --btn-glow:   #e7e4df;   /* soft pill behind hovered / selected header buttons */
   --text-menu:  #000;     /* drop-down menu section titles */
   --text-title: #3a3a3a;  /* popup titles and field labels */
   --text-node:  #222;
@@ -91,14 +86,9 @@ button:hover:not(:disabled) {
   --text-3:     #555;
   --bg-menu-title: #1f1f1f;
   --bg-selected: #ddd;
-  --btn-on-bg:     #6585a3;
-  --btn-on-text:   #fff;
-  --btn-on-border: #6c8cab;
-  --btn-off-bg:    #2f2f2f;
-  --btn-off-text:  #7d7d7d;
-  --btn-off-border: #3a3a3a;
-  --cell-on:    #55687b;
-  --btn-glow:   #5b7a95;
+  --bg-selected-text: #2a2a2a;
+  --cell-on:    #4a4845;
+  --btn-glow:   #625f5b;
   --text-menu:  #fff;
   --text-title: #d0d0d0;
   --text-node:  #ddd;
@@ -172,6 +162,7 @@ button, input, select, textarea {
   border-radius: 999px; background: var(--btn-glow);
   filter: blur(3px); opacity: 0; transition: opacity 0.15s;
 }
+.tbtn[data-rest]::before { opacity: 0.4; }   /* faintly visible even at rest */
 .tbtn:hover::before, .tbtn[data-on="true"]::before { opacity: 1; }
 /* The soft patch replaces the app-wide hover tint, which would show as a flat grey button shape */
 .tbtn:hover:not(:disabled) { box-shadow: none; }
@@ -179,3 +170,9 @@ button, input, select, textarea {
 /* Scrolls with the wheel or touch, but shows no scrollbar */
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Drop-down menu items: a thin line between neighbouring items */
+.menu-item { position: relative; }
+.menu-item + .menu-item::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: var(--border-lt);
+}

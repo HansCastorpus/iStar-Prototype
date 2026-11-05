@@ -43,8 +43,8 @@ function useColumns() {
     const hW = (legend) => legend ? Math.max(h, LEGEND_W + 2 * CELL_PAD) : h
     return {
       panelWidth: (legend) => PANEL_CHROME + label + iW(legend) + hW(legend),
-      colI: (legend) => ({ width: iW(legend), flexShrink: 0, borderLeft: '1px solid var(--border-lt)', padding: `0 4px 0 ${COL_I_PAD_L}px` }),
-      colH: (legend) => ({ width: hW(legend), flexShrink: 0, borderLeft: '1px solid var(--border-lt)', padding: '0 4px' }),
+      colI: (legend) => ({ width: iW(legend), flexShrink: 0, padding: `0 4px 0 ${COL_I_PAD_L}px` }),
+      colH: (legend) => ({ width: hW(legend), flexShrink: 0, padding: '0 4px' }),
     }
   }, [t])
 }
@@ -301,7 +301,7 @@ function NumberTools() {
           border: '1px solid var(--border-md)', background: showNumbers ? 'var(--bg-selected)' : 'var(--node-fill)',
         }}>
           <span style={{ position: 'absolute', top: 2, left: showNumbers ? 16 : 2, width: 10, height: 10, borderRadius: 5,
-            background: showNumbers ? 'var(--bg-popup)' : 'var(--text-1)', transition: 'left 0.12s' }} />
+            background: 'var(--text-1)', transition: 'left 0.12s' }} />
         </button>
         {t('filter.numbers')}
       </label>
@@ -399,13 +399,15 @@ function Section({ label, first, legend, types, highlightTypes, isolateTypes, on
       <SectionLabel first={first} open={open} onToggle={onToggle}>{label}</SectionLabel>
       {/* Rows touch each other (the card's 4px gap would leave white strips between the cells) */}
       {open && <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {types.map(type => (
+      {types.map((type, i) => (
         <TypeRow
           key={type} label={t(`type.${type}`)} legendType={type} legend={legend} cells
           inHighlight={highlightTypes.includes(type)}
           inIsolate={isolateTypes.includes(type)}
           onToggleH={() => onToggleH(type)}
           onToggleI={() => onToggleI(type)}
+          runI={{ prev: i > 0 && isolateTypes.includes(types[i - 1]), next: i < types.length - 1 && isolateTypes.includes(types[i + 1]) }}
+          runH={{ prev: i > 0 && highlightTypes.includes(types[i - 1]), next: i < types.length - 1 && highlightTypes.includes(types[i + 1]) }}
         />
       ))}
       </div>}
@@ -417,11 +419,21 @@ function Section({ label, first, legend, types, highlightTypes, isolateTypes, on
 // With cells, the column spans the row's full height and has no padding, so the toggle fills it
 const cellColumn = { alignSelf: 'stretch', padding: 0 }
 
-// A column cell used as a toggle: darker background while on, tinted on hover (the global button hover)
-function Cell({ active, onClick, children }) {
+// A column cell used as a toggle: flat darker background while on, the soft blurred patch of the header buttons on hover.
+// Selected cells join into one shape (above / below in the column, and across the two columns of a row),
+// and only the outer corners of that shape are rounded.
+// run: whether the cell above / below (same section) is on too. side: which of the two columns this is;
+// partner: whether the other column's cell in the same row is on.
+function Cell({ active, onClick, run, side, partner, children }) {
+  const R = 'var(--radius)'
+  const joinLeft = side === 'right' && partner, joinRight = side === 'left' && partner
+  const corner = (vertical, horizontal) => (vertical || horizontal ? 0 : R)
+  const radius = [corner(run?.prev, joinLeft), corner(run?.prev, joinRight), corner(run?.next, joinRight), corner(run?.next, joinLeft)].join(' ')
   return (
-    <button type="button" aria-pressed={active} onClick={onClick} style={{
-      flex: 1, alignSelf: 'stretch', padding: 0, border: 'none', borderRadius: 0, cursor: 'pointer',
+    <button type="button" aria-pressed={active} onClick={onClick} className="tbtn" style={{
+      // .tbtn gives the soft blurred patch on hover (no data-on: the selected look is the flat joined shape)
+      flex: 1, alignSelf: 'stretch', padding: 0, margin: 0, border: 'none', cursor: 'pointer',
+      borderRadius: active ? radius : 0,
       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: LEGEND_GAP,
       background: active ? 'var(--cell-on)' : 'transparent', color: 'var(--text-1)',
     }}>{children}</button>
@@ -432,7 +444,7 @@ function Cell({ active, onClick, children }) {
 // cells: no checkbox; the whole column cell is the toggle, with a darker background while on
 // wrap: let long labels run onto several lines instead of being cut off with "…"
 // cols: { i, h } styles to use instead of the filter panel's columns (the actor panel's are narrower)
-function TypeRow({ label, tint, indent = 0, legendType = label, wrap = false, cells = false, cols, legend, inHighlight, inIsolate, onToggleH, onToggleI, onZoom, logo }) {
+function TypeRow({ label, tint, indent = 0, legendType = label, wrap = false, cells = false, runI, runH, cols, legend, inHighlight, inIsolate, onToggleH, onToggleI, onZoom, logo }) {
   const t = useT()
   const panelCols = useColumns()
   const iStyle = cols?.i ?? panelCols.colI(legend)
@@ -452,13 +464,13 @@ function TypeRow({ label, tint, indent = 0, legendType = label, wrap = false, ce
       </span>
       {logo && <img src={logo} alt="" style={{ width: 20, height: 20, objectFit: 'contain', flexShrink: 0, marginRight: 8 }} />}
       <div style={{ ...iStyle, ...(cells && cellColumn), display: 'flex', justifyContent: 'center', alignItems: 'center', gap: LEGEND_GAP }}>
-        {cells ? <Cell active={inIsolate} onClick={onToggleI}>{slot(false)}</Cell> : <>
+        {cells ? <Cell active={inIsolate} onClick={onToggleI} run={runI} side="left" partner={inHighlight}>{slot(false)}</Cell> : <>
           <Square active={inIsolate} onClick={onToggleI} />
           {slot(false)}
         </>}
       </div>
       <div style={{ ...hStyle, ...(cells && cellColumn), display: 'flex', justifyContent: 'center', alignItems: 'center', gap: LEGEND_GAP }}>
-        {cells ? <Cell active={inHighlight} onClick={onToggleH}>{slot(true)}</Cell> : <>
+        {cells ? <Cell active={inHighlight} onClick={onToggleH} run={runH} side="right" partner={inIsolate}>{slot(true)}</Cell> : <>
           <Square active={inHighlight} onClick={onToggleH} />
           {slot(true)}
         </>}
@@ -661,7 +673,7 @@ const colBtn = {
 const colBtnStyle = (active) => ({
   ...colBtn,
   background: active ? 'var(--bg-selected)' : 'var(--node-fill)',
-  color: active ? 'var(--bg-popup)' : 'var(--text-1)',
+  color: active ? 'var(--bg-selected-text)' : 'var(--text-1)',
   border: `1px solid ${active ? 'var(--bg-selected)' : 'var(--border-md)'}`,
 })
 
