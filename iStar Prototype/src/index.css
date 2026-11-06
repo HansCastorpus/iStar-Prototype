@@ -169,6 +169,9 @@ button, input, select, textarea {
 /* The soft patch replaces the app-wide hover tint, which would show as a flat grey button shape */
 .tbtn:hover:not(:disabled) { box-shadow: none; }
 
+/* A small title right under a main title needs no line of its own above: the main title's underline is there */
+.menu-label + .menu-sub { border-top: none !important; }
+
 /* Scrolls with the wheel or touch, but shows no scrollbar */
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }

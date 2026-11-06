@@ -4,6 +4,7 @@ import Toolbar from './components/Toolbar.jsx'
 import FilterPanel from './components/FilterPanel.jsx'
 import TabBar from './components/TabBar.jsx'
 import WorkTitle from './components/WorkTitle.jsx'
+import InboxPanel from './components/InboxPanel.jsx'
 import useStore from './store/useStore.js'
 
 // The logo container and the toolbar / tab bar to its right are separated by a diagonal: it leaves the logo
@@ -115,6 +116,7 @@ export default function App() {
           {/* keyed by the open diagram so each one starts with a fresh view (zoom / pan) */}
           <Canvas key={activeModelId} />
           <WorkTitle />
+          <InboxPanel />
         </div>
       </div>
     </div>

@@ -75,6 +75,9 @@ function NodeActorFields({ selected }) {
   const { parentOf } = useMemo(() => actorLayout(allNodes), [allNodes])
   const list = Object.values(actors)
   const ids = selected.map(n => n.id)
+  // Names on the inbox's actor list that aren't drawn yet: offered too, and chosen like a new name typed in the box
+  const actorList = useStore(s => s.actorList)
+  const listed = actorList.filter(name => !list.some(a => a.name === name))
 
   // Value of a slot across the selection: the shared id, null if none has one, undefined if mixed
   const shared = (get) => {
@@ -148,10 +151,15 @@ function NodeActorFields({ selected }) {
           placeholder={id === undefined ? t('popup.mixed') : t('popup.actorPlaceholder')}
         />
         <label style={labelStyle}>{t(selectKey)}</label>
-        <select value={id ?? ''} onChange={e => apply(e.target.value || null)} style={inputStyle}>
+        <select value={id ?? ''} onChange={e => {
+          const v = e.target.value
+          if (v.startsWith('name:')) { commitName(v.slice(5)); setNonce(n => n + 1) }
+          else apply(v || null)
+        }} style={inputStyle}>
           {id === undefined && <option value="" disabled>{t('popup.mixed')}</option>}
           {id !== undefined && <option value="">{t('popup.actorNone')}</option>}
           {options.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+          {listed.map(name => <option key={`name:${name}`} value={`name:${name}`}>{name}</option>)}
         </select>
         {blocked?.slot === slot && <div style={blockedStyle}>{t(blocked.reason === 'parent' ? 'popup.actorParent' : 'popup.actorOverlap')}</div>}
       </>

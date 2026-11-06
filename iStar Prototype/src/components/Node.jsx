@@ -5,7 +5,7 @@ import { inActor } from '../utils/actorTree.js'
 import { useT } from '../i18n.js'
 import {
   wrapLabel, NODE_LINE_H, NODE_BADGE_H, NODE_PAD_X, NODE_FONT, nodePadXFor, TASK_TIP_X,
-  SUB_FONT, SUB_PAD_X, SUB_LOGO_H, SUB_LOGO_GAP, subLogoWidth, measureSub, fitSubLabel,
+  SUB_FONT, SUB_PAD_X, SUB_LOGO_H, SUB_LOGO_GAP, subLogoWidth, measureSub, fitSubLabel, goalRadius,
 } from '../utils/grid.js'
 
 const SELECTED_COLOR = '#0070f3'
@@ -281,7 +281,7 @@ export default function Node({ node, strayActors }) {
           <rect
             width={node.width}
             height={node.height}
-            rx={(node.type === 'goal' || node.type === 'softgoal') ? node.height / 2 : 0}
+            rx={(node.type === 'goal' || node.type === 'softgoal') ? goalRadius(node.height) : 0}
             fill={hlFill}
             stroke={bodyStroke}
             strokeWidth={bodyStrokeW(1)}
@@ -290,7 +290,7 @@ export default function Node({ node, strayActors }) {
             <>
               <defs>
                 <clipPath id={`sg-${node.id}`}>
-                  <rect width={node.width} height={node.height} rx={node.height / 2} />
+                  <rect width={node.width} height={node.height} rx={goalRadius(node.height)} />
                 </clipPath>
               </defs>
               <line

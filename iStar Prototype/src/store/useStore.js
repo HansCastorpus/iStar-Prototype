@@ -1,8 +1,9 @@
 import { create } from 'zustand'
+import { fieldsOf, planInboxImport, ELEMENT_TYPES } from '../utils/inboxExcel.js'
 import { GRID, snap, computeNodeSize } from '../utils/grid.js'
 import { getUsedOffsets, getNextSlot } from '../utils/ports.js'
 import { buildAnalysis, readEdits } from '../utils/analysisExport.js'
-import { chainOf, layoutIssues, addsIssue, actorNames, nextTintIndex } from '../utils/actorTree.js'
+import { actorChainAt, chainOf, layoutIssues, addsIssue, actorNames, nextTintIndex } from '../utils/actorTree.js'
 
 const MIN_CLEARANCE = GRID * 2
 
@@ -111,6 +112,14 @@ export function modelPath(models, id) {
   return path
 }
 
+// Element numbers are per diagram, but inbox items keep one project-wide sequence, so a number is never offered twice
+// to the contributors. When an item is placed it keeps its number if the diagram has it free, else it gets the next one.
+const usedNumbers = (s) => {
+  const out = new Set(s.inbox.map(i => i.num).filter(n => n != null))
+  for (const m of Object.values(withLive(s))) for (const n of Object.values(m.nodes)) if (n.num != null) out.add(n.num)
+  return out
+}
+
 // Elements saved before numbering existed get the next free number, in their stored order
 const resizeNodes = (nodes) => {
   let next = Math.max(0, ...Object.values(nodes || {}).map(n => n.num ?? 0)) + 1
@@ -125,7 +134,7 @@ function projectData(s) {
   const live = withLive(s)
   const models = {}
   for (const { id } of reachableModels(live)) models[id] = live[id]
-  return { version: 2, activeModelId: models[s.activeModelId] ? s.activeModelId : rootOf(models), models }
+  return { version: 2, activeModelId: models[s.activeModelId] ? s.activeModelId : rootOf(models), models, inbox: s.inbox, actorList: s.actorList }
 }
 
 // Turn saved / imported JSON (current or the older single-diagram format) into store state
@@ -140,7 +149,10 @@ function loadProject(data) {
     activeModelId = ROOT_MODEL
   }
   const active = models[activeModelId]
-  return { models, activeModelId, nodes: active.nodes, links: active.links, actors: active.actors }
+  return {
+    models, activeModelId, nodes: active.nodes, links: active.links, actors: active.actors,
+    inbox: Array.isArray(data.inbox) ? data.inbox : [], actorList: Array.isArray(data.actorList) ? data.actorList : [],
+  }
 }
 
 const useStore = create((set, get) => ({
@@ -403,10 +415,151 @@ const useStore = create((set, get) => ({
     return { selectedIds: ids, selectedId: null, selectedType: null, selectedActorId: actorId }
   }),
 
+  // ── Inbox: elements that came in (from the spreadsheet) and wait for the designer to place them on the graph.
+  // Project-wide, not per diagram. An item's actor is only a suggestion: the real one is where it is dropped.
+  // actorList: the actor names offered to contributors (dropdowns in the spreadsheet), drawn on the graph or not.
+  inbox: [],       // { id, type, text, actorName, relations, positive, negative, connected: [names], placedNodeId }
+  actorList: [],
+  inboxOpen: false,
+  inboxFilter: 'greyed',  // how placed items show in the list: 'shown' | 'greyed' | 'hidden'
+  setInboxOpen: (inboxOpen) => set({ inboxOpen }),
+  setInboxFilter: (inboxFilter) => set({ inboxFilter }),
+  addInboxItem: (item) => set(s => ({
+    inbox: [...s.inbox, {
+      id: crypto.randomUUID(), num: Math.max(0, ...usedNumbers(s)) + 1, type: 'goal', text: '', actorName: '', relationType: '', relations: '', positive: '', negative: '',
+      connected: [], placedNodeId: null, ...item,
+    }],
+  })),
+  updateInboxItem: (id, patch) => set(s => ({ inbox: s.inbox.map(i => i.id === id ? { ...i, ...patch } : i) })),
+  removeInboxItem: (id) => set(s => ({ inbox: s.inbox.filter(i => i.id !== id) })),
+  addActorName: (raw) => set(s => {
+    const name = raw.trim()
+    return !name || s.actorList.includes(name) ? {} : { actorList: [...s.actorList, name] }
+  }),
+  removeActorName: (name) => set(s => ({ actorList: s.actorList.filter(n => n !== name) })),
+
+  // Put an inbox item on the open diagram at (x, y). It joins the actor(s) whose area it is dropped in; its extra
+  // information goes with it as `details`. Returns the new element's id (null if there was no room).
+  placeInboxItem: (itemId, x, y) => {
+    const item = get().inbox.find(i => i.id === itemId)
+    if (!item) return null
+    const chain = actorChainAt(get().nodes, x, y)
+    const { relationType, relations, positive, negative, connected, actorName } = item
+    const taken = Object.values(get().nodes).some(n => n.num === item.num)
+    const num = item.num != null && !taken ? item.num : Math.max(0, ...Object.values(get().nodes).map(n => n.num ?? 0)) + 1
+    const id = get().addNode(item.type, x, y, { num, label: item.text, details: { relationType, relations, positive, negative, connected, suggestedActor: actorName } })
+    if (!id) return null
+    if (chain.length) {
+      const patch = { actorId: chain[0], nestedActorIds: chain.slice(1) }
+      if (!get().checkActorChange([id], patch)) get().updateNode(id, patch)
+    }
+    get().updateInboxItem(itemId, { placedNodeId: id, num })
+    return id
+  },
+
+  // ── Contributors' spreadsheet (see utils/inboxExcel.js) ─────────────────────────
+  exportInboxTemplate: async (linkTypes = [], blank = false) => {
+    // blank: an empty sheet to send to someone (no inbox items, no graph rows; only the actor and link type lists)
+    const s = get()
+    const inbox = blank ? [] : s.inbox
+    const live = withLive(s)
+    const reach = reachableModels(live)
+    const nodeOf = (id) => { for (const { id: m } of reach) if (live[m].nodes[id]) return live[m].nodes[id] }
+    const placedIds = new Set()
+    // Waiting items whose number has since been given to an element on the graph (or to another item) are renumbered
+    const taken = new Set()
+    for (const { id } of reach) for (const n of Object.values(live[id].nodes)) if (n.num != null) taken.add(n.num)
+    let next = Math.max(0, ...taken, ...inbox.map(i => i.num ?? 0)) + 1
+    const seen = new Set()
+    const nums = {}
+    for (const i of inbox) {
+      if (i.placedNodeId && nodeOf(i.placedNodeId)) continue
+      nums[i.id] = i.num != null && !taken.has(i.num) && !seen.has(i.num) ? i.num : next++
+      seen.add(nums[i.id])
+    }
+    if (!blank) set(st => ({ inbox: st.inbox.map(i => i.id in nums && nums[i.id] !== i.num ? { ...i, num: nums[i.id] } : i) }))
+    const items = inbox.map(i => {
+      const node = i.placedNodeId && nodeOf(i.placedNodeId)
+      if (node) placedIds.add(node.id)
+      return { id: i.id, placed: !!node, num: node ? node.num : nums[i.id], ...fieldsOf(i), ...(node && { text: node.label }) }
+    })
+    const graphRows = []
+    for (const { id } of blank ? [] : reach) {
+      const m = live[id]
+      for (const n of Object.values(m.nodes)) {
+        if (!ELEMENT_TYPES.includes(n.type) || placedIds.has(n.id)) continue
+        graphRows.push({ key: n.id, num: n.num, type: n.type, text: n.label, actorName: m.actors[n.actorId]?.name ?? '', diagram: m.name })
+      }
+    }
+    const actorNames = [...s.actorList]
+    for (const { id } of reach) for (const a of Object.values(live[id].actors)) if (a.name && !actorNames.includes(a.name)) actorNames.push(a.name)
+    const { buildInboxWorkbookBlob } = await import('../utils/inboxExcel.js')
+    const url = URL.createObjectURL(await buildInboxWorkbookBlob({ modelName: live[ROOT_MODEL]?.name ?? '', linkTypes, actorNames, items, graphRows }))
+    const a = document.createElement('a')
+    a.href = url
+    const base = (live[ROOT_MODEL]?.name ?? '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '').trim()
+    a.download = `${base || 'istar-diagram'} - contributors${blank ? ' (blank)' : ''}.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+  },
+
+  // Reads a filled-in sheet → { error } or { plan } (nothing is changed yet; see applyInboxPlan)
+  readInboxSheet: async (buffer, labelMap) => {
+    const { readInboxWorkbook } = await import('../utils/inboxExcel.js')
+    const read = await readInboxWorkbook(buffer, labelMap)
+    if (read.error) return read
+    const s = get()
+    const live = withLive(s)
+    const nodeOf = (id) => { for (const m of Object.values(live)) if (m.nodes[id]) return m.nodes[id] }
+    const actorNames = [...s.actorList]
+    for (const m of Object.values(live)) for (const a of Object.values(m.actors)) if (a.name && !actorNames.includes(a.name)) actorNames.push(a.name)
+    const mineOf = (item) => ({ ...fieldsOf(item), ...(item.placedNodeId && nodeOf(item.placedNodeId) && { text: nodeOf(item.placedNodeId).label }) })
+    return { plan: planInboxImport({ ...read, items: s.inbox, mineOf, actorNames }) }
+  },
+
+  // Carries out a plan. `takeConflicts`: for fields changed both in the sheet and in the app, use the sheet's value.
+  applyInboxPlan: (plan, takeConflicts) => {
+    const s = get()
+    const updates = plan.updates.map(u => ({ id: u.id, patch: { ...u.patch } }))
+    if (takeConflicts) for (const c of plan.conflicts) {
+      let u = updates.find(x => x.id === c.id)
+      if (!u) updates.push(u = { id: c.id, patch: {} })
+      u.patch[c.field] = c.theirs
+    }
+    const nodePatch = (n, patch) => {
+      const details = { ...n.details }
+      for (const k of ['relationType', 'relations', 'positive', 'negative', 'connected']) if (k in patch) details[k] = patch[k]
+      if ('actorName' in patch) details.suggestedActor = patch.actorName
+      return { ...('text' in patch && { label: patch.text }), ...('type' in patch && { type: patch.type }), details }
+    }
+    get().beginBatch()
+    for (const fields of plan.adds) get().addInboxItem(fields)
+    for (const { id, patch } of updates) {
+      const item = s.inbox.find(i => i.id === id)
+      get().updateInboxItem(id, patch)
+      const nodeId = item?.placedNodeId
+      if (!nodeId) continue
+      const cur = get()
+      if (cur.nodes[nodeId]) { cur.updateNode(nodeId, nodePatch(cur.nodes[nodeId], patch)); continue }
+      const modelId = Object.keys(cur.models).find(m => cur.models[m].nodes[nodeId])
+      if (!modelId) continue
+      history.restoring = true  // other diagrams aren't part of the open diagram's undo history
+      set(st => {
+        const m = st.models[modelId]
+        const merged = { ...m.nodes[nodeId], ...nodePatch(m.nodes[nodeId], patch) }
+        const { width, height } = computeNodeSize(merged.label, merged.type, merged.logo ? merged.logoAspect ?? 1 : 0)
+        return { models: { ...st.models, [modelId]: { ...m, nodes: { ...m.nodes, [nodeId]: { ...merged, width, height } } } } }
+      })
+      history.restoring = false
+    }
+    get().endBatch()
+    return { added: plan.adds.length, updated: updates.length }
+  },
+
   // ── Nodes ────────────────────────────────────────────────────────────────────
-  addNode: (type, x, y) => {
+  addNode: (type, x, y, extra = {}) => {
     const id = crypto.randomUUID()
-    const { width, height } = computeNodeSize('', type)
+    const { width, height } = computeNodeSize(extra.label ?? '', type)
     const currentNodes = get().nodes
 
     let nx = snap(x - width  / 2)
@@ -439,7 +592,7 @@ const useStore = create((set, get) => ({
     set((s) => ({
       nodes: {
         ...s.nodes,
-        [id]: { id, num: Math.max(0, ...Object.values(s.nodes).map(n => n.num ?? 0)) + 1, type, label: '', actorId: null, x: nx, y: ny, width, height, ...(type === 'subactor' && { linkedModelId: null }) },
+        [id]: { id, num: Math.max(0, ...Object.values(s.nodes).map(n => n.num ?? 0)) + 1, type, label: '', actorId: null, x: nx, y: ny, width, height, ...(type === 'subactor' && { linkedModelId: null }), ...extra },
       },
       selectedId: id,
       selectedType: 'node',
@@ -699,28 +852,6 @@ const useStore = create((set, get) => ({
   // moved. → { error } or { updated, skipped }
   importEdits: (json) => {
     const result = readEdits(json, withLive(get()))
-    if (result.error) return result
-    return get().applyEdits(result)
-  },
-
-  // Excel / Google Sheets file with the elements' text (see excelExport.js)
-  exportForSpreadsheet: async () => {
-    const project = projectData(get())
-    const analysis = buildAnalysis(project, reachableModels(project.models))
-    const { buildWorkbookBlob } = await import('../utils/excelExport.js')
-    const url = URL.createObjectURL(await buildWorkbookBlob(analysis))
-    const a = document.createElement('a')
-    a.href = url
-    const base = (get().models[ROOT_MODEL]?.name ?? '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '').trim()
-    a.download = `${base || 'istar-diagram'} - elements.xlsx`
-    a.click()
-    URL.revokeObjectURL(url)
-  },
-
-  // → { error } or { updated, skipped }; only element text is read from the sheet
-  importSpreadsheet: async (buffer) => {
-    const { readSheetEdits } = await import('../utils/excelExport.js')
-    const result = await readSheetEdits(buffer, withLive(get()))
     if (result.error) return result
     return get().applyEdits(result)
   },

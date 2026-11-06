@@ -132,6 +132,26 @@ export function octilinearHull(points) {
   return verts
 }
 
+// The actors whose area contains the point, outermost first (so [primary, ...nested]): where an element dropped
+// there would belong. Empty when the point is outside every actor.
+export function actorChainAt(nodes, x, y) {
+  const { points, parentOf } = actorLayout(nodes)
+  const inside = (verts) => {
+    let hit = false
+    for (let i = 0, j = verts.length - 1; i < verts.length; j = i++) {
+      const a = verts[i], b = verts[j]
+      if ((a.y > y) !== (b.y > y) && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) hit = !hit
+    }
+    return hit
+  }
+  const hits = Object.keys(points).filter(id => inside(octilinearHull(points[id])))
+  const depthOf = (id) => { let d = 0; for (let p = parentOf[id]; p && d < 50; p = parentOf[p]) d++; return d }
+  const deepest = hits.sort((a, b) => depthOf(b) - depthOf(a))[0]
+  const chain = []
+  for (let id = deepest; id && chain.length < 50; id = parentOf[id]) chain.unshift(id)
+  return chain
+}
+
 // id -> name for the actors store, which the layout needs to size name tags
 // (a value can also be just a name string, for an actor that doesn't exist yet)
 export const actorNames = (actors) =>

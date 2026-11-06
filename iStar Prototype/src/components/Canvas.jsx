@@ -14,6 +14,7 @@ import { computeLinkSlots } from '../utils/layout.js'
 import { computeAllPaths } from '../utils/routing.js'
 import { computeCrossings } from '../utils/crossings.js'
 import { GRID } from '../utils/grid.js'
+import { INBOX_DRAG } from './InboxPanel.jsx'
 
 const MIN_CLEARANCE = GRID * 2
 
@@ -117,6 +118,19 @@ export default function Canvas() {
     }
   }
 
+  // An element dragged out of the inbox is placed where it is dropped
+  const handleDragOver = (e) => {
+    if (e.dataTransfer.types.includes(INBOX_DRAG)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy' }
+  }
+  const handleDrop = (e) => {
+    const itemId = e.dataTransfer.getData(INBOX_DRAG)
+    if (!itemId) return
+    e.preventDefault()
+    const rect = svgRef.current.getBoundingClientRect()
+    const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top)
+    useStore.getState().placeInboxItem(itemId, world.x, world.y)
+  }
+
   // Double click on empty space clears everything selected, actors included
   const handleCanvasDoubleClick = (e) => {
     if (!e.target.classList.contains('canvas-bg')) return
@@ -189,6 +203,8 @@ export default function Canvas() {
         onMouseMove={handleMouseMove}
         onClick={handleCanvasClick}
         onDoubleClick={handleCanvasDoubleClick}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
       >
         {/* Infinite background — pan target */}
         <rect className="canvas-bg" x="-50000" y="-50000"

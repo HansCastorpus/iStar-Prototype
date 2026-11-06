@@ -371,7 +371,7 @@ function Chevron({ open }) {
 }
 
 // Header that folds / unfolds the content under it
-function DropHeader({ open, onToggle, style, children, extra }) {
+export function DropHeader({ open, onToggle, style, children, extra }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4, ...style }}>
       <button type="button" onClick={onToggle} aria-expanded={open} style={{

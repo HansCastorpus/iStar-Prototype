@@ -1,8 +1,8 @@
 import { useRef, useState, useEffect, useLayoutEffect } from 'react'
 import { flushSync } from 'react-dom'
 import useStore from '../store/useStore.js'
-import { useT, LANGS } from '../i18n.js'
-import { typesFor } from '../utils/language.js'
+import { useT, LANGS, STRINGS } from '../i18n.js'
+import { typesFor, LINK_TYPES } from '../utils/language.js'
 
 const MODES = [
   { id: 'select',         label: 'toolbar.select' },
@@ -311,13 +311,16 @@ function MenuItem({ children, onClick, checked, danger, disabled, desc, current,
 }
 
 const MenuLabel = ({ children }) => (
-  <div style={{ padding: '5px 14px', background: 'var(--bg-menu-title)', fontSize: 13, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.8, color: 'var(--text-menu)' }}>{children}</div>
+  <div className="menu-label" style={{ margin: '8px 0 0', padding: '0 14px 4px', borderBottom: '1px solid var(--text-1)', fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', color: 'var(--text-1)', fontFamily: 'Roboto, sans-serif' }}>{children}</div>
+)
+const MenuSub = ({ children }) => (
+  <div className="menu-sub" style={{ padding: '5px 14px', borderTop: '1px solid var(--border-lt)', borderBottom: '1px solid var(--border-lt)', fontSize: 11, letterSpacing: 0.4, color: 'var(--text-3)', fontFamily: 'Roboto, sans-serif' }}>{children}</div>
 )
 const Hint = ({ children }) => <span style={{ marginLeft: 'auto', paddingLeft: 12, fontSize: 11, color: 'var(--text-2)' }}>{children}</span>
 const MenuDivider = () => <div style={{ height: 4 }} />
 
 export default function Toolbar({ inset = 0 }) {
-  const { mode, setMode, exportDiagram, exportForAnalysis, exportForSpreadsheet, importEdits, importSpreadsheet, importDiagram, clearDiagram, exportAsImage, darkMode, toggleDarkMode } = useStore()
+  const { mode, setMode, exportDiagram, exportForAnalysis, exportInboxTemplate, importEdits, importDiagram, clearDiagram, exportAsImage, darkMode, toggleDarkMode } = useStore()
   const lang = useStore(s => s.lang)
   const setLang = useStore(s => s.setLang)
   const language = useStore(s => s.language)
@@ -327,6 +330,9 @@ export default function Toolbar({ inset = 0 }) {
   const canRedo = useStore(s => s.canRedo)
   const undo = useStore(s => s.undo)
   const redo = useStore(s => s.redo)
+  const inboxOpen = useStore(s => s.inboxOpen)
+  const setInboxOpen = useStore(s => s.setInboxOpen)
+  const waiting = useStore(s => s.inbox.filter(i => !i.placedNodeId).length)
   const showGrid = useStore(s => s.showGrid)
   const showClearance = useStore(s => s.showClearance)
   const setViewAid = useStore(s => s.setViewAid)
@@ -394,16 +400,34 @@ export default function Toolbar({ inset = 0 }) {
     e.target.value = ''
   }
 
-  const sheetRef = useRef(null)
-  const handleImportSheet = async (e) => {
+  const contribRef = useRef(null)
+  const linkTypeList = () => typesFor(language, LINK_TYPES).map(id => ({ id, label: t(`type.${id}`) }))
+  // Link type names in every language (and the ids) → id, so a sheet filled in under another language still reads
+  const linkLabelMap = () => {
+    const map = {}
+    for (const id of LINK_TYPES) {
+      map[id] = id
+      for (const strings of Object.values(STRINGS)) if (strings[`type.${id}`]) map[strings[`type.${id}`].toLowerCase()] = id
+    }
+    return map
+  }
+  const handleImportContrib = async (e) => {
     const file = e.target.files[0]
     e.target.value = ''
     if (!file) return
-    const r = await importSpreadsheet(await file.arrayBuffer())
-    if (r.error) return alert(t(r.error === 'notJson' ? 'toolbar.importSheetBadFile' : 'toolbar.importSheetNotOurs'))
-    const reasons = Object.entries(r.skipped).filter(([, n]) => n > 0)
-      .map(([why, n]) => `• ${t(`toolbar.importEditsSkip.${why}`, { n })}`)
-    alert([t('toolbar.importEditsDone', { n: r.updated }), ...(reasons.length ? [t('toolbar.importEditsIgnored'), ...reasons] : [])].join('\n'))
+    const { error, plan } = await useStore.getState().readInboxSheet(await file.arrayBuffer(), linkLabelMap())
+    if (error) return alert(t(error === 'notJson' ? 'toolbar.importSheetBadFile' : 'toolbar.contribNotOurs'))
+    let takeConflicts = false
+    if (plan.conflicts.length) {
+      const list = plan.conflicts.slice(0, 8).map(c => `• ${t('toolbar.contribRow', { n: c.line })} — ${c.field}`).join('\n')
+      takeConflicts = !confirm(t('toolbar.contribConflicts', { n: plan.conflicts.length, list }))
+    }
+    const r = useStore.getState().applyInboxPlan(plan, takeConflicts)
+    const lines = [t('toolbar.contribDone', { a: r.added, u: r.updated })]
+    if (plan.errors.length) lines.push(t('toolbar.importEditsIgnored'), ...plan.errors.map(x => `• ${t('toolbar.contribRow', { n: x.line })}: ${t(`toolbar.contribErr.${x.reason}`)}`))
+    if (plan.removed) lines.push(t('toolbar.contribRemoved', { n: plan.removed }))
+    if (plan.unlisted.length) lines.push(t('toolbar.contribUnlisted', { names: plan.unlisted.join(', ') }))
+    alert(lines.join('\n'))
   }
 
   const handleImport = (e) => {
@@ -431,25 +455,36 @@ export default function Toolbar({ inset = 0 }) {
           <MenuItem current={language === 'custom'} faded={language !== 'custom'} desc={t('menu.langCustomDesc')} onClick={() => { setLanguage('custom'); close() }}>{t('menu.langCustom')}</MenuItem>
           <MenuDivider />
           <MenuLabel>{t('toolbar.export')}</MenuLabel>
+          <MenuSub>{t('menu.groupBackup')}</MenuSub>
           <MenuItem onClick={() => { exportDiagram(); close() }}>{t('menu.project')}</MenuItem>
-          <MenuItem onClick={() => { exportForAnalysis(); close() }}>{t('menu.analysis')}</MenuItem>
-          <MenuItem onClick={() => { exportForSpreadsheet(); close() }}>{t('menu.sheet')}</MenuItem>
           <MenuItem onClick={() => { exportAsImage('png'); close() }}>{t('menu.png')}</MenuItem>
           <MenuItem onClick={() => { exportAsImage('jpeg'); close() }}>{t('menu.jpeg')}</MenuItem>
+          <MenuSub>{t('menu.groupContrib')}</MenuSub>
+          <MenuItem onClick={() => { exportInboxTemplate(linkTypeList(), true); close() }}>
+            <span title={t('menu.contribBlankHint')}>{t('menu.contribBlank')}</span>
+          </MenuItem>
+          <MenuItem onClick={() => { exportInboxTemplate(linkTypeList()); close() }}>
+            <span title={t('menu.contribExportHint')}>{t('menu.contribExport')}</span>
+          </MenuItem>
+          <MenuSub>{t('menu.groupReview')}</MenuSub>
+          <MenuItem onClick={() => { exportForAnalysis(); close() }}>{t('menu.analysis')}</MenuItem>
           <MenuDivider />
           <MenuLabel>{t('toolbar.import')}</MenuLabel>
+          <MenuSub>{t('menu.groupBackup')}</MenuSub>
           <MenuItem onClick={() => { fileRef.current.click(); close() }}>{t('menu.project')}</MenuItem>
+          <MenuSub>{t('menu.groupContrib')}</MenuSub>
+          <MenuItem onClick={() => { contribRef.current.click(); close() }}>
+            <span title={t('menu.contribImportHint')}>{t('menu.contribImport')}</span>
+          </MenuItem>
+          <MenuSub>{t('menu.groupReview')}</MenuSub>
           <MenuItem onClick={() => { textRef.current.click(); close() }}>
             <span title={t('toolbar.importEditsHint')}>{t('menu.editsOnly')}</span>
-          </MenuItem>
-          <MenuItem onClick={() => { sheetRef.current.click(); close() }}>
-            <span title={t('toolbar.importSheetHint')}>{t('menu.sheetEdits')}</span>
           </MenuItem>
         </>}
       </Menu>
 
       <input ref={fileRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImport} />
-      <input ref={sheetRef} type="file" accept=".xlsx" style={{ display: 'none' }} onChange={handleImportSheet} />
+      <input ref={contribRef} type="file" accept=".xlsx" style={{ display: 'none' }} onChange={handleImportContrib} />
       <input ref={textRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImportText} />
 
       <Menu label={t('toolbar.options')} width={270}>
@@ -485,6 +520,17 @@ export default function Toolbar({ inset = 0 }) {
 
       {/* Help + mode buttons */}
       <div style={{ display: 'flex', gap: 0, alignItems: 'center', flex: '1 1 auto' }}>
+        <button
+          onClick={() => setInboxOpen(!inboxOpen)}
+          className="tbtn" data-on={inboxOpen}
+          style={{
+            padding: '5px 12px', cursor: 'pointer', fontSize: 15, textTransform: 'uppercase', letterSpacing: 0.5,
+            fontFamily: 'Roboto, sans-serif', whiteSpace: 'nowrap',
+          }}
+        >
+          {t('inbox.button')}{' '}
+          {waiting > 0 && <span style={{ fontWeight: 700, color: '#dc2626' }}>{waiting}</span>}
+        </button>
         <div ref={helpRef} style={{ position: 'relative' }}>
           <button
             onClick={() => { setHelpCols(1); setHelpOpen(v => !v) }}

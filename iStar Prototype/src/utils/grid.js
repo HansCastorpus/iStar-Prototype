@@ -13,6 +13,8 @@ export const nodePadXFor = (type) =>
   type === 'goal' || type === 'softgoal' ? PILL_PAD_X : type === 'task' ? GOAL_PAD_X : NODE_PAD_X
 export const TASK_TIP_X    = 16   // how far the left / right points of a task are cut in (smaller = blunter)
 export const GOAL_PAD_Y    = 10   // vertical padding for goal (pill) nodes
+export const GOAL_MAX_RADIUS = 24  // rounded ends of goals / softgoals: half a one-line height, kept when the text wraps into many lines
+export const goalRadius = (height) => Math.min(height / 2, GOAL_MAX_RADIUS)
 export const NODE_FONT     = 13   // font size of the label inside an element
 export const NODE_LINE_H   = 16   // line height for the 13px font (13px + 3px leading)
 export const NODE_BADGE_H  = 16   // type badge height (matches link badge: 10px font + 3×2 pad)

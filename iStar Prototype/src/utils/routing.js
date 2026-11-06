@@ -1,4 +1,4 @@
-import { GRID, snap, TASK_TIP_X } from './grid.js'
+import { GRID, snap, TASK_TIP_X, goalRadius } from './grid.js'
 import { getSlotPosition, getSideDirection, STUB } from './ports.js'
 
 const DETOUR_PAD    = GRID * 2
@@ -606,12 +606,12 @@ export function computeAllPaths(nodes, linkSlots, links) {
 // Routing attaches links to the node's bounding box, but tasks have pointed ends and goals /
 // softgoals rounded ones, so off-centre links would start in the empty corner in front of the
 // shape. Slide the start along its (straight) first segment until it touches the drawn outline.
-// Mirrors the shapes in Node.jsx: task ends inset by TASK_TIP_X, goal / softgoal ends of radius H/2.
+// Mirrors the shapes in Node.jsx: task ends inset by TASK_TIP_X, goal / softgoal ends of radius goalRadius(H).
 
 // How far inside the bounding box the outline is, `d` px from the middle (left/right sides)
 // or from the end of the straight top edge (top side)
 function outlineInset(node, d, alongSide) {
-  const r = node.height / 2
+  const r = node.type === 'goal' || node.type === 'softgoal' ? goalRadius(node.height) : node.height / 2
   if (node.type === 'task') {
     // left/right: the point's sides slope TASK_TIP_X across a half-height; top: the reverse
     return alongSide ? TASK_TIP_X * Math.min(d / r, 1) : r * Math.min(d / TASK_TIP_X, 1)
@@ -636,7 +636,7 @@ function snapEnd(node, end, next) {
   }
   if (vertical && Math.abs(end.y - y) < eps) {
     // Top edge: straight between the two ends, sloped / curved beyond them
-    const flat = node.type === 'task' ? TASK_TIP_X : h / 2
+    const flat = node.type === 'task' ? TASK_TIP_X : goalRadius(h)
     const d = Math.max(x + flat - end.x, end.x - (x + w - flat), 0)
     return { ...end, y: end.y + Math.min(outlineInset(node, d, false), Math.abs(next.y - end.y) - 1) }
   }
