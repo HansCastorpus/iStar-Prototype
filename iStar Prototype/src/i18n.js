@@ -118,6 +118,15 @@ export const STRINGS = {
     'actors.unnamed': '(unnamed)',
 
     // Inbox (elements waiting to be placed on the graph)
+    'menu.share': 'Share (read-only link)',
+    'menu.sharePublish': 'Publish graph & copy link',
+    'menu.shareUpdate': 'Update shared graph & copy link',
+    'menu.shareDesc': 'Anyone with the link can look at the diagrams, not change them',
+    'menu.shareForget': 'Forget my GitHub token',
+    'share.tokenPrompt': 'To publish, paste a GitHub personal access token with only the "gist" permission. It stays in this browser and is never part of the link or the graph.',
+    'share.done': 'Link copied:\n{link}\n\nAnyone with this link can look at the diagrams (read-only). The inbox and the extra information on elements are not shared. Publish again to update it: the link stays the same, but GitHub can take a few minutes to show the new version.',
+    'share.badToken': 'GitHub refused the token (wrong, expired, or without the "gist" permission). It was forgotten: publish again to paste a new one.',
+    'share.failed': 'The graph could not be published: {why}',
     'menu.contribBlank': 'Empty sheet to send (Excel)',
     'menu.contribBlankHint': 'An empty sheet for someone to fill in: just the actor and link type drop-downs. Import it back to fill the inbox.',
     'menu.contribExport': 'Sheet with current elements (Excel)',
@@ -349,6 +358,15 @@ export const STRINGS = {
     'actors.unnamed': '(sans nom)',
 
     // Boîte de réception (éléments à placer sur le graphe)
+    'menu.share': 'Partager (lien en lecture seule)',
+    'menu.sharePublish': 'Publier le graphe et copier le lien',
+    'menu.shareUpdate': 'Mettre à jour le graphe partagé et copier le lien',
+    'menu.shareDesc': 'Toute personne ayant le lien peut voir les diagrammes, pas les modifier',
+    'menu.shareForget': 'Oublier mon jeton GitHub',
+    'share.tokenPrompt': 'Pour publier, collez un jeton d’accès personnel GitHub avec la seule permission « gist ». Il reste dans ce navigateur et ne fait jamais partie du lien ni du graphe.',
+    'share.done': 'Lien copié :\n{link}\n\nToute personne ayant ce lien peut voir les diagrammes (lecture seule). La boîte et les informations supplémentaires des éléments ne sont pas partagées. Publiez à nouveau pour mettre à jour : le lien reste le même, mais GitHub peut mettre quelques minutes à afficher la nouvelle version.',
+    'share.badToken': 'GitHub a refusé le jeton (incorrect, expiré ou sans la permission « gist »). Il a été oublié : publiez à nouveau pour en coller un nouveau.',
+    'share.failed': 'Le graphe n’a pas pu être publié : {why}',
     'menu.contribBlank': 'Fichier vide à envoyer (Excel)',
     'menu.contribBlankHint': 'Un fichier vide à faire remplir : seulement les listes d\'acteurs et de types de lien. Réimportez-le pour remplir la boîte.',
     'menu.contribExport': 'Fichier avec les éléments actuels (Excel)',

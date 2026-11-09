@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { fieldsOf, planInboxImport, ELEMENT_TYPES } from '../utils/inboxExcel.js'
+import { parseViewParam, publishGist, fetchShared, shareLink } from '../utils/share.js'
 import { GRID, snap, computeNodeSize } from '../utils/grid.js'
 import { getUsedOffsets, getNextSlot } from '../utils/ports.js'
 import { buildAnalysis, readEdits } from '../utils/analysisExport.js'
@@ -134,8 +135,20 @@ function projectData(s) {
   const live = withLive(s)
   const models = {}
   for (const { id } of reachableModels(live)) models[id] = live[id]
-  return { version: 2, activeModelId: models[s.activeModelId] ? s.activeModelId : rootOf(models), models, inbox: s.inbox, actorList: s.actorList }
+  return { version: 2, activeModelId: models[s.activeModelId] ? s.activeModelId : rootOf(models), models, inbox: s.inbox, actorList: s.actorList, share: s.share }
 }
+
+// What a share link shows: the diagrams only. The inbox, the actor list and the extra information on elements stay private.
+function shareData(s) {
+  const data = projectData(s)
+  const models = Object.fromEntries(Object.entries(data.models).map(([id, m]) => [id, {
+    ...m, nodes: Object.fromEntries(Object.entries(m.nodes).map(([k, n]) => [k, { ...n, details: undefined }])),
+  }]))
+  return { ...data, models, inbox: [], actorList: [], share: null }
+}
+
+// Opened from a share link (?view=user/gist): a read-only copy of someone's graph, nothing of it is saved in this browser
+const viewTarget = typeof location === 'undefined' ? null : parseViewParam(location.search)
 
 // Turn saved / imported JSON (current or the older single-diagram format) into store state
 function loadProject(data) {
@@ -152,6 +165,7 @@ function loadProject(data) {
   return {
     models, activeModelId, nodes: active.nodes, links: active.links, actors: active.actors,
     inbox: Array.isArray(data.inbox) ? data.inbox : [], actorList: Array.isArray(data.actorList) ? data.actorList : [],
+    share: data.share?.gistId ? data.share : null,
   }
 }
 
@@ -171,6 +185,28 @@ const useStore = create((set, get) => ({
   zoomToActor: (actorId, insetLeft = 0) => set(st => ({ zoomRequest: { actorId, insetLeft, n: (st.zoomRequest?.n ?? 0) + 1 } })),
   zoomToNode: (nodeId) => set(st => ({ zoomRequest: { nodeId, insetLeft: 0, n: (st.zoomRequest?.n ?? 0) + 1 } })),
   fitRequest: 0,  // bumped whenever a project is loaded, so the canvas re-frames the whole graph
+
+  // ── Sharing ──────────────────────────────────────────────────────────────────
+  share: null,                        // { user, gistId } of the Gist this project was published to
+  viewer: !!viewTarget,               // opened from a share link: read-only, nothing is saved
+  viewStatus: viewTarget ? 'loading' : 'ready',  // 'loading' | 'ready' | 'error'
+  loadShared: async () => {
+    try {
+      const project = loadProject(JSON.parse(await fetchShared(viewTarget)))
+      history.restoring = true
+      set({ ...project, fitRequest: get().fitRequest + 1, viewStatus: 'ready' })
+      history.restoring = false
+    } catch (e) {
+      console.error('Shared graph failed to load', e)
+      set({ viewStatus: 'error' })
+    }
+  },
+  // Publishes the diagrams to the project's Gist (making one the first time) → the link to give out. Throws with `status` set when GitHub refuses.
+  publishShare: async (token) => {
+    const { user, id } = await publishGist({ token, gistId: get().share?.gistId, content: JSON.stringify(shareData(get())) })
+    set({ share: { user, gistId: id } })
+    return shareLink(user, id)
+  },
 
   switchModel: (id) => {
     const s = get()
@@ -1034,7 +1070,28 @@ useStore.subscribe((s, prev) => {
 })
 
 useStore.subscribe((s) => {
+  if (s.viewer) return  // a shared graph is only looked at: it never replaces the project saved in this browser
   localStorage.setItem('istar-diagram', JSON.stringify(projectData(s)))
 })
+
+// A share link opens the graph read-only: every action that would change it does nothing. Selecting, filtering,
+// highlighting, the dependency tools and switching between diagrams still work.
+if (viewTarget) {
+  const noop = () => {}
+  useStore.setState({
+    addNode: () => null, updateNode: noop, moveNode: noop, moveNodeGroup: noop, deleteNode: noop,
+    updateLink: noop, reverseLink: noop, deleteLink: noop, confirmLink: noop,
+    setConnectSource: noop, setPendingLink: noop, setMode: noop,
+    renameActor: noop, ungroupActor: noop, ensureActor: () => null, setActorLogo: noop, setActorLevel: noop, openActorEditor: noop,
+    renameModel: noop, clearDiagram: noop, importDiagram: noop, importEdits: noop, undo: noop, redo: noop,
+    placeInboxItem: () => null, applyInboxPlan: noop,
+    // a sub-actor box only opens a diagram that exists; it never creates one
+    openSubactor: (nodeId) => {
+      const { nodes, models, switchModel } = useStore.getState()
+      const linked = nodes[nodeId]?.linkedModelId
+      if (linked && models[linked]) switchModel(linked)
+    },
+  })
+}
 
 export default useStore

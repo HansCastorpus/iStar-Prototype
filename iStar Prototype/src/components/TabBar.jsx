@@ -24,6 +24,7 @@ function Tabs() {
   const t = useT()
   const { live, activeId } = useLiveModels()
   const { switchModel, renameModel } = useStore()
+  const viewer = useStore(s => s.viewer)
   const [editing, setEditing] = useState(null)  // { id, text }
   const tabs = useMemo(() => reachableModels(live), [live])
 
@@ -55,9 +56,9 @@ function Tabs() {
         }
         return (
           <button key={id} role="tab" aria-selected={active}
-            title={t('tabs.rename')}
+            title={viewer ? undefined : t('tabs.rename')}
             onClick={() => switchModel(id)}
-            onDoubleClick={() => setEditing({ id, text: name })}
+            onDoubleClick={viewer ? undefined : () => setEditing({ id, text: name })}
             style={style}>
             <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
           </button>

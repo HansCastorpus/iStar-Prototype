@@ -42,7 +42,7 @@ export default function Node({ node, strayActors }) {
   const [editing, setEditing] = useState(false)
   const originalLabel = useRef('')
   const startEdit = (e) => {
-    if (useStore.getState().mode.startsWith('add-')) return
+    if (useStore.getState().viewer || useStore.getState().mode.startsWith('add-')) return
     e.stopPropagation()
     const st = useStore.getState()
     st.clearConnect()  // the clicks of the double-click may have started a link

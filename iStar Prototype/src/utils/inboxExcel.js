@@ -11,28 +11,31 @@ export const ELEMENT_TYPES = ['goal', 'task', 'softgoal', 'resource']
 const SHEET = 'Elements'
 const LISTS = 'Lists'
 const SNAPSHOT = '_snapshot'
-const README = 'Read me'
 const BLANK_ROWS = 200
 const MIN_CONNECTED = 3
 const CHUNK = 30000
 const FIXED = ['Key', 'Status', 'No.', 'Type', 'Actor', 'Text', 'Relation type', 'Relations', 'Positive aspects', 'Negative aspects']
 const COL = { key: 1, status: 2, num: 3, type: 4, actor: 5, text: 6, relationType: 7, relations: 8, positive: 9, negative: 10, connected: 11 }
 
-// Greys only: dark header, white cells to fill in, light grey rows that are shown for information. Every cell has a thin border.
-const HEADER_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } }
-const EDIT_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } }
-const INFO_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFEFEF' } }
+// Greys only. White cells are the essential ones (type, actor, text), light grey the optional extras; the darker grey
+// cells (status, number, rows already on the graph) are not for filling in. Every cell has a thin border.
+const fill = (argb) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } })
+const HEAD_ESSENTIAL = fill('FF7F7F7F'), HEAD_EXTRA = fill('FFD0D0D0'), HEAD_INFO = fill('FFE3E3E3')
+const ESSENTIAL_FILL = fill('FFFFFFFF'), EXTRA_FILL = fill('FFEDEDED'), INFO_FILL = fill('FFCFCFCF')
 const SIDE = { style: 'thin', color: { argb: 'FF8C8C8C' } }
 const BORDER = { top: SIDE, left: SIDE, bottom: SIDE, right: SIDE }
+const HEADER_ROW = 2  // row 1 holds the rules, row 2 the column headings (and the filter), the elements start on row 3
+const ESSENTIAL = ['type', 'actor', 'text']
 
 const HINTS = {
-  type: 'Goal, task, softgoal or resource.',
-  actor: 'Who this element belongs to. Pick from the list.',
-  text: 'The element itself, as short as you can make it.',
-  relationType: 'The kind of relation it has with the others. Pick from the list; explain it in Relations.',
-  relations: 'How does it relate to other elements, and which ones?',
-  positive: 'What does it help or improve?',
-  negative: 'What does it harm, cost or put at risk?',
+  info: 'Filled in for you. Numbers can change, so do not rely on them. Do not insert, delete or sort rows.',
+  type: 'Goal, task, softgoal or resource. Pick from the list.',
+  actor: 'Who this element belongs to. Pick from the list; if yours is missing, type its name.',
+  text: 'A short summary of the element.',
+  relationType: 'The kind of relation it has with other elements. Pick from the list.',
+  relations: 'How it relates to other elements, and which ones, in your own words.',
+  positive: 'What it helps or improves.',
+  negative: 'What it harms, costs or puts at risk.',
   connected: 'Another actor this element is connected to. Pick from the list.',
 }
 
@@ -54,20 +57,6 @@ export async function buildInboxWorkbookBlob(data) {
   const connectedCols = Math.max(MIN_CONNECTED, ...data.items.map(i => i.connected?.length ?? 0))
   const lastCol = COL.connected + connectedCols - 1
 
-  const readme = wb.addWorksheet(README)
-  readme.getColumn(1).width = 110
-  ;[
-    `${data.modelName || 'Model'} — elements`,
-    '',
-    'Fill in one row per element, in the "Elements" sheet. The white, bordered cells are yours to fill; grey rows are already on the graph and are only shown for context.',
-    'Type and Actor have a drop-down. If the actor you need is missing, type its name: the designer will add it.',
-    'Relations, positive and negative aspects are free text. Say in your own words how it relates to others; the designer draws the links.',
-    'Connected actors tell the designer where to place this actor in relation to the others.',
-    'The numbers are for reference (to talk about an element). They can change when elements are added to the graph, so do not rely on them. New rows get a number when the designer imports them.',
-    'Do not insert, delete or sort rows, and leave the hidden columns alone.',
-  ].forEach((line, i) => { readme.getCell(i + 1, 1).value = line; readme.getCell(i + 1, 1).alignment = { wrapText: true, vertical: 'top' } })
-  readme.getCell(1, 1).font = { bold: true, size: 14 }
-
   // Lists feeding the drop-downs
   const lists = wb.addWorksheet(LISTS, { state: 'hidden' })
   ELEMENT_TYPES.forEach((t, i) => { lists.getCell(i + 1, 1).value = t })
@@ -78,52 +67,73 @@ export async function buildInboxWorkbookBlob(data) {
   const ws = wb.addWorksheet(SHEET)
   const widths = [10, 16, 7, 12, 24, 50, 16, 40, 32, 32]
   const headers = [...FIXED, ...Array.from({ length: connectedCols }, (_, i) => `Connected actor ${i + 1}`)]
-  ws.columns = headers.map((header, i) => ({ header, width: widths[i] ?? 24, hidden: i === 0, style: { alignment: { wrapText: true, vertical: 'top' } } }))
-  const head = ws.getRow(1)
-  head.font = { bold: true }
-  head.eachCell(c => { c.fill = HEADER_FILL; c.protection = { locked: true } })
-  ws.views = [{ state: 'frozen', ySplit: 1 }]
+  ws.columns = headers.map((_, i) => ({ width: widths[i] ?? 24, hidden: i === 0, style: { alignment: { wrapText: true, vertical: 'top' } } }))
+
+  // Row 1: the rules, one cell above each column (Status and No. share one). Essential columns first say so, then what to put in.
+  const essentialAt = new Set(ESSENTIAL.map(k => COL[k]))
+  const ruleOf = (c) => c < COL.type ? ['INFO ONLY', HINTS.info]
+    : essentialAt.has(c) ? ['ESSENTIAL', HINTS[Object.keys(COL).find(k => COL[k] === c)]]
+    : ['OPTIONAL', HINTS[Object.keys(COL).find(k => COL[k] === c) ?? 'connected']]
+  ws.mergeCells(1, COL.status, 1, COL.num)
+  let ruleLines = 1
+  for (let c = COL.status; c <= lastCol; c++) {
+    if (c === COL.num) continue
+    const [label, text] = ruleOf(c)
+    const cell = ws.getCell(1, c)
+    cell.value = { richText: [{ font: { bold: true, size: 10 }, text: label }, { font: { size: 10 }, text: `\n${text}` }] }
+    cell.alignment = { wrapText: true, vertical: 'top' }
+    const width = c === COL.status ? widths[1] + widths[2] : widths[c - 1] ?? 24
+    ruleLines = Math.max(ruleLines, 1 + Math.ceil(text.length / (width * 0.9)))  // a little under a character per width unit, so the text is never cut off
+  }
+  ws.getRow(1).height = ruleLines * 14 + 8
+
+  // Row 2: the headings, with the filter
+  headers.forEach((h, i) => {
+    const c = i + 1, cell = ws.getCell(HEADER_ROW, c)
+    cell.value = h
+    cell.font = essentialAt.has(c) ? { bold: true, color: { argb: 'FFFFFFFF' } } : { bold: true }
+    cell.fill = c < COL.type ? HEAD_INFO : essentialAt.has(c) ? HEAD_ESSENTIAL : HEAD_EXTRA
+  })
+  ws.views = [{ state: 'frozen', ySplit: HEADER_ROW }]
+  const head = ws.getRow(HEADER_ROW)
   const noteOf = { [COL.type]: HINTS.type, [COL.actor]: HINTS.actor, [COL.text]: HINTS.text, [COL.relationType]: HINTS.relationType, [COL.relations]: HINTS.relations, [COL.positive]: HINTS.positive, [COL.negative]: HINTS.negative }
   for (let c = COL.connected; c <= lastCol; c++) noteOf[c] = HINTS.connected
   for (const [c, note] of Object.entries(noteOf)) head.getCell(Number(c)).note = note
 
   const base = {}
-  const editable = (row) => { for (let c = COL.type; c <= lastCol; c++) { const cell = row.getCell(c); cell.protection = { locked: false }; cell.fill = EDIT_FILL } }
-
   for (const item of data.items) {
     const f = fieldsOf(item)
     base[item.id] = f
-    const values = [item.id, item.placed ? 'On graph' : 'In inbox', item.num, f.type, f.actorName, f.text, labelOf[f.relationType] ?? '', f.relations, f.positive, f.negative, ...f.connected]
-    const row = ws.addRow(values)
-    row.eachCell({ includeEmpty: true }, c => { c.protection = { locked: true } })
-    editable(row)
+    ws.addRow([item.id, item.placed ? 'On graph' : 'In inbox', item.num, f.type, f.actorName, f.text, labelOf[f.relationType] ?? '', f.relations, f.positive, f.negative, ...f.connected])
   }
-  for (const g of data.graphRows) {
-    const row = ws.addRow([`node:${g.key}`, `On graph${g.diagram ? ` · ${g.diagram}` : ''}`, g.num, g.type, g.actorName, g.text])
-    row.eachCell({ includeEmpty: true }, c => { c.protection = { locked: true }; c.fill = INFO_FILL })
-  }
-  for (let i = 0; i < BLANK_ROWS; i++) {
-    const row = ws.addRow([])
-    for (let c = 1; c <= lastCol; c++) row.getCell(c).protection = { locked: c === COL.key || c === COL.status }
-    editable(row)
-    for (const c of [COL.status, COL.num]) row.getCell(c).fill = INFO_FILL  // locked: not for filling in
-  }
+  for (const g of data.graphRows) ws.addRow([`node:${g.key}`, `On graph${g.diagram ? ` · ${g.diagram}` : ''}`, g.num, g.type, g.actorName, g.text])
+  for (let i = 0; i < BLANK_ROWS; i++) ws.addRow([])
 
-  // Drop-downs on every editable row. The actor ones only warn on an unknown name, so a new actor can still be typed.
+  // Colours, locking and drop-downs row by row. The actor drop-downs only warn on an unknown name, so a new actor can still be typed.
   const total = ws.rowCount
-  const first = 2 + 0
-  for (let r = first; r <= total; r++) {
-    if (String(ws.getCell(r, COL.key).value ?? '').startsWith('node:')) continue
-    ws.getCell(r, COL.type).dataValidation = { type: 'list', allowBlank: true, formulae: [`${LISTS}!$A$1:$A$${ELEMENT_TYPES.length}`] }
-    if (data.linkTypes.length) ws.getCell(r, COL.relationType).dataValidation = { type: 'list', allowBlank: true, formulae: [`${LISTS}!$C$1:$C$${data.linkTypes.length}`] }
-    if (!data.actorNames.length) continue
-    const actorList = { type: 'list', allowBlank: true, showErrorMessage: true, errorStyle: 'warning', errorTitle: 'Unknown actor',
-      error: 'This actor is not on the list. Keep it anyway?', formulae: [`${LISTS}!$B$1:$B$${data.actorNames.length}`] }
-    ws.getCell(r, COL.actor).dataValidation = actorList
-    for (let c = COL.connected; c <= lastCol; c++) ws.getCell(r, c).dataValidation = actorList
+  const actorList = data.actorNames.length && { type: 'list', allowBlank: true, showErrorMessage: true, errorStyle: 'warning', errorTitle: 'Unknown actor',
+    error: 'This actor is not on the list. Keep it anyway?', formulae: [`${LISTS}!$B$1:$B$${data.actorNames.length}`] }
+  for (let r = HEADER_ROW + 1; r <= total; r++) {
+    const row = ws.getRow(r)
+    const onGraph = String(row.getCell(COL.key).value ?? '').startsWith('node:')
+    for (let c = 1; c <= lastCol; c++) {
+      const cell = row.getCell(c)
+      const open = !onGraph && c >= COL.type
+      cell.protection = { locked: !open }
+      cell.fill = !open ? INFO_FILL : essentialAt.has(c) ? ESSENTIAL_FILL : EXTRA_FILL
+      if (onGraph) cell.font = { color: { argb: 'FF595959' } }
+    }
+    if (onGraph) continue
+    row.getCell(COL.type).dataValidation = { type: 'list', allowBlank: true, formulae: [`${LISTS}!$A$1:$A$${ELEMENT_TYPES.length}`] }
+    if (data.linkTypes.length) row.getCell(COL.relationType).dataValidation = { type: 'list', allowBlank: true, formulae: [`${LISTS}!$C$1:$C$${data.linkTypes.length}`] }
+    if (!actorList) continue
+    row.getCell(COL.actor).dataValidation = actorList
+    for (let c = COL.connected; c <= lastCol; c++) row.getCell(c).dataValidation = actorList
   }
+  for (let c = COL.status; c <= lastCol; c++) ws.getCell(1, c).fill = c < COL.type ? HEAD_INFO : essentialAt.has(c) ? ESSENTIAL_FILL : EXTRA_FILL
   ws.eachRow({ includeEmpty: true }, row => { for (let c = 1; c <= lastCol; c++) row.getCell(c).border = BORDER })
-  await ws.protect('', { selectLockedCells: true, selectUnlockedCells: true, formatColumns: true, formatRows: true })
+  ws.autoFilter = { from: { row: HEADER_ROW, column: COL.status }, to: { row: total, column: lastCol } }
+  await ws.protect('', { selectLockedCells: true, selectUnlockedCells: true, formatColumns: true, formatRows: true, autoFilter: true })
 
   // Snapshot of the editable rows as exported (very hidden: not even in the "Unhide" list)
   const snap = wb.addWorksheet(SNAPSHOT, { state: 'veryHidden' })
@@ -144,7 +154,15 @@ export async function readInboxWorkbook(buffer, labelMap = {}) {
   if (!ws) return { error: 'notInbox' }
   // Columns are found by their header, so sheets from earlier versions of the template (with other columns) still load
   const at = { connected: [] }
-  const headerRow = ws.getRow(1)
+  // The headings are on row 2 (row 1 holds the rules); sheets from earlier versions have them on row 1
+  let headerLine = 0
+  for (let r = 1; r <= 5 && !headerLine; r++) {
+    const texts = []
+    for (let c = 1; c <= ws.columnCount; c++) texts.push(clean(ws.getRow(r).getCell(c).text).toLowerCase())
+    if (texts.includes('key') && texts.includes('text')) headerLine = r
+  }
+  if (!headerLine) return { error: 'notInbox' }
+  const headerRow = ws.getRow(headerLine)
   for (let c = 1; c <= ws.columnCount; c++) {
     const h = clean(headerRow.getCell(c).text).toLowerCase()
     if (h === 'key') at.key = c
@@ -171,7 +189,7 @@ export async function readInboxWorkbook(buffer, labelMap = {}) {
   const relationOf = (text) => text ? labelMap[text.toLowerCase()] ?? `!${text}` : ''  // '!…': not a link type
   const rows = []
   ws.eachRow((row, line) => {
-    if (line === 1) return
+    if (line <= headerLine) return
     const connected = []
     for (const c of at.connected) { const v = cell(row, c); if (v && !connected.includes(v)) connected.push(v) }
     rows.push({

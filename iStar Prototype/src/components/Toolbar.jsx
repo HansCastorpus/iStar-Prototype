@@ -400,6 +400,28 @@ export default function Toolbar({ inset = 0 }) {
     e.target.value = ''
   }
 
+  // Read-only link to the diagrams, kept in a secret Gist of the designer's GitHub account (see utils/share.js)
+  const shared = useStore(s => s.share)
+  const TOKEN_KEY = 'istar-gist-token'
+  const forgetToken = () => { try { localStorage.removeItem(TOKEN_KEY) } catch { /* storage unavailable */ } }
+  const handleShare = async () => {
+    let token = ''
+    try { token = localStorage.getItem(TOKEN_KEY) ?? '' } catch { /* storage unavailable */ }
+    if (!token) {
+      token = (prompt(t('share.tokenPrompt')) ?? '').trim()
+      if (!token) return
+      try { localStorage.setItem(TOKEN_KEY, token) } catch { /* storage unavailable */ }
+    }
+    try {
+      const link = await useStore.getState().publishShare(token)
+      try { await navigator.clipboard.writeText(link) } catch { /* the link is in the message below anyway */ }
+      alert(t('share.done', { link }))
+    } catch (e) {
+      if (e.status === 401 || e.status === 403) { forgetToken(); alert(t('share.badToken')) }
+      else alert(t('share.failed', { why: e.message }))
+    }
+  }
+
   const contribRef = useRef(null)
   const linkTypeList = () => typesFor(language, LINK_TYPES).map(id => ({ id, label: t(`type.${id}`) }))
   // Link type names in every language (and the ids) → id, so a sheet filled in under another language still reads
@@ -480,6 +502,12 @@ export default function Toolbar({ inset = 0 }) {
           <MenuItem onClick={() => { textRef.current.click(); close() }}>
             <span title={t('toolbar.importEditsHint')}>{t('menu.editsOnly')}</span>
           </MenuItem>
+          <MenuDivider />
+          <MenuLabel>{t('menu.share')}</MenuLabel>
+          <MenuItem onClick={() => { handleShare(); close() }} desc={t('menu.shareDesc')}>
+            {t(shared ? 'menu.shareUpdate' : 'menu.sharePublish')}
+          </MenuItem>
+          {shared && <MenuItem onClick={() => { forgetToken(); close() }}>{t('menu.shareForget')}</MenuItem>}
         </>}
       </Menu>
 

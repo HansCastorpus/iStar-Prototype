@@ -5,6 +5,7 @@ import FilterPanel from './components/FilterPanel.jsx'
 import TabBar from './components/TabBar.jsx'
 import WorkTitle from './components/WorkTitle.jsx'
 import InboxPanel from './components/InboxPanel.jsx'
+import ViewerBar from './components/ViewerBar.jsx'
 import useStore from './store/useStore.js'
 
 // The logo container and the toolbar / tab bar to its right are separated by a diagonal: it leaves the logo
@@ -55,8 +56,14 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light')
   }, [darkMode])
 
-  // Load the saved project once (not per diagram: the canvas is remounted when another diagram opens)
-  useEffect(() => { useStore.getState().loadFromStorage() }, [])
+  // Load the saved project once (not per diagram: the canvas is remounted when another diagram opens).
+  // Opened from a share link, the shared graph is loaded instead and the saved project is left alone.
+  const viewer = useStore(s => s.viewer)
+  const viewStatus = useStore(s => s.viewStatus)
+  useEffect(() => {
+    const st = useStore.getState()
+    if (st.viewer) st.loadShared(); else st.loadFromStorage()
+  }, [])
 
   const lang = useStore(s => s.lang)
   useEffect(() => { document.documentElement.lang = lang }, [lang])
@@ -90,7 +97,7 @@ export default function App() {
           <img src={`${import.meta.env.BASE_URL}Logo.svg`} alt="i* Builder" className="app-logo" draggable={false} style={{ height: 40, maxWidth: '100%', objectFit: 'contain', userSelect: 'none' }} />
         </div>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          <Toolbar inset={TOOLBAR_INSET} />
+          {viewer ? <ViewerBar inset={TOOLBAR_INSET} /> : <Toolbar inset={TOOLBAR_INSET} />}
           {/* The header's bottom line starts where the curve ends: nothing under the logo area */}
           <div style={{ position: 'relative' }}>
             <TabBar inset={TABS_INSET} />
@@ -116,7 +123,15 @@ export default function App() {
           {/* keyed by the open diagram so each one starts with a fresh view (zoom / pan) */}
           <Canvas key={activeModelId} />
           <WorkTitle />
-          <InboxPanel />
+          {!viewer && <InboxPanel />}
+          {viewer && viewStatus !== 'ready' && (
+            <div style={{
+              position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200,
+              background: 'var(--bg-canvas)', color: 'var(--text-2)', fontFamily: 'Roboto, sans-serif', fontSize: 15, textAlign: 'center', padding: 24,
+            }}>
+              {viewStatus === 'loading' ? 'Loading the graph…' : 'This graph could not be loaded. The link may be wrong, or the graph may no longer be shared.'}
+            </div>
+          )}
         </div>
       </div>
     </div>

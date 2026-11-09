@@ -28,6 +28,7 @@ export default function Canvas() {
   const fitRequest = useStore(s => s.fitRequest)
   const zoomRequest = useStore(s => s.zoomRequest)
 
+  const viewer = useStore(s => s.viewer)
   const showGrid = useStore(s => s.showGrid)
   const showClearance = useStore(s => s.showClearance)
   const { nodes, links, actors, mode, addNode, deselect, deselectAll, clearConnect, draggingNodeId, selectedIds, selectedId, selectedType } = useStore()
@@ -193,9 +194,12 @@ export default function Canvas() {
 
   return (
     <ZoomContext.Provider value={{ transform, transformRef }}>
-      <PropertyPopover linkPaths={linkPaths} />
-      <LinkTypePopup linkPaths={linkPaths} />
-      <ActorPopover linkPaths={linkPaths} />
+      {/* The editing popups don't exist in a read-only share */}
+      {!viewer && <>
+        <PropertyPopover linkPaths={linkPaths} />
+        <LinkTypePopup linkPaths={linkPaths} />
+        <ActorPopover linkPaths={linkPaths} />
+      </>}
       <svg
         ref={svgRef}
         id="diagram-canvas"

@@ -9,6 +9,7 @@ export default function WorkTitle() {
   const id = useStore(s => s.activeModelId)
   const name = useStore(s => s.models[s.activeModelId]?.name ?? '')
   const renameModel = useStore(s => s.renameModel)
+  const viewer = useStore(s => s.viewer)
   const [text, setText] = useState(null)  // set while renaming
 
   const commit = () => {
@@ -31,8 +32,8 @@ export default function WorkTitle() {
     )
   }
   return (
-    <h1 title={t('tabs.rename')} onDoubleClick={() => setText(name)}
-      style={{ ...style, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'text', userSelect: 'none' }}>
+    <h1 title={viewer ? undefined : t('tabs.rename')} onDoubleClick={viewer ? undefined : () => setText(name)}
+      style={{ ...style, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: viewer ? 'default' : 'text', userSelect: 'none' }}>
       {name}
     </h1>
   )
