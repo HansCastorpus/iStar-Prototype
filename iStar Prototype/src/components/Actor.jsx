@@ -1,15 +1,10 @@
 import { useRef, useMemo, useEffect } from 'react'
 import useStore from '../store/useStore.js'
 import {
-  actorLayout, actorNames, octilinearHull, inActor, chainOf, topCenterOf, tagTextSize, LOGO_GAP,
-  extentsOf, hullsSeparated, logoSize, tagHeight,
-  LINE_LEN, tagFontSize, actorTintVar,
+  actorLayout, actorNames, octilinearHull, inActor, chainOf, headerSize, logoSize, barSpan,
+  HEADER_H, HEADER_FONT, HEADER_LOGO, HEADER_GAP, actorTintVar,
 } from '../utils/actorTree.js'
 import { focusView } from '../utils/dependencies.js'
-
-const LABEL_RADIUS = 6
-const TAG_SLIDE_STEP = 24  // a nested tag slides along its top edge in steps of this much
-const TAG_CLEARANCE = 8    // least space between a name tag and its actor's area
 
 function buildHullPath(verts, r = 15) {
   const n = verts.length
@@ -33,41 +28,7 @@ function buildHullPath(verts, r = 15) {
     if (next !== 0) d += ` L${A[next].x},${A[next].y}`
   }
 
-  const cornerMid = verts.map((v, i) => ({
-    x: 0.25 * A[i].x + 0.5 * v.x + 0.25 * B[i].x,
-    y: 0.25 * A[i].y + 0.5 * v.y + 0.25 * B[i].y,
-  }))
-
-  return { d: d + ' Z', cornerMid }
-}
-
-// Name tag geometry (world coords): the tag sits LINE_LEN out from the hull corner along lineDir,
-// with its border meeting the connector line
-function nameTag(name, logo, highlighted, nested, anchorCorner, lineDir, hullExt) {
-  const fontSize = tagFontSize(nested, highlighted)
-  const fontWeight = highlighted ? 'bold' : 'normal'
-  const { textW, contentW, labelW } = tagTextSize(name, fontSize, highlighted, logo)
-  const labelH = tagHeight(fontSize, logo)
-  // Distance from the label centre to its edge along lineDir, so the line meets the border
-  const edgeDist = Math.min(
-    Math.abs(lineDir.x) > 1e-6 ? (labelW / 2) / Math.abs(lineDir.x) : Infinity,
-    Math.abs(lineDir.y) > 1e-6 ? (labelH / 2) / Math.abs(lineDir.y) : Infinity,
-  )
-  // A wide tag (long name, logo) can reach back over the actor's area near a slanted corner, so the
-  // connector is lengthened until the tag keeps TAG_CLEARANCE away from the area
-  let lineLen = LINE_LEN, lineEndX, lineEndY, labelCx, labelCy
-  for (; ; lineLen += 2) {
-    lineEndX = anchorCorner.x + lineLen * lineDir.x
-    lineEndY = anchorCorner.y + lineLen * lineDir.y
-    labelCx = lineEndX + edgeDist * lineDir.x
-    labelCy = lineEndY + edgeDist * lineDir.y
-    const box = extentsOf([
-      { x: labelCx - labelW / 2, y: labelCy - labelH / 2 }, { x: labelCx + labelW / 2, y: labelCy - labelH / 2 },
-      { x: labelCx - labelW / 2, y: labelCy + labelH / 2 }, { x: labelCx + labelW / 2, y: labelCy + labelH / 2 },
-    ])
-    if (!hullExt || lineLen > 600 || hullsSeparated(box, hullExt, TAG_CLEARANCE)) break
-  }
-  return { fontSize, fontWeight, labelW, labelH, lineEndX, lineEndY, textW, contentW, labelCx, labelCy }
+  return d + ' Z'
 }
 
 // Background of an actor's zone. With nothing nested it is the plain --actor-bg. In a nesting the deepest
@@ -85,39 +46,9 @@ function backgroundShade({ depth, levels }, tint) {
   return tint ? `color-mix(in srgb, ${tint} ${TINT_PCT}%, ${base})` : base
 }
 
-// Does a tag (box + connector line) touch a link or an element? Boxes are checked with a small margin.
-const TAG_AVOID_MARGIN = 4
-function segmentHitsRect(a, b, r) {
-  let t0 = 0, t1 = 1
-  const dx = b.x - a.x, dy = b.y - a.y
-  for (const [p, q] of [[-dx, a.x - r.x1], [dx, r.x2 - a.x], [-dy, a.y - r.y1], [dy, r.y2 - a.y]]) {
-    if (p === 0) { if (q < 0) return false; continue }
-    const k = q / p
-    if (p < 0) { if (k > t1) return false; if (k > t0) t0 = k }
-    else { if (k < t0) return false; if (k < t1) t1 = k }
-  }
-  return true
-}
-function segmentsCross(a, b, c, d) {
-  const o = (p, q, r) => Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x))
-  return o(a, b, c) !== o(a, b, d) && o(c, d, a) !== o(c, d, b)
-}
-function tagHitsSomething(tag, anchor, linkPaths, nodes) {
-  const m = TAG_AVOID_MARGIN
-  const box = { x1: tag.labelCx - tag.labelW / 2 - m, x2: tag.labelCx + tag.labelW / 2 + m,
-    y1: tag.labelCy - tag.labelH / 2 - m, y2: tag.labelCy + tag.labelH / 2 + m }
-  const lineEnd = { x: tag.lineEndX, y: tag.lineEndY }
-  for (const path of Object.values(linkPaths)) {
-    for (let i = 1; i < path.length; i++) {
-      if (segmentHitsRect(path[i - 1], path[i], box)) return true
-      if (segmentsCross(anchor, lineEnd, path[i - 1], path[i])) return true
-    }
-  }
-  return Object.values(nodes).some(n =>
-    n.x < box.x2 && n.x + n.width > box.x1 && n.y < box.y2 && n.y + n.height > box.y1)
-}
-
-export default function Actor({ actor, linkPaths = {} }) {
+// extras / offset come from barLayout (actorBars.js): how much wider the name bar is made and how far the name
+// slides along it so that no link crosses the name
+export default function Actor({ actor, extras, offset = 0 }) {
   const nodes = useStore(s => s.nodes)
   const actors = useStore(s => s.actors)
   const names = useMemo(() => actorNames(actors), [actors])
@@ -139,89 +70,40 @@ export default function Actor({ actor, linkPaths = {} }) {
   const gRef = useRef(null)
   const dragRef = useRef(null)
 
-  const { d, candidates, memberIds, nested, hullExt, shade } = useMemo(() => {
-    const layout = actorLayout(nodes, names)
+  // The outline, and the name bar at its top: its box (x1..x2 across the whole outline, clipped to it when drawn) and
+  // the middle of the bar at the height of the logo and name, where they are centred
+  const { d, memberIds, shade, bar } = useMemo(() => {
+    const layout = actorLayout(nodes, names, extras)
     const members = layout.members[actor.id] ?? []
     if (!members.length) return {}
-
-    // Actor centroid
-    const actorCx = members.reduce((s, n) => s + n.x + n.width / 2, 0) / members.length
-    const actorCy = members.reduce((s, n) => s + n.y + n.height / 2, 0) / members.length
-
-    // Diagram centre of mass (all nodes)
-    const allNodes = Object.values(nodes)
-    const diagCx = allNodes.reduce((s, n) => s + n.x + n.width / 2, 0) / allNodes.length
-    const diagCy = allNodes.reduce((s, n) => s + n.y + n.height / 2, 0) / allNodes.length
-
-    // Outward direction: from diagram centre toward this actor's centroid
-    let odx = actorCx - diagCx
-    let ody = actorCy - diagCy
-    const len = Math.hypot(odx, ody)
-    if (len < 1) { odx = -1 / Math.SQRT2; ody = -1 / Math.SQRT2 }
-    else { odx /= len; ody /= len }
-
     const verts = octilinearHull(layout.points[actor.id])
     if (verts.length < 3) return {}
-
-    const { d, cornerMid } = buildHullPath(verts, 15)
-
-    // Where the tag can hang from, best first; it takes the first spot where it touches no link or
-    // element. A primary actor's tag hangs off a corner of its outline, outermost corner first.
-    // A nested actor's tag hangs off its top edge (the room its parent leaves there), middle first.
-    const nested = !!layout.parentOf[actor.id]
-    let candidates
-    if (nested) {
-      const top = topCenterOf(verts)
-      const topXs = verts.filter(v => v.y - top.y < 0.5).map(v => v.x)
-      const lo = Math.min(...topXs), hi = Math.max(...topXs)
-      const offsets = [0]
-      for (let o = TAG_SLIDE_STEP; top.x - o >= lo || top.x + o <= hi; o += TAG_SLIDE_STEP) offsets.push(-o, o)
-      candidates = offsets
-        .filter(o => top.x + o >= lo - 0.5 && top.x + o <= hi + 0.5)
-        .map(o => ({ anchor: { x: top.x + o, y: top.y }, dir: { x: 0, y: -1 } }))
-    } else {
-      const score = i => verts[i].x * odx + verts[i].y * ody
-      const order = verts.map((_, i) => i).sort((a, b) => score(b) - score(a))
-      candidates = order.map((i, rank) => {
-        if (rank === 0) return { anchor: cornerMid[i], dir: { x: odx, y: ody } }
-        const vx = cornerMid[i].x - actorCx, vy = cornerMid[i].y - actorCy, vl = Math.hypot(vx, vy) || 1
-        return { anchor: cornerMid[i], dir: { x: vx / vl, y: vy / vl } }
-      })
-    }
-
+    const topY = Math.min(...verts.map(v => v.y))
+    const xs = verts.map(v => v.x)
+    const { lo, hi } = barSpan(verts, topY)
     return {
-      d,
-      nested, candidates,
-      hullExt: extentsOf(layout.points[actor.id]),
+      d: buildHullPath(verts, 15),
       shade: layout.shade[actor.id],
       memberIds: members.map(m => m.id),
+      bar: { x1: Math.min(...xs), x2: Math.max(...xs), y1: topY, y2: topY + HEADER_H, cx: (lo + hi) / 2, lo, hi },
     }
-  }, [nodes, names, actor.id])
+  }, [nodes, names, extras, actor.id])
+
+  // While this actor's edit popup is open, report where its name bar is so the popup can anchor to it
+  const tagX = bar?.lo, tagY = bar?.y1, tagW = bar && bar.hi - bar.lo
+  useEffect(() => {
+    if (isEditing) setEditingActorTag(bar && !isHidden ? { x: tagX, y: tagY, w: tagW, h: HEADER_H } : null)
+  }, [isEditing, isHidden, tagX, tagY, tagW]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!d || isHidden) return null
 
   const name = actor.name || ''
   const logoAspect = actor.logo ? actor.logoAspect ?? 1 : 0
-  const tag = useMemo(() => {
-    if (!candidates) return null
-    let first = null
-    for (const { anchor, dir } of candidates) {
-      const tag = { ...nameTag(name, logoAspect, isHighlighted, nested, anchor, dir, hullExt), anchor }
-      if (!tagHitsSomething(tag, anchor, linkPaths, nodes)) return tag
-      first ??= tag
-    }
-    return first
-  }, [candidates, name, logoAspect, isHighlighted, nested, hullExt, linkPaths, nodes])
-
-  // While this actor's edit popup is open, report where its name tag is so the popup can anchor to it
-  const tagX = tag && tag.labelCx - tag.labelW / 2, tagY = tag && tag.labelCy - tag.labelH / 2
-  const tagW = tag?.labelW, tagH = tag?.labelH
-  useEffect(() => {
-    if (isEditing) setEditingActorTag(tag && !isHidden ? { x: tagX, y: tagY, w: tagW, h: tagH } : null)
-  }, [isEditing, isHidden, tagX, tagY, tagW, tagH]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  if (!d || !tag || isHidden) return null
-
-  const { fontSize, fontWeight, labelW, labelH, lineEndX, lineEndY, labelCx, labelCy, textW, contentW } = tag
-  const logo = actor.logo ? logoSize(fontSize, logoAspect) : null
+  const { contentW } = headerSize(name, logoAspect)
+  const logo = actor.logo ? logoSize(HEADER_LOGO, logoAspect) : null
+  const startX = bar.cx + offset - contentW / 2
+  const midY = bar.y1 + HEADER_H / 2
+  const clipId = `actor-clip-${actor.id}`
 
   const clientToWorld = (cx, cy) => {
     const pt = gRef.current.ownerSVGElement.createSVGPoint()
@@ -313,10 +195,12 @@ export default function Actor({ actor, linkPaths = {} }) {
     }
   }
 
-  // Highlighted (incl. selected): solid line matching the name tag's stroke
-  const bg = backgroundShade(shade, isHighlighted ? actorTintVar(actors, actor.id) : null)
+  // Highlighted (incl. selected): solid outline, and the name bar takes the actor's colour
+  const tint = actorTintVar(actors, actor.id)
+  const bg = backgroundShade(shade, isHighlighted ? tint : null)
   const hullStroke = isHighlighted ? 'var(--node-stroke)' : 'var(--text-3)'
   const hullStrokeW = isHighlighted ? 2 : 1
+  const barFill = isHighlighted ? `color-mix(in srgb, ${tint} 35%, var(--node-fill))` : 'var(--node-fill)'
 
   return (
     <g ref={gRef}
@@ -325,6 +209,7 @@ export default function Actor({ actor, linkPaths = {} }) {
       onPointerUp={onGroupPointerUp}
       onPointerCancel={onGroupPointerUp}
     >
+      <defs><clipPath id={clipId}><path d={d} /></clipPath></defs>
       {/* Light grey background. With nesting it gets darker towards the primary actor: the deepest
           nested actor is the lightest, each level out is darker (see backgroundShade) */}
       <path d={d} stroke="none" style={{ fill: bg, pointerEvents: 'none' }} />
@@ -334,36 +219,34 @@ export default function Actor({ actor, linkPaths = {} }) {
         style={{ pointerEvents: 'stroke', cursor: 'move' }}
         onPointerDown={onPointerDown}
       />
+      {/* The name bar: the top of the area itself, cut to the outline's shape; pressing it toggles the highlight */}
+      <g clipPath={`url(#${clipId})`}>
+        <rect
+          x={bar.x1} y={bar.y1} width={bar.x2 - bar.x1} height={HEADER_H}
+          fill={barFill} style={{ cursor: 'pointer' }}
+          onPointerDown={e => onPointerDown(e, true)}
+        />
+        <line x1={bar.x1} x2={bar.x2} y1={bar.y2} y2={bar.y2}
+          stroke={hullStroke} strokeWidth={hullStrokeW} style={{ pointerEvents: 'none' }} />
+      </g>
       <path d={d} fill="none" stroke={hullStroke} strokeWidth={hullStrokeW}
         strokeDasharray={isHighlighted ? undefined : '6 3'} style={{ pointerEvents: 'none' }} />
-      <line
-        x1={tag.anchor.x} y1={tag.anchor.y}
-        x2={lineEndX} y2={lineEndY}
-        stroke="var(--node-stroke)" strokeWidth={isHighlighted ? 2 : 1} style={{ pointerEvents: 'none' }}
-      />
-      <rect
-        x={labelCx - labelW / 2} y={labelCy - labelH / 2}
-        width={labelW} height={labelH} rx={LABEL_RADIUS} ry={LABEL_RADIUS}
-        fill="var(--node-fill)" stroke="var(--node-stroke)" strokeWidth={isHighlighted ? 2 : 1}
-        style={{ cursor: 'pointer' }}
-        onPointerDown={e => onPointerDown(e, true)}
-      />
+      {/* Logo on the left of the name; its shorter side is HEADER_LOGO */}
+      {logo && (
+        <image
+          href={actor.logo} width={logo.w} height={logo.h}
+          x={startX} y={midY - logo.h / 2}
+          preserveAspectRatio="xMidYMid meet" style={{ pointerEvents: 'none' }}
+        />
+      )}
       <text
-        x={actor.logo ? labelCx - contentW / 2 : labelCx} y={labelCy}
-        textAnchor={actor.logo ? 'start' : 'middle'} dominantBaseline="central"
-        fontSize={fontSize} fontWeight={fontWeight} fontFamily="sans-serif" fill="var(--node-text)"
+        x={startX + (logo ? logo.w + HEADER_GAP : 0)} y={midY}
+        textAnchor="start" dominantBaseline="central"
+        fontSize={HEADER_FONT} fontWeight="bold" fontFamily="sans-serif" fill="var(--node-text)"
         style={{ pointerEvents: 'none', userSelect: 'none' }}
       >
         {name}
       </text>
-      {/* Logo to the right of the name; its shorter side is as long as the text is tall */}
-      {actor.logo && (
-        <image
-          href={actor.logo} width={logo.w} height={logo.h}
-          x={labelCx - contentW / 2 + textW + LOGO_GAP} y={labelCy - logo.h / 2}
-          preserveAspectRatio="xMidYMid meet" style={{ pointerEvents: 'none' }}
-        />
-      )}
     </g>
   )
 }

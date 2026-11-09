@@ -5,11 +5,10 @@ import useStore, { ALL_TYPES } from '../store/useStore.js'
 import { LegendIcon, LEGEND_W } from './LegendIcons.jsx'
 import { upstreamLayerCount, focusView } from '../utils/dependencies.js'
 import { useT } from '../i18n.js'
-import { actorLayout, measureText, actorTintVar } from '../utils/actorTree.js'
+import { actorLayout, actorTintVar } from '../utils/actorTree.js'
 
 const NODE_TYPES = ['goal', 'task', 'softgoal', 'resource', 'subactor']
 const LINK_TYPES = ['depends-on', 'or', 'xor', 'and', 'help', 'hurt', 'make', 'break', 'needed-by', 'part-of']
-const ACTOR_TYPES = ['actor']
 
 // Each header column holds one toggle button that is as wide as the longer of its two labels in the current language.
 const COL_I_PAD_L = 10  // extra room between the divider and the visibility column
@@ -69,19 +68,10 @@ export default function FilterPanel() {
 
 
 
-  const [actorPanelOpen, setActorPanelOpen] = useState(false)
   const [filterOpen, setFilterOpen] = useState(true)
   // Kept here (not in Section) so the choices survive the whole panel being minimised
-  const [sectionOpen, setSectionOpen] = useState({ elements: true, links: true, actors: true })
+  const [sectionOpen, setSectionOpen] = useState({ elements: true, links: true })
   const sectionProps = (key) => ({ open: sectionOpen[key], onToggle: () => setSectionOpen(o => ({ ...o, [key]: !o[key] })) })
-
-  // Pressing anywhere on the diagram canvas closes the actor panel
-  useEffect(() => {
-    if (!actorPanelOpen) return
-    const onDown = (e) => { if (e.target.closest?.('#diagram-canvas')) setActorPanelOpen(false) }
-    document.addEventListener('pointerdown', onDown, true)  // capture: canvas items stop propagation
-    return () => document.removeEventListener('pointerdown', onDown, true)
-  }, [actorPanelOpen])
 
   // Track whether the panel's content is taller than the panel (i.e. a scrollbar is showing)
   const [panelEl, setPanelEl] = useState(null)
@@ -186,18 +176,13 @@ export default function FilterPanel() {
           highlightTypes={highlightTypes} isolateTypes={isolateTypes}
           onToggleH={toggleHighlightType} onToggleI={toggleIsolateType} />
 
-        <Section label={t('filter.actors')} types={ACTOR_TYPES} legend={legendOpen} {...sectionProps('actors')}
-          highlightTypes={highlightTypes} isolateTypes={isolateTypes}
-          onToggleH={toggleHighlightType} onToggleI={toggleIsolateType}>
-          <ActorListToggle open={actorPanelOpen} onToggle={() => setActorPanelOpen(o => !o)} />
-        </Section>
         </>}
       </div>
 
       {!viewer && <DependenciesCard />}
+      {!viewer && <ActorsCard />}
       </>}
     </div>
-    {actorPanelOpen && !collapsed && <ActorPanel left={panelWidth} onClose={() => setActorPanelOpen(false)} />}
     </>
   )
 }
@@ -286,6 +271,80 @@ export function DependenciesCard({ style }) {
           )}
           </>}
         </div>
+  )
+}
+
+// Every actor with its logo (a colour swatch when it has none) and a button that zooms the diagram onto it. Nested actors are
+// listed under the one they sit in. Floats on its own in the viewer.
+export function ActorsCard({ style }) {
+  const t = useT()
+  const actors = useStore(s => s.actors)
+  const nodes = useStore(s => s.nodes)
+  const zoomToActor = useStore(s => s.zoomToActor)
+  const [open, setOpen] = useState(true)
+
+  // Pressing an actor zooms onto it and highlights it (in the list and on the diagram) for as long as the pointer stays on its row
+  const [active, setActive] = useState(null)
+  useEffect(() => {
+    if (!active) return
+    const st = useStore.getState()
+    if (st.highlightTypes.includes('actor') || st.highlightedActorIds.includes(active)) return  // already lit by something else
+    st.toggleActorHighlight(active)
+    return () => useStore.getState().toggleActorHighlight(active)  // the pointer left, another actor was pressed, or the card went away
+  }, [active])
+  const press = (id) => { setActive(id); zoomToActor(id) }
+  const release = (id) => setActive(cur => cur === id ? null : cur)
+
+  // Primary actors by name, each followed by the actors nested in it (indented), and so on down
+  const list = useMemo(() => {
+    const { parentOf } = actorLayout(nodes)
+    const byName = (a, b) => (a.name || '').localeCompare(b.name || '')
+    const kids = {}
+    const roots = []
+    for (const a of Object.values(actors)) {
+      const p = parentOf[a.id]
+      if (p && actors[p]) (kids[p] ??= []).push(a)
+      else roots.push(a)
+    }
+    const out = []
+    const walk = (a, indent, seen) => {
+      if (seen.has(a.id)) return
+      out.push({ actor: a, indent })
+      for (const c of (kids[a.id] ?? []).sort(byName)) walk(c, indent + 1, new Set([...seen, a.id]))
+    }
+    for (const r of roots.sort(byName)) walk(r, 0, new Set())
+    return out
+  }, [actors, nodes])
+
+  return (
+    <div style={{ ...cardStyle, gap: 2, ...style }}>
+      <DropHeader open={open} onToggle={() => setOpen(o => !o)} style={{ ...cardTitle, marginBottom: open ? 6 : 0 }}>
+        {t('actors.title')}
+      </DropHeader>
+      {open && list.length === 0 && <div style={infoText}>{t('actors.none')}</div>}
+      {open && list.map(({ actor: a, indent }) => {
+        const tint = actorTintVar(actors, a.id)
+        const lit = active === a.id
+        return (
+          <div key={a.id} className="actor-row" role="button" tabIndex={0} title={a.name}
+            onClick={() => press(a.id)} onPointerLeave={() => release(a.id)} onBlur={() => release(a.id)}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); press(a.id) } }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, minHeight: 28, padding: `0 6px 0 ${6 + indent * NEST_INDENT}px`,
+              ...(lit && { background: `color-mix(in srgb, ${tint} 22%, transparent)`, boxShadow: `inset 4px 0 0 ${tint}` }),
+            }}>
+            <div style={{ width: 26, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {a.logo
+                ? <img src={a.logo} alt="" style={{ maxWidth: 26, maxHeight: 20, objectFit: 'contain' }} />
+                : <span aria-hidden style={{ width: 10, height: 10, borderRadius: 3, background: tint, border: '1px solid var(--border-md)' }} />}
+            </div>
+            <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontFamily: 'Roboto, sans-serif', color: 'var(--text-1)', userSelect: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {a.name || t('actors.unnamed')}
+            </span>
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
@@ -459,8 +518,7 @@ function Cell({ active, onClick, run, side, partner, children }) {
 // cells: no checkbox; the whole column cell is the toggle, with a darker background while on
 // wrap: let long labels run onto several lines instead of being cut off with "…"
 // cols: { i, h } styles to use instead of the filter panel's columns (the actor panel's are narrower)
-function TypeRow({ label, tint, indent = 0, legendType = label, wrap = false, cells = false, runI, runH, cols, legend, inHighlight, inIsolate, onToggleH, onToggleI, onZoom, logo }) {
-  const t = useT()
+function TypeRow({ label, tint, indent = 0, legendType = label, wrap = false, cells = false, runI, runH, cols, legend, inHighlight, inIsolate, onToggleH, onToggleI }) {
   const panelCols = useColumns()
   const iStyle = cols?.i ?? panelCols.colI(legend)
   const hStyle = cols?.h ?? panelCols.colH(legend)
@@ -477,7 +535,6 @@ function TypeRow({ label, tint, indent = 0, legendType = label, wrap = false, ce
           : { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }) }}>
         {label}
       </span>
-      {logo && <img src={logo} alt="" style={{ width: 20, height: 20, objectFit: 'contain', flexShrink: 0, marginRight: 8 }} />}
       <div style={{ ...iStyle, ...(cells && cellColumn), display: 'flex', justifyContent: 'center', alignItems: 'center', gap: LEGEND_GAP }}>
         {cells ? <Cell active={inIsolate} onClick={onToggleI} run={runI} side="left" partner={inHighlight}>{slot(false)}</Cell> : <>
           <Square active={inIsolate} onClick={onToggleI} />
@@ -490,130 +547,11 @@ function TypeRow({ label, tint, indent = 0, legendType = label, wrap = false, ce
           {slot(true)}
         </>}
       </div>
-      {onZoom && (
-        <div style={ZOOM_COL}>
-          <button type="button" onClick={onZoom} title={t('actors.zoom')} aria-label={t('actors.zoom')} style={{
-            background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: 'var(--text-2)', display: 'flex',
-          }}>
-            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
-              <circle cx="5.5" cy="5.5" r="4" fill="none" stroke="currentColor" strokeWidth="1.5" />
-              <line x1="8.5" y1="8.5" x2="13" y2="13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
-          </button>
-        </div>
-      )}
     </div>
-  )
-}
-
-// Button in the Actors section that opens the per-actor panel
-function ActorListToggle({ open, onToggle }) {
-  const t = useT()
-  const count = useStore(s => Object.keys(s.actors).length)
-  return (
-    <button onClick={onToggle} disabled={!count} aria-expanded={open}
-      style={{ ...colBtnStyle(open), width: '100%', marginTop: 4,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '6px 10px', fontSize: 11, textAlign: 'left',
-        ...(!count && { color: 'var(--text-3)', cursor: 'default' }) }}>
-      <span>{count ? t('filter.eachActor', { n: count }) : t('filter.noActors')}</span>
-      {count > 0 && <span aria-hidden>{open ? '◂' : '▸'}</span>}
-    </button>
   )
 }
 
 const NEST_INDENT = 16  // px each nesting level is shifted right in the actor list
-const ACTOR_PANEL_W = 280
-// Everything in a row besides the name text: panel + card padding and border, the two checkbox
-// columns, zoom column, name gap, nesting arrow and scrollbar room
-const ROW_EXTRA = 24 + 24 + 2 + 56 + 56 + 32 + 8 + 16 + 16 + 10  // + colour bar
-const LOGO_SLOT = 28
-// Narrow checkbox columns for the actor panel: just the checkbox and its small column label
-const ACTOR_COL = { width: 56, flexShrink: 0, borderLeft: '1px solid var(--border-lt)', padding: '0 2px' }
-const ACTOR_COLS = { i: ACTOR_COL, h: ACTOR_COL }
-const ZOOM_COL = { width: 32, flexShrink: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }
-
-// Side panel next to the filter panel: every actor with its own hide / highlight checkboxes
-function ActorPanel({ left, onClose }) {
-  const t = useT()
-  const actors              = useStore(s => s.actors)
-  const hiddenActorIds      = useStore(s => s.hiddenActorIds)
-  const highlightedActorIds = useStore(s => s.highlightedActorIds)
-  const toggleActorHidden    = useStore(s => s.toggleActorHidden)
-  const toggleActorHighlight = useStore(s => s.toggleActorHighlight)
-  const zoomToActor          = useStore(s => s.zoomToActor)
-  // The "actor" type row applies to every actor, so the per-actor boxes show the combined state
-  const actorsVisible       = useStore(s => s.isolateTypes.includes('actor'))
-  const actorsHighlighted   = useStore(s => s.highlightTypes.includes('actor'))
-
-  // Primary actors by name, each followed by the actors nested in it (staggered), and so on down
-  const nodes = useStore(s => s.nodes)
-  const list = useMemo(() => {
-    const { parentOf } = actorLayout(nodes)
-    const byName = (a, b) => (a.name || '').localeCompare(b.name || '')
-    const kids = {}
-    const roots = []
-    for (const a of Object.values(actors)) {
-      const p = parentOf[a.id]
-      if (p && actors[p]) (kids[p] ??= []).push(a)
-      else roots.push(a)
-    }
-    const out = []
-    const walk = (a, indent, seen) => {
-      if (seen.has(a.id)) return
-      out.push({ actor: a, indent })
-      for (const c of (kids[a.id] ?? []).sort(byName)) walk(c, indent + 1, new Set([...seen, a.id]))
-    }
-    for (const r of roots.sort(byName)) walk(r, 0, new Set())
-    return out
-  }, [actors, nodes])
-  const colLabel = { fontSize: 9, color: 'var(--text-3)', fontFamily: 'Roboto, sans-serif', textAlign: 'center' }
-
-  // Wide enough that no actor name is cut or broken: the longest row decides
-  const panelW = Math.max(ACTOR_PANEL_W, ...list.map(({ actor: a, indent }) =>
-    Math.ceil(measureText(a.name || t('actors.unnamed'), '12px Roboto, sans-serif')) + indent * NEST_INDENT + ROW_EXTRA + (a.logo ? LOGO_SLOT : 0)))
-
-  return (
-    <div className="panel-slide-in" style={{
-      position: 'absolute', left, top: 0, bottom: 0, width: panelW, maxWidth: `calc(100% - ${left}px)`, zIndex: 150,
-      background: 'var(--bg-panel)', borderRight: '1px solid var(--border)',
-      overflowY: 'auto', padding: 12,
-    }}>
-      <div style={cardStyle}>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
-          <div style={{ ...cardTitle, flex: 1, marginBottom: 0 }}>{t('actors.title')}</div>
-          <button onClick={onClose} aria-label={t('actors.close')} style={{
-            background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, lineHeight: 1,
-            color: 'var(--text-2)', padding: '0 2px',
-          }}>×</button>
-        </div>
-
-        {/* Column labels, aligned with the checkbox columns */}
-        <div style={{ display: 'flex', alignItems: 'center', marginTop: 8, paddingBottom: 4, borderBottom: '1px solid var(--border-lt)' }}>
-          <div style={{ flex: 1 }} />
-          <div style={{ ...ACTOR_COL, ...colLabel }}>{t('actors.visible')}</div>
-          <div style={{ ...ACTOR_COL, ...colLabel }}>{t('actors.highlight')}</div>
-          <div style={{ ...ZOOM_COL, ...colLabel }}>{t('actors.zoom')}</div>
-        </div>
-
-        {list.length === 0 && (
-          <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'Roboto, sans-serif', padding: '6px 0' }}>{t('actors.none')}</div>
-        )}
-        {list.map(({ actor: a, indent }) => (
-          <TypeRow
-            key={a.id} label={a.name || t('actors.unnamed')} tint={actorsHighlighted || highlightedActorIds.includes(a.id) ? actorTintVar(actors, a.id) : null} indent={indent} legendType={null} legend={false} wrap cols={ACTOR_COLS}
-            inIsolate={actorsVisible && !hiddenActorIds.includes(a.id)}
-            inHighlight={actorsHighlighted || highlightedActorIds.includes(a.id)}
-            onToggleI={() => toggleActorHidden(a.id)}
-            onToggleH={() => toggleActorHighlight(a.id)}
-            onZoom={() => zoomToActor(a.id, panelW)}
-            logo={a.logo}
-          />
-        ))}
-      </div>
-    </div>
-  )
-}
 
 function LegendSlot({ type, highlighted }) {
   return (

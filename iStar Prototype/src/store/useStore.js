@@ -479,7 +479,7 @@ const useStore = create((set, get) => ({
   placeInboxItem: (itemId, x, y) => {
     const item = get().inbox.find(i => i.id === itemId)
     if (!item) return null
-    const chain = actorChainAt(get().nodes, x, y)
+    const chain = actorChainAt(get().nodes, x, y, actorNames(get().actors))
     const { relationType, relations, positive, negative, connected, actorName } = item
     const taken = Object.values(get().nodes).some(n => n.num === item.num)
     const num = item.num != null && !taken ? item.num : Math.max(0, ...Object.values(get().nodes).map(n => n.num ?? 0)) + 1

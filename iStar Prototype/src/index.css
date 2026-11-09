@@ -140,13 +140,6 @@ button:hover:not(:disabled) {
   --actor-tint-11: #8a90a3;
 }
 
-/* Side panels that open next to the filter panel */
-@keyframes panel-slide-in {
-  from { opacity: 0; transform: translateX(-8px); }
-  to   { opacity: 1; transform: none; }
-}
-.panel-slide-in { animation: panel-slide-in 0.15s ease-out; }
-
 button, input, select, textarea {
   border-radius: var(--radius);
 }
@@ -171,6 +164,10 @@ button, input, select, textarea {
 
 /* A small title right under a main title needs no line of its own above: the main title's underline is there */
 .menu-label + .menu-sub { border-top: none !important; }
+
+/* Rows of the actor list: a soft tint on hover (the pressed one gets the actor's own colour, set inline) */
+.actor-row { cursor: pointer; border-radius: var(--radius); outline: none; transition: background 0.12s; }
+.actor-row:hover, .actor-row:focus-visible { background: color-mix(in srgb, var(--btn-glow) 60%, transparent); }
 
 /* Scrolls with the wheel or touch, but shows no scrollbar */
 .no-scrollbar { scrollbar-width: none; }

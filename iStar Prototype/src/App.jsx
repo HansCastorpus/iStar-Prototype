@@ -5,7 +5,7 @@ import FilterPanel from './components/FilterPanel.jsx'
 import TabBar from './components/TabBar.jsx'
 import WorkTitle from './components/WorkTitle.jsx'
 import InboxPanel from './components/InboxPanel.jsx'
-import { DependenciesCard } from './components/FilterPanel.jsx'
+import { DependenciesCard, ActorsCard } from './components/FilterPanel.jsx'
 import useStore from './store/useStore.js'
 import { useT } from './i18n.js'
 
@@ -132,8 +132,13 @@ export default function App() {
           <Canvas key={activeModelId} />
           <WorkTitle />
           {!viewer && <InboxPanel />}
-          {/* In the viewer the dependency tools sit on the right, under the title */}
-          {viewer && <DependenciesCard style={{ position: 'absolute', top: 52, right: 12, width: 230, zIndex: 120 }} />}
+          {/* In the viewer the dependency tools and the actor list sit on the right, under the title */}
+          {viewer && (
+            <div className="no-scrollbar" style={{ position: 'absolute', top: 52, right: 12, bottom: 12, width: 230, zIndex: 120, display: 'flex', flexDirection: 'column', gap: 12, overflowY: 'auto', pointerEvents: 'none' }}>
+              <DependenciesCard />
+              <ActorsCard />
+            </div>
+          )}
           {viewer && viewStatus !== 'ready' && (
             <div style={{
               position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200,

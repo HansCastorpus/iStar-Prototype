@@ -4,16 +4,13 @@
 // Shared by the actor drawing (Actor.jsx) and the overlap checks in the store.
 
 export const PAD = 20        // space between an actor's edge and what is directly inside it
-export const TAG_ROOM = 62   // room above a nested actor, inside its parent, for its name tag and connector line
-export const LINE_LEN = 15       // connector line from an actor's edge to its name tag
-export const LABEL_PAD_X = 12
-export const LABEL_PAD_Y = 8
-const FONT_SIZE_PRIMARY = 23     // name tag text size of a primary actor
-const FONT_SIZE_NESTED = 23       // ... and of a nested actor
-const FONT_SIZE_HL_BUMP = 1.5     // added when the actor is highlighted
-export const tagFontSize = (nested, highlighted) =>
-  (nested ? FONT_SIZE_NESTED : FONT_SIZE_PRIMARY) + (highlighted ? FONT_SIZE_HL_BUMP : 0)
-const TAG_MARGIN = 8              // space kept around a nested actor's tag
+// The actor's name sits in a bar that is part of the top of its area: the area grows upward by HEADER_H, and wide enough
+// for the name and logo.
+export const HEADER_H = 56        // height of the name bar
+export const HEADER_FONT = 28     // text size of the name
+export const HEADER_LOGO = 40     // the logo's shorter side
+export const HEADER_GAP = 10      // between the logo and the name
+const HEADER_PAD_X = 22           // room left and right of the logo + name
 export const ACTOR_GAP = 20  // required clearance between unrelated actor areas
 
 // Each actor gets one of ACTOR_TINTS colours (--actor-tint-N in index.css), kept on the actor as `colorIdx`;
@@ -56,35 +53,30 @@ export function logoSize(fontSize, aspect) {
   return { w: h * aspect, h }
 }
 
-// Height of a name tag: the text, or a taller logo (which then gets a little padding of its own)
-export function tagHeight(fontSize, logo) {
-  const own = fontSize + 2 * LABEL_PAD_Y
-  return logo ? Math.max(own, logoSize(fontSize, logo).h + 8) : own
+// Where the logo and name can sit across the name bar: the horizontal stretch that is inside the outline over the whole height
+// of the content (so slanted corners never cut it). Its middle is where the content is centred.
+export const HEADER_CONTENT_H = Math.max(HEADER_FONT, HEADER_LOGO)
+export function barSpan(verts, topY) {
+  const crossings = (y) => {
+    const xs = []
+    for (let i = 0; i < verts.length; i++) {
+      const a = verts[i], b = verts[(i + 1) % verts.length]
+      if ((a.y <= y && y < b.y) || (b.y <= y && y < a.y)) xs.push(a.x + (y - a.y) * (b.x - a.x) / (b.y - a.y))
+    }
+    return xs
+  }
+  const mid = topY + HEADER_H / 2
+  const upper = crossings(mid - HEADER_CONTENT_H / 2), lower = crossings(mid + HEADER_CONTENT_H / 2)
+  const lo = Math.max(Math.min(...upper), Math.min(...lower)), hi = Math.min(Math.max(...upper), Math.max(...lower))
+  return hi > lo ? { lo, hi } : { lo: Math.min(...upper, ...lower), hi: Math.max(...upper, ...lower) }
 }
 
-// Width of a name tag: the text, plus the logo (if any) to the right of it. `logo` is the aspect ratio.
-export const LOGO_GAP = 6
-export function tagTextSize(name, fontSize, bold, logo) {
-  const textW = measureText(name, `${bold ? 'bold' : 'normal'} ${fontSize}px sans-serif`)
-  const logoW = logo ? logoSize(fontSize, logo).w : 0
-  const contentW = textW + (logo ? LOGO_GAP + logoW : 0)
-  return { textW, contentW, logoW, labelW: Math.max(36, contentW + 2 * LABEL_PAD_X) }
-}
-
-// Where the tag of a nested actor hangs from: the middle of the top edge of its outline
-export function topCenterOf(verts) {
-  const topY = Math.min(...verts.map(v => v.y))
-  const xs = verts.filter(v => v.y - topY < 0.5).map(v => v.x)
-  return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: topY }
-}
-
-// Space a nested actor's tag takes above its top edge (sized for the highlighted, bold text so that
-// highlighting never makes it collide with anything)
-function tagRect({ name, logo }, topCenter) {
-  const fontSize = tagFontSize(true, true)
-  const { labelW: w } = tagTextSize(name, fontSize, true, logo)
-  const h = tagHeight(fontSize, logo)
-  return { x1: topCenter.x - w / 2, x2: topCenter.x + w / 2, y1: topCenter.y - LINE_LEN - h, y2: topCenter.y }
+// What the name bar holds (logo on the left, then the name) and the least width the area's top edge needs for it
+export function headerSize(name, logo) {
+  const textW = measureText(name || '', `bold ${HEADER_FONT}px sans-serif`)
+  const logoW = logo ? logoSize(HEADER_LOGO, logo).w : 0
+  const contentW = textW + (logo ? HEADER_GAP + logoW : 0)
+  return { textW, logoW, contentW, minW: contentW + 2 * HEADER_PAD_X }
 }
 
 // Octagon (as vertices) around a set of points, with edges along the axes and diagonals
@@ -134,8 +126,8 @@ export function octilinearHull(points) {
 
 // The actors whose area contains the point, outermost first (so [primary, ...nested]): where an element dropped
 // there would belong. Empty when the point is outside every actor.
-export function actorChainAt(nodes, x, y) {
-  const { points, parentOf } = actorLayout(nodes)
+export function actorChainAt(nodes, x, y, names = {}) {
+  const { points, parentOf } = actorLayout(nodes, names)
   const inside = (verts) => {
     let hit = false
     for (let i = 0, j = verts.length - 1; i < verts.length; j = i++) {
@@ -156,14 +148,15 @@ export function actorChainAt(nodes, x, y) {
 // (a value can also be just a name string, for an actor that doesn't exist yet)
 export const actorNames = (actors) =>
   Object.fromEntries(Object.entries(actors).map(([id, a]) => [id, { name: a.name, logo: a.logo ? a.logoAspect ?? 1 : 0 }]))
-const asMeta = (m) => (typeof m === 'string' ? { name: m } : m ?? { name: '' })
+export const asMeta = (m) => (typeof m === 'string' ? { name: m } : m ?? { name: '' })
 
 // members / parentOf / outline points per actor. `invalid` is set when an actor would sit in two
 // different places (two parents, or inside itself); such a state is never allowed to be created.
 //
 // An actor's area keeps the same distance (PAD) from everything directly inside it: its own elements
-// and the areas of its nested actors. Above each nested actor there is TAG_ROOM instead, for its tag.
-export function actorLayout(nodes, names = {}) {
+// and the areas of its nested actors. On top of that comes the name bar (HEADER_H), part of the area itself.
+// extras: { actorId: { l, r } } width added to the left / right end of that actor's name bar (see actorBars.js)
+export function actorLayout(nodes, names = {}, extras = {}) {
   const members = {}, direct = {}, parentOf = {}, children = {}
   let invalid = false
   for (const n of Object.values(nodes)) {
@@ -179,8 +172,8 @@ export function actorLayout(nodes, names = {}) {
     if (chain.length) (direct[chain[chain.length - 1]] ??= []).push(n)
   }
 
-  // Corner points of the area, built from the inside out; tags[id] is the room a nested actor's tag needs
-  const points = {}, tags = {}
+  // Corner points of the area, built from the inside out
+  const points = {}
   const pointsOf = (id, depth = 0) => {
     if (points[id]) return points[id]
     const pts = (direct[id] ?? []).flatMap(n => [
@@ -190,18 +183,26 @@ export function actorLayout(nodes, names = {}) {
       { x: n.x + n.width + PAD, y: n.y + n.height + PAD },
     ])
     if (depth < 50) for (const c of children[id] ?? []) {
-      const verts = octilinearHull(pointsOf(c, depth + 1))
-      if (verts.length) {
-        const r = (tags[c] = tagRect(asMeta(names[c]), topCenterOf(verts)))
-        // the area also holds the tag, with a little space around it
-        pts.push({ x: r.x1 - TAG_MARGIN, y: r.y1 - TAG_MARGIN }, { x: r.x2 + TAG_MARGIN, y: r.y1 - TAG_MARGIN })
-      }
-      for (const v of verts) {
+      // a nested actor's area already includes its own name bar
+      for (const v of octilinearHull(pointsOf(c, depth + 1))) {
         pts.push(
-          { x: v.x - PAD, y: v.y - TAG_ROOM }, { x: v.x + PAD, y: v.y - TAG_ROOM },
-          { x: v.x - PAD, y: v.y + PAD },      { x: v.x + PAD, y: v.y + PAD },
+          { x: v.x - PAD, y: v.y - PAD }, { x: v.x + PAD, y: v.y - PAD },
+          { x: v.x - PAD, y: v.y + PAD }, { x: v.x + PAD, y: v.y + PAD },
         )
       }
+    }
+    if (pts.length) {
+      // The name bar: HEADER_H above the top edge, as wide as that edge or as the name needs, with straight sides
+      const top = Math.min(...pts.map(p => p.y))
+      const edge = pts.filter(p => p.y - top < 0.5).map(p => p.x)
+      const mid = (Math.min(...edge) + Math.max(...edge)) / 2
+      const meta = asMeta(names[id])
+      const half = Math.max((Math.max(...edge) - Math.min(...edge)) / 2, headerSize(meta.name, meta.logo).minW / 2)
+      const left = mid - half - (extras[id]?.l ?? 0), right = mid + half + (extras[id]?.r ?? 0)
+      pts.push(
+        { x: left, y: top - HEADER_H },  { x: right, y: top - HEADER_H },
+        { x: left, y: top },             { x: right, y: top },
+      )
     }
     return (points[id] = pts)
   }
@@ -218,7 +219,7 @@ export function actorLayout(nodes, names = {}) {
   }
   const shade = Object.fromEntries(Object.keys(members).map(id => [id, { depth: depth[id], levels: treeDepth[rootOf[id]] }]))
 
-  return { members, parentOf, points, tags, shade, invalid }
+  return { members, parentOf, points, shade, invalid }
 }
 
 // Octilinear extent values (the 8 support values) of a set of points
@@ -270,8 +271,7 @@ export function strayElements(nodes, names = {}) {
 // whether it adds a problem, rather than by whether any problem exists):
 //  - two actors that aren't nested in each other have areas closer than ACTOR_GAP
 //  - an element of the parent actor, but not of the nested one, runs into the nested actor's area
-//    (or the name tag above it)
-//  - a nested actor's name tag touches an element, or another nested actor's tag
+//    (name bar included)
 export function layoutIssues(nodes, names = {}) {
   const L = actorLayout(nodes, names)
   const keys = new Set()
@@ -293,7 +293,7 @@ export function layoutIssues(nodes, names = {}) {
     if (!L.parentOf[id]) continue
     const memberIds = new Set(L.members[id].map(n => n.id))
     const siblings = L.members[L.parentOf[id]]  // only elements inside the parent can be in the way
-    const area = extentsOf(L.points[id].flatMap(p => [p, { x: p.x, y: p.y - TAG_ROOM }]))  // the actor's area plus the tag above it
+    const area = extentsOf(L.points[id])
     for (const n of siblings) {
       if (memberIds.has(n.id)) continue
       const r = extentsOf([{ x: n.x, y: n.y }, { x: n.x + n.width, y: n.y }, { x: n.x, y: n.y + n.height }, { x: n.x + n.width, y: n.y + n.height }])
@@ -301,21 +301,6 @@ export function layoutIssues(nodes, names = {}) {
     }
   }
 
-  const hits = (a, b, m) => a.x1 - m < b.x2 && b.x1 - m < a.x2 && a.y1 - m < b.y2 && b.y1 - m < a.y2
-  const tagIds = Object.keys(L.tags)
-  for (const id of tagIds) {
-    const memberIds = new Set(L.members[id].map(n => n.id))
-    for (const n of Object.values(nodes)) {
-      if (memberIds.has(n.id)) continue
-      const r = { x1: n.x, x2: n.x + n.width, y1: n.y, y2: n.y + n.height }
-      if (hits(L.tags[id], r, TAG_MARGIN / 2)) keys.add(`t:${id}|${n.id}`)
-    }
-  }
-  for (let i = 0; i < tagIds.length; i++) {
-    for (let j = i + 1; j < tagIds.length; j++) {
-      if (hits(L.tags[tagIds[i]], L.tags[tagIds[j]], TAG_MARGIN / 2)) keys.add(`tt:${tagIds[i]}|${tagIds[j]}`)
-    }
-  }
   return { invalid: L.invalid, keys }
 }
 

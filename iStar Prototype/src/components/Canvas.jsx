@@ -10,6 +10,7 @@ import PropertyPopover from './PropertyPopover.jsx'
 import LinkTypePopup from './LinkTypePopup.jsx'
 import ActorPopover from './ActorPopover.jsx'
 import { actorLayout, actorNames, strayElements, inActor } from '../utils/actorTree.js'
+import { barLayout } from '../utils/actorBars.js'
 import { computeLinkSlots } from '../utils/layout.js'
 import { computeAllPaths } from '../utils/routing.js'
 import { computeCrossings } from '../utils/crossings.js'
@@ -143,6 +144,8 @@ export default function Canvas() {
   const linkPaths = useMemo(() => computeAllPaths(nodes, linkSlots, links), [nodes, linkSlots, links])
 
   const strays = useMemo(() => strayElements(nodes, actorNames(actors)), [nodes, actors])
+  // How each actor's name bar is widened / where its name sits so that no link crosses the name
+  const bars = useMemo(() => barLayout(nodes, actorNames(actors), linkPaths), [nodes, actors, linkPaths])
   const crossings = useMemo(() => computeCrossings(links, linkPaths), [links, linkPaths])
 
   // AND-bar: group AND links by target+side, compute one spanning perpendicular
@@ -263,7 +266,7 @@ export default function Canvas() {
             const { shade } = actorLayout(nodes)
             return Object.values(actors).sort((a, b) => (shade[a.id]?.depth ?? 0) - (shade[b.id]?.depth ?? 0))
           })().map((actor) => (
-            <Actor key={actor.id} actor={actor} linkPaths={linkPaths} />
+            <Actor key={actor.id} actor={actor} extras={bars.extras} offset={bars.offsets[actor.id] ?? 0} />
           ))}
 
           {/* Clearance outlines — the zone no other element may enter; always shown when switched on in
