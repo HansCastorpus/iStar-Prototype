@@ -3,6 +3,7 @@ import useStore from '../store/useStore.js'
 import { useT } from '../i18n.js'
 import { DropHeader } from './FilterPanel.jsx'
 import { typesFor, LINK_TYPES } from '../utils/language.js'
+import { parseLinks, parseImages } from '../utils/elementDetails.js'
 
 // Elements that came in from outside (the spreadsheet) and wait to be placed: listed by suggested actor, each with the
 // information that came with it. Drag one onto the graph to place it. Placed ones stay in the list (shown, greyed or hidden).
@@ -12,7 +13,7 @@ export const INBOX_DRAG = 'application/x-istar-inbox'
 const font = 'Roboto, sans-serif'
 const card = { background: 'var(--bg-popup)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 12,
   boxShadow: '0 2px 10px rgba(0, 0, 0, 0.12)' }
-const smallLabel = { fontSize: 10, color: 'var(--text-3)', fontFamily: font, textTransform: 'uppercase', letterSpacing: 0.4 }
+const smallLabel = { fontSize: 12, color: 'var(--text-3)', fontFamily: font, textTransform: 'uppercase', letterSpacing: 0.4 }
 const field = {
   width: '100%', boxSizing: 'border-box', padding: '5px 8px', fontSize: 12, fontFamily: font,
   background: 'var(--node-fill)', color: 'var(--text-1)', border: '1px solid var(--border-md)',
@@ -60,7 +61,7 @@ export default function InboxPanel() {
   if (!open) return null
   return (
     <div className="no-scrollbar" style={{
-      position: 'absolute', top: 52, right: 0, bottom: 0, width: 340, maxWidth: '100%', zIndex: 120,
+      position: 'absolute', top: 12, right: 0, bottom: 0, width: 340, maxWidth: '100%', zIndex: 120,
       overflowY: 'auto', padding: '0 12px 12px', pointerEvents: 'none', display: 'flex', flexDirection: 'column', gap: 12,
     }}>
       <div style={{ ...card, pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
@@ -114,7 +115,7 @@ function Item({ item, placed, dim }) {
   const t = useT()
   const remove = useStore(s => s.removeInboxItem)
   const [open, setOpen] = useState(false)
-  const info = [['relationType', item.relationType && t(`type.${item.relationType}`)], ['relations', item.relations], ['positive', item.positive], ['negative', item.negative]].filter(([, v]) => v)
+  const info = [['description', item.description], ['relationType', item.relationType && t(`type.${item.relationType}`)], ['relations', item.relations], ['positive', item.positive], ['negative', item.negative]].filter(([, v]) => v)
   const hasMore = info.length > 0 || item.connected?.length > 0
   return (
     <div
@@ -165,18 +166,19 @@ function AddForm({ names, onDone }) {
   const t = useT()
   const addInboxItem = useStore(s => s.addInboxItem)
   const language = useStore(s => s.language)
-  const empty = { type: 'goal', text: '', actorName: '', relationType: '', relations: '', positive: '', negative: '', connected: [] }
+  const empty = { type: 'goal', text: '', actorName: '', description: '', relationType: '', relations: '', positive: '', negative: '', linksText: '', imagesText: '', connected: [] }
   const [f, setF] = useState(empty)
   const set = (patch) => setF(prev => ({ ...prev, ...patch }))
   const submit = (e) => {
     e.preventDefault()
     if (!f.text.trim()) return
-    addInboxItem({ ...f, text: f.text.trim() })
+    const { linksText, imagesText, ...rest } = f
+    addInboxItem({ ...rest, text: f.text.trim(), links: parseLinks(linksText).links, images: parseImages(imagesText).images })
     setF(empty)
   }
-  const area = (key) => (
+  const area = (key, labelKey = `inbox.${key}`) => (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <span style={smallLabel}>{t(`inbox.${key}`)}</span>
+      <span style={smallLabel}>{t(labelKey)}</span>
       <textarea rows={2} value={f[key]} onChange={e => set({ [key]: e.target.value })} style={{ ...field, resize: 'vertical' }} />
     </label>
   )
@@ -208,7 +210,9 @@ function AddForm({ names, onDone }) {
           {typesFor(language, LINK_TYPES).map(x => <option key={x} value={x}>{t(`type.${x}`)}</option>)}
         </select>
       </label>
+      {area('description')}
       {area('relations')}{area('positive')}{area('negative')}
+      {area('linksText', 'inbox.links')}{area('imagesText', 'inbox.images')}
       <div>
         <span style={smallLabel}>{t('inbox.connected')}</span>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>

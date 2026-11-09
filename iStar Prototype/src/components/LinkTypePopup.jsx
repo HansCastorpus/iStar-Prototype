@@ -83,7 +83,7 @@ export default function LinkTypePopup({ linkPaths = {} }) {
           userSelect: 'none',
         }}
       >
-        <span style={{ fontSize: 10, color: 'var(--text-3)', letterSpacing: 3 }}>• • •</span>
+        <span style={{ fontSize: 12, color: 'var(--text-3)', letterSpacing: 3 }}>• • •</span>
       </div>
 
       <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-title)', marginBottom: 4 }}>{t('linkType.title')}</div>

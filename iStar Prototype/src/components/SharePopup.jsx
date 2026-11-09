@@ -8,7 +8,7 @@ import { hasVault, legacyToken, saveVault, openVault, clearVault } from '../util
 // utils/vault.js), so the popup has three steps: set up (token + a new password), unlock (password), then the sharing itself.
 const MIN_PASSWORD = 6
 const font = 'Roboto, sans-serif'
-const label = { fontSize: 10, color: 'var(--text-3)', fontFamily: font, textTransform: 'uppercase', letterSpacing: 0.4 }
+const label = { fontSize: 12, color: 'var(--text-3)', fontFamily: font, textTransform: 'uppercase', letterSpacing: 0.4 }
 const field = {
   width: '100%', boxSizing: 'border-box', padding: '6px 8px', fontSize: 13, fontFamily: font,
   background: 'var(--node-fill)', color: 'var(--text-1)', border: '1px solid var(--border-md)',

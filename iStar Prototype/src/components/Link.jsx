@@ -9,8 +9,8 @@ import { pointsToPath, getPointAtT, projectOntoPath } from '../utils/routing.js'
 
 const PAD_X = 10
 const PAD_Y = 3
-const FONT_SIZE = 10
-const CHAR_W = 5.8
+const FONT_SIZE = 12
+const CHAR_W = 7
 
 const ARROW_H  = 8   // triangle height
 const ARROW_HW = 5   // triangle half-base width

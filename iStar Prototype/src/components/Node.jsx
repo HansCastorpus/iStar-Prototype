@@ -5,13 +5,13 @@ import { inActor } from '../utils/actorTree.js'
 import { useT } from '../i18n.js'
 import {
   wrapLabel, NODE_LINE_H, NODE_BADGE_H, NODE_PAD_X, NODE_FONT, nodePadXFor, TASK_TIP_X,
-  SUB_FONT, SUB_PAD_X, SUB_LOGO_H, SUB_LOGO_GAP, subLogoWidth, measureSub, fitSubLabel, goalRadius,
+  SUB_FONT, SUB_PAD_X, SUB_LOGO_H, SUB_LOGO_GAP, subLogoWidth, measureSub, fitSubLabel, pillRadius, goalPadX,
 } from '../utils/grid.js'
 
 const SELECTED_COLOR = '#0070f3'
 const PENDING_TARGET_COLOR = '#16a34a'
 
-const BADGE_CHAR_W = 7.5
+const BADGE_CHAR_W = 9
 const BADGE_PAD_X = 7
 
 const NODE_TYPES = {
@@ -176,8 +176,9 @@ export default function Node({ node, strayActors }) {
       const state = useStore.getState()
       const prevSelected = state.selectedId
 
-      // If another single node was already selected, start a link between them.
+      // If another single node was already selected, start a link between them (in the editor; the viewer just selects the new one).
       if (
+        !state.viewer &&
         prevSelected &&
         prevSelected !== nodeRef.current.id &&
         state.selectedType === 'node' &&
@@ -207,7 +208,7 @@ export default function Node({ node, strayActors }) {
   const bodyStroke = accent ?? (isFillHighlighted ? hlStroke : stroke)
   const bodyStrokeW = (base) => accent ? 2 : isFillHighlighted ? 2 : base
 
-  const nodePadX = nodePadXFor(node.type)
+  const nodePadX = node.type === 'goal' ? goalPadX(node.height, node.width) : nodePadXFor(node.type)
   const lines = wrapLabel(node.label || `[${typeName}]`, node.width, nodePadX)
   const cx = node.width / 2
   const textAreaH = node.height - NODE_BADGE_H / 2
@@ -247,7 +248,7 @@ export default function Node({ node, strayActors }) {
           onPointerDown={e => e.stopPropagation()}
           onClick={e => { e.stopPropagation(); openSubactor(node.id) }}>
           <rect x={cx - 34} y={40} width={68} height={18} rx={9} fill="var(--node-fill)" stroke="var(--node-stroke)" strokeWidth={1} />
-          <text x={cx} y={49} textAnchor="middle" dominantBaseline="central" fontSize={10} fontFamily="sans-serif"
+          <text x={cx} y={49} textAnchor="middle" dominantBaseline="central" fontSize={12} fontFamily="sans-serif"
             fill="var(--node-text)" style={{ pointerEvents: 'none', userSelect: 'none' }}>{t('subactor.open')} ›</text>
         </g>
       </>
@@ -281,7 +282,7 @@ export default function Node({ node, strayActors }) {
           <rect
             width={node.width}
             height={node.height}
-            rx={(node.type === 'goal' || node.type === 'softgoal') ? goalRadius(node.height) : 0}
+            rx={(node.type === 'goal' || node.type === 'softgoal') ? pillRadius(node.type, node.height) : 0}
             fill={hlFill}
             stroke={bodyStroke}
             strokeWidth={bodyStrokeW(1)}
@@ -290,7 +291,7 @@ export default function Node({ node, strayActors }) {
             <>
               <defs>
                 <clipPath id={`sg-${node.id}`}>
-                  <rect width={node.width} height={node.height} rx={goalRadius(node.height)} />
+                  <rect width={node.width} height={node.height} rx={pillRadius('softgoal', node.height)} />
                 </clipPath>
               </defs>
               <line
@@ -371,7 +372,7 @@ export default function Node({ node, strayActors }) {
         y={badgeCY}
         textAnchor="middle"
         dominantBaseline="central"
-        fontSize={10}
+        fontSize={12}
         fontFamily="sans-serif"
         fill="var(--node-text)"
         style={{ pointerEvents: 'none', userSelect: 'none' }}

@@ -3,9 +3,9 @@ import Canvas from './components/Canvas.jsx'
 import Toolbar from './components/Toolbar.jsx'
 import FilterPanel from './components/FilterPanel.jsx'
 import TabBar from './components/TabBar.jsx'
-import WorkTitle from './components/WorkTitle.jsx'
 import InboxPanel from './components/InboxPanel.jsx'
 import { DependenciesCard, ActorsCard } from './components/FilterPanel.jsx'
+import { collapseBtn } from './components/popupStyles.js'
 import useStore from './store/useStore.js'
 import { useT } from './i18n.js'
 
@@ -62,6 +62,8 @@ export default function App() {
   const t = useT()
   const viewer = useStore(s => s.viewer)
   const viewStatus = useStore(s => s.viewStatus)
+  const cardsHidden = useStore(s => s.cardsHidden)
+  const setCardsHidden = useStore(s => s.setCardsHidden)
   useEffect(() => {
     const st = useStore.getState()
     if (st.viewer) st.loadShared(); else st.loadFromStorage()
@@ -130,14 +132,21 @@ export default function App() {
         <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
           {/* keyed by the open diagram so each one starts with a fresh view (zoom / pan) */}
           <Canvas key={activeModelId} />
-          <WorkTitle />
           {!viewer && <InboxPanel />}
-          {/* In the viewer the dependency tools and the actor list sit on the right, under the title */}
+          {/* In the viewer the dependency tools and the actor list sit on the right (the title is in the header) */}
+          {/* The column can be hidden (display: none, so the cards keep their open / closed state) and brought back by a small button */}
           {viewer && (
-            <div className="no-scrollbar" style={{ position: 'absolute', top: 52, right: 12, bottom: 12, width: 230, zIndex: 120, display: 'flex', flexDirection: 'column', gap: 12, overflowY: 'auto', pointerEvents: 'none' }}>
+            <div className="no-scrollbar" style={{ position: 'absolute', top: 12, right: 12, bottom: 12, width: 230, zIndex: 120, display: cardsHidden ? 'none' : 'flex', flexDirection: 'column', gap: 12, overflowY: 'auto', pointerEvents: 'none' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
+                <button onClick={() => setCardsHidden(true)} title={t('filter.collapse')} aria-label={t('filter.collapse')} style={collapseBtn}>»</button>
+              </div>
               <DependenciesCard />
               <ActorsCard />
             </div>
+          )}
+          {viewer && cardsHidden && (
+            <button onClick={() => setCardsHidden(false)} title={t('filter.expand')} aria-label={t('filter.expand')}
+              style={{ ...collapseBtn, position: 'absolute', top: 12, right: 12, zIndex: 120 }}>«</button>
           )}
           {viewer && viewStatus !== 'ready' && (
             <div style={{

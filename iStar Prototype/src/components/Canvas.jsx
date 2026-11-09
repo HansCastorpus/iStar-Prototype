@@ -9,6 +9,7 @@ import LinkPreview from './LinkPreview.jsx'
 import PropertyPopover from './PropertyPopover.jsx'
 import LinkTypePopup from './LinkTypePopup.jsx'
 import ActorPopover from './ActorPopover.jsx'
+import ElementPopup from './ElementPopup.jsx'
 import { actorLayout, actorNames, strayElements, inActor } from '../utils/actorTree.js'
 import { barLayout } from '../utils/actorBars.js'
 import { computeLinkSlots } from '../utils/layout.js'
@@ -18,6 +19,7 @@ import { GRID } from '../utils/grid.js'
 import { INBOX_DRAG } from './InboxPanel.jsx'
 
 const MIN_CLEARANCE = GRID * 2
+const VIEWER_CARDS_W = 242  // the viewer's column of cards on the right (230 wide + 12 from the edge)
 
 export default function Canvas() {
   const svgRef = useRef(null)
@@ -63,19 +65,25 @@ export default function Canvas() {
     return () => svg.on('.zoom', null)
   }, [])
 
-  // Frame the given elements, centred in the visible area (animated when asked); never zooms in past 100%
-  const frameNodes = useCallback((list, animate = false, insetLeft = 0, maxK = 1) => {
+  // Frame the given elements, centred in the visible area (animated when asked); never zooms in past 100%.
+  // screenCentered: centre them on the middle of the whole screen instead, leaving the same clear room on both sides
+  // (the width of the side panel that covers the canvas: the filter panel, and in the viewer the cards on the right)
+  const frameNodes = useCallback((list, animate = false, insetLeft = 0, maxK = 1, screenCentered = false) => {
     const svgEl = svgRef.current
     if (!list.length || !svgEl || !zoomRef.current) return
     const minX = Math.min(...list.map(n => n.x)), maxX = Math.max(...list.map(n => n.x + n.width))
     const minY = Math.min(...list.map(n => n.y)), maxY = Math.max(...list.map(n => n.y + n.height))
     const rect = svgEl.getBoundingClientRect()
-    insetLeft += useStore.getState().filterPanelRight ?? 0  // the filter panel floats over the canvas
-    const width = rect.width - insetLeft, height = rect.height  // insetLeft: part of the canvas covered by side panels
+    const st = useStore.getState()
+    insetLeft += st.filterPanelRight ?? 0  // the filter panel floats over the canvas
+    const insetRight = screenCentered && st.viewer && !st.cardsHidden ? VIEWER_CARDS_W : 0
+    const side = Math.max(insetLeft, insetRight)
+    const left = screenCentered ? side : insetLeft  // where the clear area starts
+    const width = screenCentered ? rect.width - 2 * side : rect.width - insetLeft, height = rect.height  // minus the part covered by side panels
     const margin = 80
     const k = Math.min(maxK, (width - margin * 2) / (maxX - minX), (height - margin * 2) / (maxY - minY))
     const t = d3.zoomIdentity
-      .translate(insetLeft + width / 2, height / 2).scale(Math.max(k, 0.1))
+      .translate(left + width / 2, height / 2).scale(Math.max(k, 0.1))
       .translate(-(minX + maxX) / 2, -(minY + maxY) / 2)
     const sel = d3.select(svgEl)
     ;(animate ? sel.transition().duration(400) : sel).call(zoomRef.current.transform, t)
@@ -93,7 +101,16 @@ export default function Canvas() {
     if (zoomRequest.nodeId) {
       const node = useStore.getState().nodes[zoomRequest.nodeId]
       if (node) frameNodes([node], true, 0, 1.5)
-    } else frameNodes(all.filter(n => inActor(n, zoomRequest.actorId)), true, zoomRequest.insetLeft)
+    } else {
+      // Centre on the actor's whole area (its name bar and padding included), in the middle of the screen
+      const st = useStore.getState()
+      const pts = actorLayout(st.nodes, actorNames(st.actors)).points[zoomRequest.actorId]
+      if (pts?.length) {
+        const xs = pts.map(p => p.x), ys = pts.map(p => p.y)
+        frameNodes([{ x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) }],
+          true, zoomRequest.insetLeft, 1, true)
+      } else frameNodes(all.filter(n => inActor(n, zoomRequest.actorId)), true, zoomRequest.insetLeft, 1, true)
+    }
   }, [zoomRequest, frameNodes])
 
   const screenToWorld = useCallback((cx, cy) => ({
@@ -117,6 +134,7 @@ export default function Canvas() {
       const hadPendingLink = !!useStore.getState().pendingLink
       clearConnect()
       if (!hadPendingLink) deselect()
+      useStore.getState().clearActorPick()  // viewer: the picked actor stops being highlighted
     }
   }
 
@@ -138,6 +156,7 @@ export default function Canvas() {
     if (!e.target.classList.contains('canvas-bg')) return
     if (modeRef.current.startsWith('add-')) return
     deselectAll()
+    useStore.getState().clearActorPick()
   }
 
   const linkSlots = useMemo(() => computeLinkSlots(nodes, links), [nodes, links])
@@ -203,6 +222,8 @@ export default function Canvas() {
         <LinkTypePopup linkPaths={linkPaths} />
         <ActorPopover linkPaths={linkPaths} />
       </>}
+      {/* ...and the read-only popup with an element's information is the viewer's */}
+      {viewer && <ElementPopup linkPaths={linkPaths} />}
       <svg
         ref={svgRef}
         id="diagram-canvas"

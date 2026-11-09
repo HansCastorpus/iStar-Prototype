@@ -13,11 +13,17 @@ export const nodePadXFor = (type) =>
   type === 'goal' || type === 'softgoal' ? PILL_PAD_X : type === 'task' ? GOAL_PAD_X : NODE_PAD_X
 export const TASK_TIP_X    = 16   // how far the left / right points of a task are cut in (smaller = blunter)
 export const GOAL_PAD_Y    = 10   // vertical padding for goal (pill) nodes
-export const GOAL_MAX_RADIUS = 24  // rounded ends of goals / softgoals: half a one-line height, kept when the text wraps into many lines
-export const goalRadius = (height) => Math.min(height / 2, GOAL_MAX_RADIUS)
+export const GOAL_MAX_RADIUS = 24  // rounded ends of a softgoal: half a one-line height, kept when the text wraps into many lines
+// A goal is always a bullet: its ends are half-circles however tall it gets. A softgoal keeps the 24px curve.
+export const pillRadius = (type, height) => type === 'goal' ? height / 2 : Math.min(height / 2, GOAL_MAX_RADIUS)
+export const GOAL_MAX_W = 480      // goals may grow wider than other elements (NODE_MAX_W), so a long text spreads out instead of piling up
+export const GOAL_ASPECT = 2.4     // a goal that takes several lines is widened until it is at least this many times wider than tall
+// Room left and right of a goal's text: more as it gets taller, so the lines stay clear of the rounded ends, but never
+// more than a quarter of the width each side (the text keeps at least half of it)
+export const goalPadX = (height, width) => Math.min(Math.max(PILL_PAD_X, Math.round(height / 2 - 6)), Math.floor(width / 4))
 export const NODE_FONT     = 13   // font size of the label inside an element
 export const NODE_LINE_H   = 16   // line height for the 13px font (13px + 3px leading)
-export const NODE_BADGE_H  = 16   // type badge height (matches link badge: 10px font + 3×2 pad)
+export const NODE_BADGE_H  = 19   // type badge height (12px font + 3.5×2 pad)
 
 let _ctx = null
 function getCtx() {
@@ -93,10 +99,33 @@ export function computeNodeSize(label, type = '', logoAspect = 0) {
     return { width, height: SUB_H }
   }
 
-  const padX = nodePadXFor(type)
   const padY = (type === 'goal' || type === 'task' || type === 'softgoal') ? GOAL_PAD_Y : NODE_PAD_Y
-
   const singleLineW = text.length ? ctx.measureText(text).width : 0
+
+  // A goal is a bullet. Its side padding depends on its height, which depends on how the text wraps within that padding; the
+  // padding only ever grows, so this settles. A single line keeps the width it needs; text that wraps is given more width,
+  // a step at a time, until the shape is wide enough to look like a bullet (or GOAL_MAX_W). Node.jsx draws the text with
+  // goalPadX(height, width) of the result, the same padding.
+  if (type === 'goal') {
+    const fit = (width) => {
+      let padX = PILL_PAD_X, lines, height
+      for (let i = 0; i < 12; i++) {
+        lines = wrapLabel(text, width, padX)
+        height = Math.max(Math.ceil((padY * 2 + lines.length * NODE_LINE_H) / GRID) * GRID, GRID * 2) + NODE_BADGE_H / 2
+        const next = goalPadX(height, width)
+        if (next <= padX) break
+        padX = next
+      }
+      return { width, height, lines: lines.length }
+    }
+    let result = fit(NODE_MIN_W)
+    for (let width = NODE_MIN_W + GRID; width <= GOAL_MAX_W && result.lines > 1 && result.width < result.height * GOAL_ASPECT; width += GRID) {
+      result = fit(width)
+    }
+    return { width: result.width, height: result.height }
+  }
+
+  const padX = nodePadXFor(type)
   const width = Math.min(
     Math.max(Math.ceil((singleLineW + padX * 2) / GRID) * GRID, NODE_MIN_W),
     NODE_MAX_W,

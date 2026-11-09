@@ -6,6 +6,8 @@
 // three-way merge: a field only changes if the contributor changed it, and a contributor's change to a field
 // that was also changed in the app since the export is reported as a conflict instead of overwriting it.
 
+import { isWebUrl, parseLinks, parseImages, linksToText, imagesToText } from './elementDetails.js'
+
 export const ELEMENT_TYPES = ['goal', 'task', 'softgoal', 'resource']
 
 const SHEET = 'Elements'
@@ -14,8 +16,8 @@ const SNAPSHOT = '_snapshot'
 const BLANK_ROWS = 200
 const MIN_CONNECTED = 3
 const CHUNK = 30000
-const FIXED = ['Key', 'Status', 'No.', 'Type', 'Actor', 'Text', 'Relation type', 'Relations', 'Positive aspects', 'Negative aspects']
-const COL = { key: 1, status: 2, num: 3, type: 4, actor: 5, text: 6, relationType: 7, relations: 8, positive: 9, negative: 10, connected: 11 }
+const FIXED = ['Key', 'Status', 'No.', 'Type', 'Actor', 'Text', 'Description', 'Relation type', 'Relations', 'Positive aspects', 'Negative aspects', 'Links', 'Images']
+const COL = { key: 1, status: 2, num: 3, type: 4, actor: 5, text: 6, description: 7, relationType: 8, relations: 9, positive: 10, negative: 11, links: 12, images: 13, connected: 14 }
 
 // Greys only. White cells are the essential ones (type, actor, text), light grey the optional extras; the darker grey
 // cells (status, number, rows already on the graph) are not for filling in. Every cell has a thin border.
@@ -31,22 +33,26 @@ const HINTS = {
   info: 'Filled in for you. Numbers can change, so do not rely on them. Do not insert, delete or sort rows.',
   type: 'Goal, task, softgoal or resource. Pick from the list.',
   actor: 'Who this element belongs to. Pick from the list; if yours is missing, type its name.',
-  text: 'A short summary of the element.',
+  text: 'A short summary of the element: it is what the graph shows.',
+  description: 'What it is about, in a few sentences. Shown when the element is opened in the viewer.',
   relationType: 'The kind of relation it has with other elements. Pick from the list.',
   relations: 'How it relates to other elements, and which ones, in your own words.',
   positive: 'What it helps or improves.',
   negative: 'What it harms, costs or puts at risk.',
+  links: 'Web links about it, one per line: "Label | https://…" or just the address.',
+  images: 'Addresses (https://…) of pictures, one per line.',
   connected: 'Another actor this element is connected to. Pick from the list.',
 }
 
-const FIELDS = ['type', 'text', 'actorName', 'relationType', 'relations', 'positive', 'negative', 'connected']
+const FIELDS = ['type', 'text', 'actorName', 'description', 'relationType', 'relations', 'positive', 'negative', 'links', 'images', 'connected']
 const clean = (v) => (v ?? '').toString().trim()
 const same = (a, b) => JSON.stringify(a ?? '') === JSON.stringify(b ?? '')
 
 // The editable part of an inbox item (the same shape is stored in the snapshot)
 export const fieldsOf = (item) => ({
   type: item.type ?? 'goal', text: item.text ?? '', actorName: item.actorName ?? '', relationType: item.relationType ?? '',
-  relations: item.relations ?? '', positive: item.positive ?? '', negative: item.negative ?? '',
+  description: item.description ?? '', relations: item.relations ?? '', positive: item.positive ?? '', negative: item.negative ?? '',
+  links: item.links ?? [], images: item.images ?? [],
   connected: item.connected ?? [],
 })
 
@@ -65,7 +71,7 @@ export async function buildInboxWorkbookBlob(data) {
   const labelOf = Object.fromEntries(data.linkTypes.map(l => [l.id, l.label]))
 
   const ws = wb.addWorksheet(SHEET)
-  const widths = [10, 16, 7, 12, 24, 50, 16, 40, 32, 32]
+  const widths = [10, 16, 7, 12, 24, 50, 40, 16, 40, 32, 32, 40, 40]
   const headers = [...FIXED, ...Array.from({ length: connectedCols }, (_, i) => `Connected actor ${i + 1}`)]
   ws.columns = headers.map((_, i) => ({ width: widths[i] ?? 24, hidden: i === 0, style: { alignment: { wrapText: true, vertical: 'top' } } }))
 
@@ -96,15 +102,15 @@ export async function buildInboxWorkbookBlob(data) {
   })
   ws.views = [{ state: 'frozen', ySplit: HEADER_ROW }]
   const head = ws.getRow(HEADER_ROW)
-  const noteOf = { [COL.type]: HINTS.type, [COL.actor]: HINTS.actor, [COL.text]: HINTS.text, [COL.relationType]: HINTS.relationType, [COL.relations]: HINTS.relations, [COL.positive]: HINTS.positive, [COL.negative]: HINTS.negative }
+  const noteOf = { [COL.type]: HINTS.type, [COL.actor]: HINTS.actor, [COL.text]: HINTS.text, [COL.description]: HINTS.description, [COL.relationType]: HINTS.relationType, [COL.relations]: HINTS.relations, [COL.positive]: HINTS.positive, [COL.negative]: HINTS.negative, [COL.links]: HINTS.links, [COL.images]: HINTS.images }
   for (let c = COL.connected; c <= lastCol; c++) noteOf[c] = HINTS.connected
   for (const [c, note] of Object.entries(noteOf)) head.getCell(Number(c)).note = note
 
   const base = {}
   for (const item of data.items) {
     const f = fieldsOf(item)
-    base[item.id] = f
-    ws.addRow([item.id, item.placed ? 'On graph' : 'In inbox', item.num, f.type, f.actorName, f.text, labelOf[f.relationType] ?? '', f.relations, f.positive, f.negative, ...f.connected])
+    base[item.id] = { ...f, images: f.images.filter(isWebUrl) }  // a picture stored in the diagram can't be written in a cell, so the sheet never changes those
+    ws.addRow([item.id, item.placed ? 'On graph' : 'In inbox', item.num, f.type, f.actorName, f.text, f.description, labelOf[f.relationType] ?? '', f.relations, f.positive, f.negative, linksToText(f.links), imagesToText(f.images), ...f.connected])
   }
   for (const g of data.graphRows) ws.addRow([`node:${g.key}`, `On graph${g.diagram ? ` · ${g.diagram}` : ''}`, g.num, g.type, g.actorName, g.text])
   for (let i = 0; i < BLANK_ROWS; i++) ws.addRow([])
@@ -169,6 +175,9 @@ export async function readInboxWorkbook(buffer, labelMap = {}) {
     else if (h === 'type') at.type = c
     else if (h === 'actor') at.actor = c
     else if (h === 'text') at.text = c
+    else if (h === 'description') at.description = c
+    else if (h === 'links') at.links = c
+    else if (h === 'images') at.images = c
     else if (h === 'relation type') at.relationType = c
     else if (h === 'relations') at.relations = c
     else if (h === 'positive aspects') at.positive = c
@@ -192,8 +201,9 @@ export async function readInboxWorkbook(buffer, labelMap = {}) {
     if (line <= headerLine) return
     const connected = []
     for (const c of at.connected) { const v = cell(row, c); if (v && !connected.includes(v)) connected.push(v) }
+    const links = parseLinks(cell(row, at.links)), images = parseImages(cell(row, at.images))
     rows.push({
-      line, key: cell(row, at.key),
+      line, key: cell(row, at.key), description: cell(row, at.description), links: links.links, images: images.images, dropped: links.dropped + images.dropped,
       type: cell(row, at.type).toLowerCase(), actorName: cell(row, at.actor), text: cell(row, at.text),
       relationType: relationOf(cell(row, at.relationType)), relations: cell(row, at.relations), positive: cell(row, at.positive), negative: cell(row, at.negative),
       connected,
@@ -204,15 +214,17 @@ export async function readInboxWorkbook(buffer, labelMap = {}) {
 
 // Works out what an import would do, changing nothing.
 //   rows, base: from readInboxWorkbook   items: the inbox now   mineOf(item): its fields now (a placed element's text is the one on the graph)
-// → { adds: [fields], updates: [{ id, patch }], conflicts: [{ id, field, mine, theirs }], errors: [{ line, reason }], removed, unlisted }
+// → { adds: [fields], updates: [{ id, patch }], conflicts: [{ id, field, mine, theirs }], errors: [{ line, reason }], removed, unlisted, dropped }
+// (dropped: lines in the Links / Images cells that were not web addresses)
 export function planInboxImport({ rows, base, items, mineOf, actorNames }) {
-  const plan = { adds: [], updates: [], conflicts: [], errors: [], removed: 0, unlisted: [] }
+  const plan = { adds: [], updates: [], conflicts: [], errors: [], removed: 0, unlisted: [], dropped: 0 }
   const unlisted = new Set()
   const noteActors = (f) => { for (const n of [f.actorName, ...f.connected]) if (n && !actorNames.includes(n)) unlisted.add(n) }
   const problem = (f) => !f.text ? 'missingText' : !ELEMENT_TYPES.includes(f.type) ? 'badType' : f.relationType?.startsWith('!') ? 'badRelation' : null
 
   for (const row of rows) {
     if (row.key.startsWith('node:')) continue  // on the graph already: shown for context only
+    plan.dropped += row.dropped ?? 0
     const theirs = fieldsOf(row)
     if (!row.key) {
       if (FIELDS.every(k => k === 'type' || !theirs[k] || !theirs[k].length)) continue  // an empty row
@@ -225,10 +237,14 @@ export function planInboxImport({ rows, base, items, mineOf, actorNames }) {
     const mine = mineOf(item)
     const was = base[row.key] ?? mine  // no snapshot: the sheet wins
     const patch = {}
+    // Only web addresses fit in a sheet: pictures stored in the diagram are left out of the comparison and kept as they are
+    const view = (field, v) => field === 'images' ? (v ?? []).filter(isWebUrl) : v
+    const result = (field, v) => field === 'images' ? [...(mine.images ?? []).filter(x => !isWebUrl(x)), ...v] : v
     for (const field of FIELDS) {
-      if (same(theirs[field], was[field])) continue  // the contributor left it alone
-      if (same(mine[field], was[field]) || same(mine[field], theirs[field])) patch[field] = theirs[field]
-      else plan.conflicts.push({ id: item.id, line: row.line, field, mine: mine[field], theirs: theirs[field] })
+      const t = theirs[field], w = view(field, was[field]), m = view(field, mine[field])
+      if (same(t, w)) continue  // the contributor left it alone
+      if (same(m, w) || same(m, t)) patch[field] = result(field, t)
+      else plan.conflicts.push({ id: item.id, line: row.line, field, mine: mine[field], theirs: result(field, t) })
     }
     const reason = Object.keys(patch).length && problem({ ...mine, ...patch })
     if (reason) { plan.errors.push({ line: row.line, reason }); continue }

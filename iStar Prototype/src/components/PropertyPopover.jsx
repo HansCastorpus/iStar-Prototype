@@ -8,6 +8,7 @@ import { shrinkImage } from '../utils/image.js'
 import PopupConnector from './PopupConnector.jsx'
 import { typesFor } from '../utils/language.js'
 import PopoverHeader from './PopoverHeader.jsx'
+import DetailsEditor from './DetailsEditor.jsx'
 import { HEADER_H, popoverStyle, labelStyle, inputStyle, summaryStyle, btnStyle, confirmOnEnter } from './popupStyles.js'
 
 const NODE_TYPES = ['goal', 'task', 'softgoal', 'resource']
@@ -191,6 +192,7 @@ export default function PropertyPopover({ linkPaths = {} }) {
   const t = useT()
   const language = useStore(s => s.language)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [showDetails, setShowDetails] = useState(false)  // the form for the element's extra information
   const [collapsed, setCollapsed] = useState(false)  // kept across selections so a minimized popup stays out of the way
 
   const anchor = selectionAnchor({ selectedId, selectedIds, selectedType, nodes, links, linkPaths, transform })
@@ -348,6 +350,9 @@ export default function PropertyPopover({ linkPaths = {} }) {
       </>}
 
       <NodeActorFields key={node.id} selected={[node]} />
+
+      {!isSub && <button onClick={() => setShowDetails(true)} style={{ ...btnStyle('var(--text-1)'), marginTop: 4 }}>{t('details.open')} ›</button>}
+      {showDetails && <DetailsEditor nodeId={node.id} onClose={() => setShowDetails(false)} />}
 
 
       <div style={{ marginTop: 6 }}>

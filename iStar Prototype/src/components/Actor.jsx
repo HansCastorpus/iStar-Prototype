@@ -187,6 +187,7 @@ export default function Actor({ actor, extras, offset = 0 }) {
     // A plain click on the name tag toggles the highlight and opens / closes the edit popup with it;
     // dragging only moves the group
     if (ds.fromName && !ds.hasMoved) {
+      if (useStore.getState().viewer) { useStore.getState().pickActor(actor.id); return }
       toggleActorHighlight(actor.id)
       const s = useStore.getState()
       const lit = s.highlightTypes.includes('actor') || s.highlightedActorIds.includes(actor.id)
@@ -195,12 +196,11 @@ export default function Actor({ actor, extras, offset = 0 }) {
     }
   }
 
-  // Highlighted (incl. selected): solid outline, and the name bar takes the actor's colour
+  // Highlighted (incl. selected): solid, thicker outline and a tinted body; the name bar keeps its plain fill
   const tint = actorTintVar(actors, actor.id)
   const bg = backgroundShade(shade, isHighlighted ? tint : null)
   const hullStroke = isHighlighted ? 'var(--node-stroke)' : 'var(--text-3)'
   const hullStrokeW = isHighlighted ? 2 : 1
-  const barFill = isHighlighted ? `color-mix(in srgb, ${tint} 35%, var(--node-fill))` : 'var(--node-fill)'
 
   return (
     <g ref={gRef}
@@ -223,7 +223,7 @@ export default function Actor({ actor, extras, offset = 0 }) {
       <g clipPath={`url(#${clipId})`}>
         <rect
           x={bar.x1} y={bar.y1} width={bar.x2 - bar.x1} height={HEADER_H}
-          fill={barFill} style={{ cursor: 'pointer' }}
+          fill="var(--node-fill)" style={{ cursor: 'pointer' }}
           onPointerDown={e => onPointerDown(e, true)}
         />
         <line x1={bar.x1} x2={bar.x2} y1={bar.y2} y2={bar.y2}

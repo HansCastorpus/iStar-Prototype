@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom'
 import useStore from '../store/useStore.js'
 import { useT, LANGS, STRINGS } from '../i18n.js'
 import SharePopup from './SharePopup.jsx'
+import { shareLink } from '../utils/share.js'
 import { typesFor, LINK_TYPES } from '../utils/language.js'
 
 const MODES = [
@@ -325,6 +326,7 @@ export default function Toolbar({ inset = 0 }) {
   const lang = useStore(s => s.lang)
   const setLang = useStore(s => s.setLang)
   const viewer = useStore(s => s.viewer)  // opened from a share link: only the menus that make sense for looking at a graph
+  const diagramName = useStore(s => s.models[s.activeModelId]?.name ?? '')  // the viewer shows it here, at the right of the header
   const language = useStore(s => s.language)
   const setLanguage = useStore(s => s.setLanguage)
   const t = useT()
@@ -404,6 +406,12 @@ export default function Toolbar({ inset = 0 }) {
 
   // Publishing a read-only link happens in a popup, behind a password (see SharePopup.jsx)
   const [sharing, setSharing] = useState(false)
+  const share = useStore(s => s.share)  // where this project was published, if it was
+  // A direct link to the viewer: the published graph, in a new tab. Not published yet → the sharing popup opens instead.
+  const openViewer = () => {
+    if (share) window.open(shareLink(share.user, share.gistId), '_blank', 'noopener')
+    else setSharing(true)
+  }
 
   const contribRef = useRef(null)
   const linkTypeList = () => typesFor(language, LINK_TYPES).map(id => ({ id, label: t(`type.${id}`) }))
@@ -431,6 +439,7 @@ export default function Toolbar({ inset = 0 }) {
     const lines = [t('toolbar.contribDone', { a: r.added, u: r.updated })]
     if (plan.errors.length) lines.push(t('toolbar.importEditsIgnored'), ...plan.errors.map(x => `• ${t('toolbar.contribRow', { n: x.line })}: ${t(`toolbar.contribErr.${x.reason}`)}`))
     if (plan.removed) lines.push(t('toolbar.contribRemoved', { n: plan.removed }))
+    if (plan.dropped) lines.push(t('toolbar.contribDropped', { n: plan.dropped }))
     if (plan.unlisted.length) lines.push(t('toolbar.contribUnlisted', { names: plan.unlisted.join(', ') }))
     alert(lines.join('\n'))
   }
@@ -491,6 +500,7 @@ export default function Toolbar({ inset = 0 }) {
           <MenuDivider />
           <MenuLabel>{t('menu.share')}</MenuLabel>
           <MenuItem onClick={() => { setSharing(true); close() }} desc={t('menu.shareDesc')}>{t('menu.shareOpen')}</MenuItem>
+          <MenuItem onClick={() => { openViewer(); close() }} desc={t(share ? 'menu.openViewerDesc' : 'menu.openViewerFirst')}>{t('menu.openViewer')} ›</MenuItem>
           </>}
         </>}
       </Menu>
@@ -640,6 +650,12 @@ export default function Toolbar({ inset = 0 }) {
           </button>
         ))}
       </div>}
+      {viewer && (
+        <h1 title={diagramName} style={{
+          marginLeft: 'auto', padding: '0 16px', maxWidth: '60%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          font: '700 20px Roboto, sans-serif', color: 'var(--text-title)', userSelect: 'none',
+        }}>{diagramName}</h1>
+      )}
       {sharing && <SharePopup onClose={() => setSharing(false)} />}
     </div>
   )

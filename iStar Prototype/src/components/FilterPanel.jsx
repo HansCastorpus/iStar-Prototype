@@ -5,6 +5,7 @@ import useStore, { ALL_TYPES } from '../store/useStore.js'
 import { LegendIcon, LEGEND_W } from './LegendIcons.jsx'
 import { upstreamLayerCount, focusView } from '../utils/dependencies.js'
 import { useT } from '../i18n.js'
+import { collapseBtn } from './popupStyles.js'
 import { actorLayout, actorTintVar } from '../utils/actorTree.js'
 
 const NODE_TYPES = ['goal', 'task', 'softgoal', 'resource', 'subactor']
@@ -19,7 +20,7 @@ const BTN_CHROME  = 10  // header button padding (2 × 4) + border (2)
 let measureCtx = null
 function buttonTextW(text) {
   if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d')
-  measureCtx.font = '10px Roboto, sans-serif'
+  measureCtx.font = '12px Roboto, sans-serif'
   return Math.ceil(measureCtx.measureText(text).width)
 }
 
@@ -129,18 +130,22 @@ export default function FilterPanel() {
       flexShrink: 0,
       // Scrolling only switches on once the panel has widened, so the scrollbar never squeezes the cards
       overflowY: collapsed ? 'hidden' : overflows ? 'auto' : 'hidden',
-      padding: collapsed ? 6 : 12,
+      padding: 12,
       gap: 12,
     }}>
-      {collapsed && (
-        <button onClick={toggleCollapsed} title={t('filter.expand')} aria-label={t('filter.expand')}
-          style={collapseBtn}>»</button>
+      {/* The minimise button: in the editor it sits in the Filter card's title row while the panel is open; on its own above the
+          cards when the panel is minimised, and always in the viewer (like the one on the right) */}
+      {(collapsed || viewer) && (
+        <div style={{ display: 'flex', justifyContent: 'flex-start', flexShrink: 0 }}>
+          <button onClick={toggleCollapsed} title={t(collapsed ? 'filter.expand' : 'filter.collapse')} aria-label={t(collapsed ? 'filter.expand' : 'filter.collapse')}
+            style={collapseBtn}>{collapsed ? '»' : '«'}</button>
+        </div>
       )}
       {/* Filter container */}
       {!collapsed && <>
       <div ref={setFilterCardEl} style={cardStyle}>
         <DropHeader open={filterOpen} onToggle={() => setFilterOpen(o => !o)} style={{ ...cardTitle, marginBottom: filterOpen ? 6 : 0 }}
-          extra={<button onClick={toggleCollapsed} title={t('filter.collapse')} aria-label={t('filter.collapse')}
+          extra={!viewer && <button onClick={toggleCollapsed} title={t('filter.collapse')} aria-label={t('filter.collapse')}
             style={collapseBtn}>«</button>}>
           {t('filter.title')}
         </DropHeader>
@@ -255,13 +260,13 @@ export function DependenciesCard({ style }) {
             {pathOn ? t('deps.pathClear') : t('deps.path')}
           </button>
           {pathOn && canPath && (
-            <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'Roboto, sans-serif', lineHeight: 1.5 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', fontFamily: 'Roboto, sans-serif', lineHeight: 1.5 }}>
               {hasPath ? t('deps.pathShowing') : t('deps.pathNone')}
             </div>
           )}
           {/* Current status */}
           {(!canFocus || isDirectActive || isDeepActive) && (
-            <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'Roboto, sans-serif', marginTop: 2, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', fontFamily: 'Roboto, sans-serif', marginTop: 2, lineHeight: 1.5 }}>
               {!canFocus
                 ? t('deps.noSelection')
                 : isDeepActive
@@ -292,8 +297,14 @@ export function ActorsCard({ style }) {
     st.toggleActorHighlight(active)
     return () => useStore.getState().toggleActorHighlight(active)  // the pointer left, another actor was pressed, or the card went away
   }, [active])
-  const press = (id) => { setActive(id); zoomToActor(id) }
-  const release = (id) => setActive(cur => cur === id ? null : cur)
+  const viewer = useStore(s => s.viewer)
+  const picked = useStore(s => s.actorPick)
+  // In the viewer a pressed actor stays picked (see pickActor in the store); in the editor only while the pointer is on its row
+  const press = (id) => {
+    if (viewer) useStore.getState().pickActor(id); else setActive(id)
+    zoomToActor(id)
+  }
+  const release = (id) => { if (!viewer) setActive(cur => cur === id ? null : cur) }
 
   // Primary actors by name, each followed by the actors nested in it (indented), and so on down
   const list = useMemo(() => {
@@ -324,7 +335,7 @@ export function ActorsCard({ style }) {
       {open && list.length === 0 && <div style={infoText}>{t('actors.none')}</div>}
       {open && list.map(({ actor: a, indent }) => {
         const tint = actorTintVar(actors, a.id)
-        const lit = active === a.id
+        const lit = viewer ? picked === a.id : active === a.id
         return (
           <div key={a.id} className="actor-row" role="button" tabIndex={0} title={a.name}
             onClick={() => press(a.id)} onPointerLeave={() => release(a.id)} onBlur={() => release(a.id)}
@@ -391,7 +402,7 @@ function NumberTools() {
           </svg>
         </button>
       </form>
-      {missing && <div style={{ fontSize: 10, color: '#dc2626', fontFamily: 'Roboto, sans-serif' }}>{t('filter.findNone', { n: query })}</div>}
+      {missing && <div style={{ fontSize: 12, color: '#dc2626', fontFamily: 'Roboto, sans-serif' }}>{t('filter.findNone', { n: query })}</div>}
     </div>
   )
 }
@@ -407,7 +418,7 @@ function LayerStepper({ value, max, enabled, onChange }) {
   const canDec = enabled && value > 1
   const canInc = enabled && value < max
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: GAP, fontSize: 10, fontFamily: 'Roboto, sans-serif', color: enabled ? 'var(--text-2)' : 'var(--text-3)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: GAP, fontSize: 12, fontFamily: 'Roboto, sans-serif', color: enabled ? 'var(--text-2)' : 'var(--text-3)' }}>
       <span style={{ flex: '0 1 auto', minWidth: 0, lineHeight: 1.25 }}>{t('deps.layers')}</span>
       <span aria-hidden style={{ flex: '1 1 14px', minWidth: 14, display: 'flex', alignItems: 'center' }}>
         <span style={{ flex: 1, height: 1, background: 'currentColor' }} />
@@ -597,14 +608,10 @@ const cardStyle = {
 }
 
 const infoText = {
-  fontSize: 10, color: 'var(--text-2)', fontFamily: 'Roboto, sans-serif', lineHeight: 1.5, marginBottom: 6,
+  fontSize: 12, color: 'var(--text-2)', fontFamily: 'Roboto, sans-serif', lineHeight: 1.5, marginBottom: 6,
 }
 
-const COLLAPSED_W = 44
-const collapseBtn = {
-  background: 'var(--node-fill)', color: 'var(--text-1)', border: '1px solid var(--border-md)',
-  width: 28, height: 24, padding: 0, cursor: 'pointer', pointerEvents: 'auto', fontSize: 14, fontFamily: 'Roboto, sans-serif', lineHeight: 1,
-}
+const COLLAPSED_W = 52  // panel padding (12 + 12) around the 28px minimise button
 
 const cardTitle = {
   fontSize: 13, fontWeight: 'bold', color: 'var(--text-1)', fontFamily: 'Roboto, sans-serif', textTransform: 'uppercase', marginBottom: 6,
@@ -616,7 +623,7 @@ const colBtn = {
   width: '100%',
   padding: '6px 10px',
   cursor: 'pointer',
-  fontSize: 10,
+  fontSize: 12,
   fontFamily: 'Roboto, sans-serif',
   color: 'var(--text-1)',
   textAlign: 'center',
@@ -636,7 +643,7 @@ const filterBtnStyle = {
   padding: '6px 4px',
   margin: 2,
   cursor: 'pointer',
-  fontSize: 10,
+  fontSize: 12,
   fontFamily: 'Roboto, sans-serif',
   textAlign: 'center',
   whiteSpace: 'nowrap',

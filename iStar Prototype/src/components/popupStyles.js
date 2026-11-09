@@ -87,3 +87,9 @@ export const btnStyle = (color) => ({
   fontSize: 12,
   fontFamily: 'Roboto, sans-serif',
 })
+
+// The small « / » button that minimises or brings back a side panel (the filter panel; the viewer's cards)
+export const collapseBtn = {
+  background: 'var(--node-fill)', color: 'var(--text-1)', border: '1px solid var(--border-md)',
+  width: 28, height: 24, padding: 0, cursor: 'pointer', pointerEvents: 'auto', fontSize: 14, fontFamily: 'Roboto, sans-serif', lineHeight: 1,
+}

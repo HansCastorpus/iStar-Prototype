@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { fieldsOf, planInboxImport, ELEMENT_TYPES } from '../utils/inboxExcel.js'
 import { parseViewParam, publishGist, fetchShared, shareLink } from '../utils/share.js'
+import { publicDetails } from '../utils/elementDetails.js'
 import { GRID, snap, computeNodeSize } from '../utils/grid.js'
 import { getUsedOffsets, getNextSlot } from '../utils/ports.js'
 import { buildAnalysis, readEdits } from '../utils/analysisExport.js'
@@ -138,13 +139,23 @@ function projectData(s) {
   return { version: 2, activeModelId: models[s.activeModelId] ? s.activeModelId : rootOf(models), models, inbox: s.inbox, actorList: s.actorList, share: s.share }
 }
 
-// What a share link shows: the diagrams only. The inbox, the actor list and the extra information on elements stay private.
+// What a share link shows: the diagrams, with the public part of each element's information. The inbox and the actor list stay private.
 function shareData(s) {
   const data = projectData(s)
   const models = Object.fromEntries(Object.entries(data.models).map(([id, m]) => [id, {
-    ...m, nodes: Object.fromEntries(Object.entries(m.nodes).map(([k, n]) => [k, { ...n, details: undefined }])),
+    // the viewer shows an element's description, aspects, links, pictures and related actors; the designer's notes stay private
+    ...m, nodes: Object.fromEntries(Object.entries(m.nodes).map(([k, n]) => [k, { ...n, details: publicDetails(n.details) }])),
   }]))
   return { ...data, models, inbox: [], actorList: [], share: null }
+}
+
+// An inbox item as it is now: once placed, its element on the graph holds the text and the extra information
+const DETAIL_FIELDS = ['description', 'relationType', 'relations', 'positive', 'negative', 'links', 'images', 'connected']
+const liveFields = (item, node) => {
+  const f = fieldsOf(item)
+  if (!node) return f
+  const d = node.details ?? {}
+  return { ...f, text: node.label, ...Object.fromEntries(DETAIL_FIELDS.filter(k => k in d).map(k => [k, d[k]])) }
 }
 
 // Opened from a share link (?view=user/gist): a read-only copy of someone's graph, nothing of it is saved in this browser
@@ -190,6 +201,8 @@ const useStore = create((set, get) => ({
   share: null,                        // { user, gistId } of the Gist this project was published to
   viewer: !!viewTarget,               // opened from a share link: read-only, nothing is saved
   viewStatus: viewTarget ? 'loading' : 'ready',  // 'loading' | 'ready' | 'error'
+  cardsHidden: false,                 // the viewer's column of cards on the right is hidden
+  setCardsHidden: (cardsHidden) => set({ cardsHidden }),
   loadShared: async () => {
     try {
       const project = loadProject(JSON.parse(await fetchShared(viewTarget)))
@@ -328,7 +341,7 @@ const useStore = create((set, get) => ({
   toggleLegend: () => set(s => ({ legendOpen: !s.legendOpen })),
   filterCollapsed: false,  // the left filter panel is minimised to a narrow strip
   toggleFilterCollapsed: () => set(s => ({ filterCollapsed: !s.filterCollapsed })),
-  showNumbers: true,  // element numbers in the top-left corner of each element
+  showNumbers: !viewTarget,  // element numbers in the top-left corner of each element (not in the viewer: they are the designer's working numbers)
   setShowNumbers: (on) => set({ showNumbers: on }),
   hideTags: false,
   toggleHideTags: () => set(s => ({ hideTags: !s.hideTags })),
@@ -350,6 +363,16 @@ const useStore = create((set, get) => ({
   isolateSnapshot:   null,         // same for "Show all"/"Hide all"
   hiddenActorIds:      [],         // individual actors hidden from the filter panel
   highlightedActorIds: [],         // individual actors highlighted from the filter panel
+
+  // In the viewer, clicking an actor picks it: it alone stays highlighted until another actor is picked, an open space is
+  // clicked, or the highlights in the left panel are changed
+  actorPick: null,
+  pickActor: (id) => set(s => ({
+    actorPick: id,
+    highlightedActorIds: [id],
+    highlightTypes: s.highlightTypes.filter(t => t !== 'actor'),
+  })),
+  clearActorPick: () => set(s => s.actorPick ? { actorPick: null, highlightedActorIds: [] } : {}),
 
   // Per-actor toggles work on the *effective* state (the "actor" type row OR the per-actor list),
   // and fold back into the type row when every actor ends up the same, so all controls stay in sync.
@@ -382,6 +405,7 @@ const useStore = create((set, get) => ({
     return {
       highlightTypes: has ? s.highlightTypes.filter(t => t !== type) : [...s.highlightTypes, type],
       ...(type === 'actor' && { highlightedActorIds: [] }),
+      ...(s.actorPick && { actorPick: null, highlightedActorIds: [] }),  // the left panel now decides
     }
   }),
 
@@ -393,11 +417,11 @@ const useStore = create((set, get) => ({
     }
   }),
 
-  filterSelectAll:  () => set({ highlightTypes: [...ALL_TYPES], isolateTypes: [...ALL_TYPES] }),
-  filterSelectNone: () => set({ highlightTypes: [], isolateTypes: [] }),
+  filterSelectAll:  () => set({ highlightTypes: [...ALL_TYPES], isolateTypes: [...ALL_TYPES], actorPick: null, highlightedActorIds: [] }),
+  filterSelectNone: () => set({ highlightTypes: [], isolateTypes: [], actorPick: null, highlightedActorIds: [] }),
   setAllHighlight: (on) => set(s => {
     const r = bulkSet(s.highlightTypes, s.highlightedActorIds, s.highlightSnapshot, on, false)
-    return r ? { highlightTypes: r.types, highlightedActorIds: r.actorIds, highlightSnapshot: r.snapshot } : {}
+    return r ? { highlightTypes: r.types, highlightedActorIds: r.actorIds, highlightSnapshot: r.snapshot, ...(s.actorPick && { actorPick: null, highlightedActorIds: [] }) } : {}
   }),
   setAllIsolate: (on) => set(s => {
     const r = bulkSet(s.isolateTypes, s.hiddenActorIds, s.isolateSnapshot, on, true)
@@ -463,7 +487,7 @@ const useStore = create((set, get) => ({
   addInboxItem: (item) => set(s => ({
     inbox: [...s.inbox, {
       id: crypto.randomUUID(), num: Math.max(0, ...usedNumbers(s)) + 1, type: 'goal', text: '', actorName: '', relationType: '', relations: '', positive: '', negative: '',
-      connected: [], placedNodeId: null, ...item,
+      description: '', links: [], images: [], connected: [], placedNodeId: null, ...item,
     }],
   })),
   updateInboxItem: (id, patch) => set(s => ({ inbox: s.inbox.map(i => i.id === id ? { ...i, ...patch } : i) })),
@@ -480,10 +504,10 @@ const useStore = create((set, get) => ({
     const item = get().inbox.find(i => i.id === itemId)
     if (!item) return null
     const chain = actorChainAt(get().nodes, x, y, actorNames(get().actors))
-    const { relationType, relations, positive, negative, connected, actorName } = item
+    const { relationType, relations, positive, negative, connected, actorName, description, links, images } = item
     const taken = Object.values(get().nodes).some(n => n.num === item.num)
     const num = item.num != null && !taken ? item.num : Math.max(0, ...Object.values(get().nodes).map(n => n.num ?? 0)) + 1
-    const id = get().addNode(item.type, x, y, { num, label: item.text, details: { relationType, relations, positive, negative, connected, suggestedActor: actorName } })
+    const id = get().addNode(item.type, x, y, { num, label: item.text, details: { description, relationType, relations, positive, negative, links, images, connected, suggestedActor: actorName } })
     if (!id) return null
     if (chain.length) {
       const patch = { actorId: chain[0], nestedActorIds: chain.slice(1) }
@@ -517,7 +541,7 @@ const useStore = create((set, get) => ({
     const items = inbox.map(i => {
       const node = i.placedNodeId && nodeOf(i.placedNodeId)
       if (node) placedIds.add(node.id)
-      return { id: i.id, placed: !!node, num: node ? node.num : nums[i.id], ...fieldsOf(i), ...(node && { text: node.label }) }
+      return { id: i.id, placed: !!node, num: node ? node.num : nums[i.id], ...liveFields(i, node || null) }
     })
     const graphRows = []
     for (const { id } of blank ? [] : reach) {
@@ -549,7 +573,7 @@ const useStore = create((set, get) => ({
     const nodeOf = (id) => { for (const m of Object.values(live)) if (m.nodes[id]) return m.nodes[id] }
     const actorNames = [...s.actorList]
     for (const m of Object.values(live)) for (const a of Object.values(m.actors)) if (a.name && !actorNames.includes(a.name)) actorNames.push(a.name)
-    const mineOf = (item) => ({ ...fieldsOf(item), ...(item.placedNodeId && nodeOf(item.placedNodeId) && { text: nodeOf(item.placedNodeId).label }) })
+    const mineOf = (item) => liveFields(item, item.placedNodeId ? nodeOf(item.placedNodeId) : null)
     return { plan: planInboxImport({ ...read, items: s.inbox, mineOf, actorNames }) }
   },
 
@@ -564,7 +588,7 @@ const useStore = create((set, get) => ({
     }
     const nodePatch = (n, patch) => {
       const details = { ...n.details }
-      for (const k of ['relationType', 'relations', 'positive', 'negative', 'connected']) if (k in patch) details[k] = patch[k]
+      for (const k of ['relationType', 'relations', 'positive', 'negative', 'connected', 'description', 'links', 'images']) if (k in patch) details[k] = patch[k]
       if ('actorName' in patch) details.suggestedActor = patch.actorName
       return { ...('text' in patch && { label: patch.text }), ...('type' in patch && { type: patch.type }), details }
     }
