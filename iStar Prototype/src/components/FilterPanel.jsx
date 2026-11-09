@@ -53,6 +53,7 @@ function useColumns() {
 export default function FilterPanel() {
   const t = useT()
   const language = useStore(s => s.language)
+  const viewer = useStore(s => s.viewer)
   const { panelWidth: basePanelWidth, colI, colH } = useColumns()
   const highlightTypes      = useStore(s => s.highlightTypes)
   const isolateTypes        = useStore(s => s.isolateTypes)
@@ -61,39 +62,15 @@ export default function FilterPanel() {
   const hiddenActorIds      = useStore(s => s.hiddenActorIds)
   const setAllHighlight     = useStore(s => s.setAllHighlight)
   const setAllIsolate       = useStore(s => s.setAllIsolate)
-  const focusNodeId         = useStore(s => s.focusNodeId)
-  const focusDeep           = useStore(s => s.focusDeep)
-  const setFocusNode        = useStore(s => s.setFocusNode)
-  const focusDepth          = useStore(s => s.focusDepth)
-  const setFocusDepth       = useStore(s => s.setFocusDepth)
-  const selectedId          = useStore(s => s.selectedId)
-  const selectedType        = useStore(s => s.selectedType)
-  const selectedActorId     = useStore(s => s.selectedActorId)
 
   const legendOpen   = useStore(s => s.legendOpen)
   const hideTags     = useStore(s => s.hideTags)
   const setHideTags    = useStore(s => s.setHideTags)
 
-  const pathOn         = useStore(s => s.pathOn)
-  const togglePath     = useStore(s => s.togglePath)
-  const selectedIds    = useStore(s => s.selectedIds)
-  const canPath        = selectedIds.length === 2 && !selectedActorId
-  const hasPath        = useStore(s => pathOn && canPath && !!focusView(s))
-  const canFocus       = selectedType === 'node' && !!selectedId
-  const isDirectActive = !!focusNodeId && focusNodeId === selectedId && !focusDeep
-  const isDeepActive   = !!focusNodeId && focusNodeId === selectedId && focusDeep
 
-  // Layers that actually exist upstream of the selected element (the stepper's upper bound)
-  const maxLayers = useStore(s => canFocus ? upstreamLayerCount(s.links, selectedId) : 0)
-  const layers = maxLayers ? Math.min(focusDepth, maxLayers) : focusDepth
-  const changeLayers = (n) => {
-    setFocusDepth(n)
-    if (!isDirectActive) setFocusNode(selectedId, false)  // adjusting layers switches the view on
-  }
 
   const [actorPanelOpen, setActorPanelOpen] = useState(false)
   const [filterOpen, setFilterOpen] = useState(true)
-  const [depsOpen, setDepsOpen] = useState(true)
   // Kept here (not in Section) so the choices survive the whole panel being minimised
   const [sectionOpen, setSectionOpen] = useState({ elements: true, links: true, actors: true })
   const sectionProps = (key) => ({ open: sectionOpen[key], onToggle: () => setSectionOpen(o => ({ ...o, [key]: !o[key] })) })
@@ -179,7 +156,7 @@ export default function FilterPanel() {
         </DropHeader>
         {filterOpen && <>
 
-        <NumberTools />
+        {!viewer && <NumberTools />}
 
         {/* Column headers */}
         <div style={{ display: 'flex', alignItems: 'flex-end' }}>
@@ -217,63 +194,98 @@ export default function FilterPanel() {
         </>}
       </div>
 
-      {/* Dependencies container */}
-      <div style={{ ...cardStyle, gap: 6 }}>
-        <DropHeader open={depsOpen} onToggle={() => setDepsOpen(o => !o)} style={{ ...cardTitle, marginBottom: depsOpen ? 6 : 0 }}>
-          {t('deps.title')}
-        </DropHeader>
-        {depsOpen && <>
-        <div style={infoText}>
-          <strong style={{ color: 'var(--text-1)' }}>{t('deps.infoLead')}</strong> {t('deps.info')}
-        </div>
-        <button
-          onClick={() => canFocus && setFocusNode(selectedId, false)}
-          disabled={!canFocus}
-          style={focusBtnStyle(isDirectActive, canFocus)}
-        >
-          {isDirectActive ? t('deps.clear') : t('deps.relationships')}
-        </button>
-        <LayerStepper
-          value={layers}
-          max={maxLayers}
-          enabled={canFocus && maxLayers > 0}
-          onChange={changeLayers}
-        />
-        <button
-          onClick={() => canFocus && setFocusNode(selectedId, true)}
-          disabled={!canFocus}
-          style={focusBtnStyle(isDeepActive, canFocus)}
-        >
-          {isDeepActive ? t('deps.clear') : t('deps.all')}
-        </button>
-        <button
-          onClick={() => (canPath || pathOn) && togglePath()}
-          disabled={!canPath && !pathOn}
-          style={focusBtnStyle(pathOn, canPath || pathOn)}
-        >
-          {pathOn ? t('deps.pathClear') : t('deps.path')}
-        </button>
-        {(pathOn || canPath || canFocus || selectedIds.length > 0) && (
-          <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'Roboto, sans-serif', lineHeight: 1.5 }}>
-            {pathOn && canPath ? (hasPath ? t('deps.pathShowing') : t('deps.pathNone')) : t('deps.pathHint')}
-          </div>
-        )}
-        {/* Current status */}
-        {(!canFocus || isDirectActive || isDeepActive) && (
-          <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'Roboto, sans-serif', marginTop: 2, lineHeight: 1.5 }}>
-            {!canFocus
-              ? t('deps.noSelection')
-              : isDeepActive
-              ? t('deps.showingAll')
-              : layers === 1 ? t('deps.showingLayer') : t('deps.showingLayers', { n: layers })}
-          </div>
-        )}
-        </>}
-      </div>
+      {!viewer && <DependenciesCard />}
       </>}
     </div>
     {actorPanelOpen && !collapsed && <ActorPanel left={panelWidth} onClose={() => setActorPanelOpen(false)} />}
     </>
+  )
+}
+
+// The dependency tools (relationships, layers, path) for the selected element(s). Floats on its own in the viewer.
+export function DependenciesCard({ style }) {
+  const t = useT()
+  const focusNodeId         = useStore(s => s.focusNodeId)
+  const focusDeep           = useStore(s => s.focusDeep)
+  const setFocusNode        = useStore(s => s.setFocusNode)
+  const focusDepth          = useStore(s => s.focusDepth)
+  const setFocusDepth       = useStore(s => s.setFocusDepth)
+  const selectedId          = useStore(s => s.selectedId)
+  const selectedType        = useStore(s => s.selectedType)
+  const selectedActorId     = useStore(s => s.selectedActorId)
+  const pathOn         = useStore(s => s.pathOn)
+  const togglePath     = useStore(s => s.togglePath)
+  const selectedIds    = useStore(s => s.selectedIds)
+  const canPath        = selectedIds.length === 2 && !selectedActorId
+  const hasPath        = useStore(s => pathOn && canPath && !!focusView(s))
+  const canFocus       = selectedType === 'node' && !!selectedId
+  const isDirectActive = !!focusNodeId && focusNodeId === selectedId && !focusDeep
+  const isDeepActive   = !!focusNodeId && focusNodeId === selectedId && focusDeep
+  // Layers that actually exist upstream of the selected element (the stepper's upper bound)
+  const maxLayers = useStore(s => canFocus ? upstreamLayerCount(s.links, selectedId) : 0)
+  const layers = maxLayers ? Math.min(focusDepth, maxLayers) : focusDepth
+  const changeLayers = (n) => {
+    setFocusDepth(n)
+    if (!isDirectActive) setFocusNode(selectedId, false)  // adjusting layers switches the view on
+  }
+  const [depsOpen, setDepsOpen] = useState(true)
+
+  return (
+        <div style={{ ...cardStyle, gap: 6, ...style }}>
+          <DropHeader open={depsOpen} onToggle={() => setDepsOpen(o => !o)} style={{ ...cardTitle, marginBottom: depsOpen ? 6 : 0 }}>
+            {t('deps.title')}
+          </DropHeader>
+          {depsOpen && <>
+          <div style={infoText}>
+            <strong style={{ color: 'var(--text-1)' }}>{t('deps.infoLead')}</strong> {t('deps.info')}
+          </div>
+          <button
+            onClick={() => canFocus && setFocusNode(selectedId, false)}
+            disabled={!canFocus}
+            style={focusBtnStyle(isDirectActive, canFocus)}
+          >
+            {isDirectActive ? t('deps.clear') : t('deps.relationships')}
+          </button>
+          <LayerStepper
+            value={layers}
+            max={maxLayers}
+            enabled={canFocus && maxLayers > 0}
+            onChange={changeLayers}
+          />
+          <button
+            onClick={() => canFocus && setFocusNode(selectedId, true)}
+            disabled={!canFocus}
+            style={focusBtnStyle(isDeepActive, canFocus)}
+          >
+            {isDeepActive ? t('deps.clear') : t('deps.all')}
+          </button>
+          <div style={{ ...infoText, marginBottom: 0 }}>
+            <strong style={{ color: 'var(--text-1)' }}>{t('deps.pathLead')}</strong> {t('deps.pathInfo')}
+          </div>
+          <button
+            onClick={() => (canPath || pathOn) && togglePath()}
+            disabled={!canPath && !pathOn}
+            style={focusBtnStyle(pathOn, canPath || pathOn)}
+          >
+            {pathOn ? t('deps.pathClear') : t('deps.path')}
+          </button>
+          {pathOn && canPath && (
+            <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'Roboto, sans-serif', lineHeight: 1.5 }}>
+              {hasPath ? t('deps.pathShowing') : t('deps.pathNone')}
+            </div>
+          )}
+          {/* Current status */}
+          {(!canFocus || isDirectActive || isDeepActive) && (
+            <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'Roboto, sans-serif', marginTop: 2, lineHeight: 1.5 }}>
+              {!canFocus
+                ? t('deps.noSelection')
+                : isDeepActive
+                ? t('deps.showingAll')
+                : layers === 1 ? t('deps.showingLayer') : t('deps.showingLayers', { n: layers })}
+            </div>
+          )}
+          </>}
+        </div>
   )
 }
 
@@ -328,23 +340,24 @@ function NumberTools() {
 // "Layers  − 2 / 4 +" control for how far back "Highlight relationships" reaches
 function LayerStepper({ value, max, enabled, onChange }) {
   const t = useT()
-  // Same look as the other panel buttons (incl. their disabled state), just sized to the symbol
-  const stepBtn = (disabled) => ({ ...focusBtnStyle(false, !disabled), width: 'auto', minWidth: 30 })
+  // One line: label, a dash with an arrowhead that stretches across the free space, then  [−]  2 / 4  [+].
+  // The same gap sits between every part, the label wraps onto two lines when the card is narrow, and the buttons and
+  // the count keep a fixed size so they always fit inside the card.
+  const GAP = 8
+  const stepBtn = (disabled) => ({ ...focusBtnStyle(false, !disabled), width: 30, flexShrink: 0, padding: '6px 0', display: 'flex', alignItems: 'center', justifyContent: 'center' })
   const canDec = enabled && value > 1
   const canInc = enabled && value < max
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 2,
-      fontSize: 10, fontFamily: 'Roboto, sans-serif', color: enabled ? 'var(--text-2)' : 'var(--text-3)' }}>
-      <span style={{ whiteSpace: 'nowrap' }}>{t('deps.layers')}</span>
-      {/* Arrow from the label to the buttons, stretching across the free space */}
-      <span aria-hidden style={{ flex: 1, minWidth: 16, display: 'flex', alignItems: 'center' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: GAP, fontSize: 10, fontFamily: 'Roboto, sans-serif', color: enabled ? 'var(--text-2)' : 'var(--text-3)' }}>
+      <span style={{ flex: '0 1 auto', minWidth: 0, lineHeight: 1.25 }}>{t('deps.layers')}</span>
+      <span aria-hidden style={{ flex: '1 1 14px', minWidth: 14, display: 'flex', alignItems: 'center' }}>
         <span style={{ flex: 1, height: 1, background: 'currentColor' }} />
         <svg width="5" height="8" viewBox="0 0 5 8" style={{ flexShrink: 0, display: 'block' }}>
           <path d="M0,0 L5,4 L0,8 Z" fill="currentColor" />
         </svg>
       </span>
       <button onClick={() => onChange(value - 1)} disabled={!canDec} aria-label={t('deps.fewer')} style={stepBtn(!canDec)}><StepIcon /></button>
-      <span style={{ minWidth: 36, textAlign: 'center', color: enabled ? 'var(--text-1)' : 'var(--text-3)' }}>
+      <span style={{ width: 38, flexShrink: 0, textAlign: 'center', whiteSpace: 'nowrap', color: enabled ? 'var(--text-1)' : 'var(--text-3)' }}>
         {enabled ? `${value} / ${max}` : '–'}
       </span>
       <button onClick={() => onChange(value + 1)} disabled={!canInc} aria-label={t('deps.more')} style={stepBtn(!canInc)}><StepIcon plus /></button>

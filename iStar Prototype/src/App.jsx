@@ -5,8 +5,9 @@ import FilterPanel from './components/FilterPanel.jsx'
 import TabBar from './components/TabBar.jsx'
 import WorkTitle from './components/WorkTitle.jsx'
 import InboxPanel from './components/InboxPanel.jsx'
-import ViewerBar from './components/ViewerBar.jsx'
+import { DependenciesCard } from './components/FilterPanel.jsx'
 import useStore from './store/useStore.js'
+import { useT } from './i18n.js'
 
 // The logo container and the toolbar / tab bar to its right are separated by a diagonal: it leaves the logo
 // container's top-right corner and runs down and to the right, so the tabs (lower) start further right than the
@@ -58,6 +59,7 @@ export default function App() {
 
   // Load the saved project once (not per diagram: the canvas is remounted when another diagram opens).
   // Opened from a share link, the shared graph is loaded instead and the saved project is left alone.
+  const t = useT()
   const viewer = useStore(s => s.viewer)
   const viewStatus = useStore(s => s.viewStatus)
   useEffect(() => {
@@ -90,14 +92,20 @@ export default function App() {
       <div ref={setHeaderEl} style={{ display: 'flex', flexShrink: 0, position: 'relative' }}>
         <div style={{
           width: filterCollapsed ? logoWidth : filterPanelRight ?? 300, flexShrink: 0, boxSizing: 'border-box',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14,
           padding: '8px 16px', background: 'var(--bg-logo)',
           borderTop: '1px solid var(--border)',  // runs into the diagonal's top curve
         }}>
-          <img src={`${import.meta.env.BASE_URL}Logo.svg`} alt="i* Builder" className="app-logo" draggable={false} style={{ height: 40, maxWidth: '100%', objectFit: 'contain', userSelect: 'none' }} />
+          <img src={`${import.meta.env.BASE_URL}Logo.svg`} alt="i* Builder" className="app-logo" draggable={false} style={{ height: 40, minWidth: 0, objectFit: 'contain', userSelect: 'none' }} />
+          {/* A dash of its own, with the same gap to the logo and to the word (drawn, so it sits exactly on the middle line) */}
+          <span aria-hidden style={{ width: 14, height: 1.5, background: 'var(--text-1)', flexShrink: 0 }} />
+          {/* Which side this is: the editor, or a read-only copy opened from a share link */}
+          <span style={{ fontSize: 23, fontWeight: 400, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--text-1)', whiteSpace: 'nowrap', fontFamily: 'Roboto, sans-serif', userSelect: 'none' }}>
+            {t(viewer ? 'app.viewer' : 'app.editor')}
+          </span>
         </div>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          {viewer ? <ViewerBar inset={TOOLBAR_INSET} /> : <Toolbar inset={TOOLBAR_INSET} />}
+          <Toolbar inset={TOOLBAR_INSET} />
           {/* The header's bottom line starts where the curve ends: nothing under the logo area */}
           <div style={{ position: 'relative' }}>
             <TabBar inset={TABS_INSET} />
@@ -124,6 +132,8 @@ export default function App() {
           <Canvas key={activeModelId} />
           <WorkTitle />
           {!viewer && <InboxPanel />}
+          {/* In the viewer the dependency tools sit on the right, under the title */}
+          {viewer && <DependenciesCard style={{ position: 'absolute', top: 52, right: 12, width: 230, zIndex: 120 }} />}
           {viewer && viewStatus !== 'ready' && (
             <div style={{
               position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200,

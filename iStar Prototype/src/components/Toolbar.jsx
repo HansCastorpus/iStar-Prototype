@@ -2,6 +2,7 @@ import { useRef, useState, useEffect, useLayoutEffect } from 'react'
 import { flushSync } from 'react-dom'
 import useStore from '../store/useStore.js'
 import { useT, LANGS, STRINGS } from '../i18n.js'
+import SharePopup from './SharePopup.jsx'
 import { typesFor, LINK_TYPES } from '../utils/language.js'
 
 const MODES = [
@@ -320,9 +321,10 @@ const Hint = ({ children }) => <span style={{ marginLeft: 'auto', paddingLeft: 1
 const MenuDivider = () => <div style={{ height: 4 }} />
 
 export default function Toolbar({ inset = 0 }) {
-  const { mode, setMode, exportDiagram, exportForAnalysis, exportInboxTemplate, importEdits, importDiagram, clearDiagram, exportAsImage, darkMode, toggleDarkMode } = useStore()
+  const { mode, setMode, exportDiagram, exportInboxTemplate, importEdits, importDiagram, clearDiagram, exportAsImage, darkMode, toggleDarkMode } = useStore()
   const lang = useStore(s => s.lang)
   const setLang = useStore(s => s.setLang)
+  const viewer = useStore(s => s.viewer)  // opened from a share link: only the menus that make sense for looking at a graph
   const language = useStore(s => s.language)
   const setLanguage = useStore(s => s.setLanguage)
   const t = useT()
@@ -400,27 +402,8 @@ export default function Toolbar({ inset = 0 }) {
     e.target.value = ''
   }
 
-  // Read-only link to the diagrams, kept in a secret Gist of the designer's GitHub account (see utils/share.js)
-  const shared = useStore(s => s.share)
-  const TOKEN_KEY = 'istar-gist-token'
-  const forgetToken = () => { try { localStorage.removeItem(TOKEN_KEY) } catch { /* storage unavailable */ } }
-  const handleShare = async () => {
-    let token = ''
-    try { token = localStorage.getItem(TOKEN_KEY) ?? '' } catch { /* storage unavailable */ }
-    if (!token) {
-      token = (prompt(t('share.tokenPrompt')) ?? '').trim()
-      if (!token) return
-      try { localStorage.setItem(TOKEN_KEY, token) } catch { /* storage unavailable */ }
-    }
-    try {
-      const link = await useStore.getState().publishShare(token)
-      try { await navigator.clipboard.writeText(link) } catch { /* the link is in the message below anyway */ }
-      alert(t('share.done', { link }))
-    } catch (e) {
-      if (e.status === 401 || e.status === 403) { forgetToken(); alert(t('share.badToken')) }
-      else alert(t('share.failed', { why: e.message }))
-    }
-  }
+  // Publishing a read-only link happens in a popup, behind a password (see SharePopup.jsx)
+  const [sharing, setSharing] = useState(false)
 
   const contribRef = useRef(null)
   const linkTypeList = () => typesFor(language, LINK_TYPES).map(id => ({ id, label: t(`type.${id}`) }))
@@ -472,15 +455,18 @@ export default function Toolbar({ inset = 0 }) {
     }}>
       <Menu label={t('toolbar.file')} width={280}>
         {close => <>
+          {!viewer && <>
           <MenuLabel>{t('menu.language')}</MenuLabel>
           <MenuItem current={language === 'istar2'} faded={language !== 'istar2'} desc={t('menu.langIstar2Desc')} onClick={() => { setLanguage('istar2'); close() }}>{t('menu.langIstar2')}</MenuItem>
           <MenuItem current={language === 'custom'} faded={language !== 'custom'} desc={t('menu.langCustomDesc')} onClick={() => { setLanguage('custom'); close() }}>{t('menu.langCustom')}</MenuItem>
           <MenuDivider />
+          </>}
           <MenuLabel>{t('toolbar.export')}</MenuLabel>
           <MenuSub>{t('menu.groupBackup')}</MenuSub>
           <MenuItem onClick={() => { exportDiagram(); close() }}>{t('menu.project')}</MenuItem>
           <MenuItem onClick={() => { exportAsImage('png'); close() }}>{t('menu.png')}</MenuItem>
           <MenuItem onClick={() => { exportAsImage('jpeg'); close() }}>{t('menu.jpeg')}</MenuItem>
+          {!viewer && <>
           <MenuSub>{t('menu.groupContrib')}</MenuSub>
           <MenuItem onClick={() => { exportInboxTemplate(linkTypeList(), true); close() }}>
             <span title={t('menu.contribBlankHint')}>{t('menu.contribBlank')}</span>
@@ -488,8 +474,8 @@ export default function Toolbar({ inset = 0 }) {
           <MenuItem onClick={() => { exportInboxTemplate(linkTypeList()); close() }}>
             <span title={t('menu.contribExportHint')}>{t('menu.contribExport')}</span>
           </MenuItem>
-          <MenuSub>{t('menu.groupReview')}</MenuSub>
-          <MenuItem onClick={() => { exportForAnalysis(); close() }}>{t('menu.analysis')}</MenuItem>
+          </>}
+          {!viewer && <>
           <MenuDivider />
           <MenuLabel>{t('toolbar.import')}</MenuLabel>
           <MenuSub>{t('menu.groupBackup')}</MenuSub>
@@ -504,10 +490,8 @@ export default function Toolbar({ inset = 0 }) {
           </MenuItem>
           <MenuDivider />
           <MenuLabel>{t('menu.share')}</MenuLabel>
-          <MenuItem onClick={() => { handleShare(); close() }} desc={t('menu.shareDesc')}>
-            {t(shared ? 'menu.shareUpdate' : 'menu.sharePublish')}
-          </MenuItem>
-          {shared && <MenuItem onClick={() => { forgetToken(); close() }}>{t('menu.shareForget')}</MenuItem>}
+          <MenuItem onClick={() => { setSharing(true); close() }} desc={t('menu.shareDesc')}>{t('menu.shareOpen')}</MenuItem>
+          </>}
         </>}
       </Menu>
 
@@ -517,10 +501,12 @@ export default function Toolbar({ inset = 0 }) {
 
       <Menu label={t('toolbar.options')} width={270}>
         {close => <>
+          {!viewer && <>
           <MenuLabel>{t('toolbar.edit')}</MenuLabel>
           <MenuItem disabled={!canUndo} onClick={() => { undo(); close() }}>{t('toolbar.undoItem')}<Hint>Ctrl/⌘+Z</Hint></MenuItem>
           <MenuItem disabled={!canRedo} onClick={() => { redo(); close() }}>{t('toolbar.redoItem')}<Hint>Shift+Ctrl/⌘+Z</Hint></MenuItem>
           <MenuDivider />
+          </>}
           <MenuLabel>{t('toolbar.language')}</MenuLabel>
           {LANGS.map(l => (
             <MenuItem key={l} checked={lang === l} onClick={() => { setLang(l); close() }}>{t(`lang.${l}`)}</MenuItem>
@@ -535,6 +521,7 @@ export default function Toolbar({ inset = 0 }) {
           <MenuItem checked={showClearance} onClick={() => setViewAid('showClearance', !showClearance)}>
             <span title={t('toolbar.showClearanceHint')}>{t('toolbar.showClearance')}</span>
           </MenuItem>
+          {!viewer && <>
           <MenuDivider />
           {!armed
             ? <MenuItem danger onClick={armClear}>{t('toolbar.clearCanvas')}</MenuItem>
@@ -543,11 +530,12 @@ export default function Toolbar({ inset = 0 }) {
                 <button onClick={() => { confirmClear(); close() }} style={{ ...actionBtn, padding: '3px 10px', borderColor: '#c00', color: '#c00' }}>{t('toolbar.confirm')}</button>
                 <button onClick={cancelClear} style={{ ...actionBtn, padding: '3px 10px' }}>{t('toolbar.cancel')}</button>
               </div>}
+          </>}
         </>}
       </Menu>
 
-      {/* Help + mode buttons */}
-      <div style={{ display: 'flex', gap: 0, alignItems: 'center', flex: '1 1 auto' }}>
+      {/* Help + mode buttons (not in the viewer) */}
+      {!viewer && <div style={{ display: 'flex', gap: 0, alignItems: 'center', flex: '1 1 auto' }}>
         <button
           onClick={() => setInboxOpen(!inboxOpen)}
           className="tbtn" data-on={inboxOpen}
@@ -651,7 +639,8 @@ export default function Toolbar({ inset = 0 }) {
             {t(label)}
           </button>
         ))}
-      </div>
+      </div>}
+      {sharing && <SharePopup onClose={() => setSharing(false)} />}
     </div>
   )
 }
