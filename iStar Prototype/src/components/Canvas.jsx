@@ -10,6 +10,7 @@ import PropertyPopover from './PropertyPopover.jsx'
 import LinkTypePopup from './LinkTypePopup.jsx'
 import ActorPopover from './ActorPopover.jsx'
 import ElementPopup from './ElementPopup.jsx'
+import ZoneLayer from './ZoneLayer.jsx'
 import { actorLayout, actorNames, strayElements, inActor } from '../utils/actorTree.js'
 import { barLayout } from '../utils/actorBars.js'
 import { computeLinkSlots } from '../utils/layout.js'
@@ -289,6 +290,9 @@ export default function Canvas() {
           })().map((actor) => (
             <Actor key={actor.id} actor={actor} extras={bars.extras} offset={bars.offsets[actor.id] ?? 0} />
           ))}
+
+          {/* Risk zones: soft red areas around the elements marked with them, above the actors and below the links */}
+          <ZoneLayer />
 
           {/* Clearance outlines — the zone no other element may enter; always shown when switched on in
               Options, otherwise only while dragging a node */}

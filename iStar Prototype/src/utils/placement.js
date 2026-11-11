@@ -14,8 +14,9 @@ export function rectOverlap(a, b) {
 export const inflate = (r, d) => ({ x: r.x - d, y: r.y - d, w: r.w + 2 * d, h: r.h + 2 * d })
 
 // obstacles: [{ x, y, w, h, weight }]
-export function placePopup({ anchor, size, obstacles, viewport, margin = 8 }) {
+export function placePopup({ anchor, size, obstacles, viewport, margin = 8, centered = false }) {
   const { w, h } = size
+  if (centered) return placeCentered({ anchor, size, viewport, margin })
   const ax1 = anchor.x, ay1 = anchor.y
   const ax2 = anchor.x + anchor.w, ay2 = anchor.y + anchor.h
   const acx = ax1 + anchor.w / 2, acy = ay1 + anchor.h / 2
@@ -62,3 +63,27 @@ export function connectorPoints(popup, anchor) {
   }
   return { p, a }
 }
+
+// The spot closest to the middle of the view where the popup does not touch the anchor. Everything else may be covered.
+function placeCentered({ anchor, size, viewport, margin }) {
+  const { w, h } = size
+  const minX = margin, maxX = Math.max(margin, viewport.w - w - margin)
+  const minY = margin, maxY = Math.max(margin, viewport.h - h - margin)
+  const cx = clampTo(viewport.w / 2 - w / 2, minX, maxX), cy = clampTo(viewport.h / 2 - h / 2, minY, maxY)
+  const guard = inflate(anchor, 8)
+  const STEP = 8
+  let best = null
+  const consider = (x, y) => {
+    if (rectOverlap({ x, y, w, h }, guard) > 0) return
+    const dist = Math.hypot(x - cx, y - cy)
+    if (!best || dist < best.dist) best = { x, y, dist }
+  }
+  consider(cx, cy)
+  for (let y = minY; y <= maxY; y += STEP) for (let x = minX; x <= maxX; x += STEP) consider(x, y)
+  consider(maxX, maxY); consider(minX, minY); consider(maxX, minY); consider(minX, maxY)
+  if (best) return { x: best.x, y: best.y }
+  // The popup is too big to keep clear of the element anywhere: fall back to the middle
+  return { x: cx, y: cy }
+}
+
+function clampTo(v, lo, hi) { return Math.max(lo, Math.min(v, hi)) }

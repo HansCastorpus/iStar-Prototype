@@ -9,6 +9,7 @@ import { parseLinks, parseImages } from '../utils/elementDetails.js'
 // information that came with it. Drag one onto the graph to place it. Placed ones stay in the list (shown, greyed or hidden).
 const TYPES = ['goal', 'task', 'softgoal', 'resource']
 export const INBOX_DRAG = 'application/x-istar-inbox'
+const DEPENDUM_GROUP = '\u0000dependum'  // a key no actor name can have
 
 const font = 'Roboto, sans-serif'
 const card = { background: 'var(--bg-popup)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 12,
@@ -52,9 +53,13 @@ export default function InboxPanel() {
 
   const groups = useMemo(() => {
     const visible = inbox.filter(i => filter !== 'hidden' || !isPlaced(i))
+    // Dependums belong to no actor, so they get a group of their own, after the actors'
+    const byActor = visible.filter(i => !i.dependum)
     const keys = [...names]
-    for (const i of visible) if (!keys.includes(i.actorName || '')) keys.push(i.actorName || '')
-    return keys.map(key => ({ key, items: visible.filter(i => (i.actorName || '') === key) })).filter(g => g.items.length)
+    for (const i of byActor) if (!keys.includes(i.actorName || '')) keys.push(i.actorName || '')
+    const groups = keys.map(key => ({ key, items: byActor.filter(i => (i.actorName || '') === key) })).filter(g => g.items.length)
+    const dependums = visible.filter(i => i.dependum)
+    return dependums.length ? [...groups, { key: DEPENDUM_GROUP, dependum: true, items: dependums }] : groups
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inbox, names, filter, placedIds])
 
@@ -101,7 +106,7 @@ export default function InboxPanel() {
         <div key={g.key} style={{ ...card, pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
           <DropHeader open={!closed[g.key]} onToggle={() => setClosed(c => ({ ...c, [g.key]: !c[g.key] }))}
             style={{ fontSize: 12, fontWeight: 'bold', fontFamily: font, color: 'var(--text-1)' }}>
-            {g.key || t('inbox.noActor')} <span style={{ fontWeight: 'normal', color: 'var(--text-3)' }}>({g.items.length})</span>
+            {g.dependum ? t('inbox.dependums') : g.key || t('inbox.noActor')} <span style={{ fontWeight: 'normal', color: 'var(--text-3)' }}>({g.items.length})</span>
           </DropHeader>
           {!closed[g.key] && g.items.map(item => <Item key={item.id} item={item} placed={isPlaced(item)} dim={isPlaced(item) && filter === 'greyed'} />)}
         </div>
@@ -129,7 +134,7 @@ function Item({ item, placed, dim }) {
       }}>
       <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
         <div style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
-          <div style={smallLabel}>{item.num != null && `#${item.num} · `}{item.type}{placed && ` · ${t('inbox.placed')}`}</div>
+          <div style={smallLabel}>{item.num != null && `#${item.num} · `}{item.type}{item.dependum && ` · ${t('inbox.dependum')}`}{placed && ` · ${t('inbox.placed')}`}</div>
           {item.text || '—'}
         </div>
         {hasMore && (
@@ -166,7 +171,7 @@ function AddForm({ names, onDone }) {
   const t = useT()
   const addInboxItem = useStore(s => s.addInboxItem)
   const language = useStore(s => s.language)
-  const empty = { type: 'goal', text: '', actorName: '', description: '', relationType: '', relations: '', positive: '', negative: '', linksText: '', imagesText: '', connected: [] }
+  const empty = { type: 'goal', text: '', actorName: '', dependum: false, description: '', relationType: '', relations: '', positive: '', negative: '', linksText: '', imagesText: '', connected: [] }
   const [f, setF] = useState(empty)
   const set = (patch) => setF(prev => ({ ...prev, ...patch }))
   const submit = (e) => {
@@ -193,12 +198,16 @@ function AddForm({ names, onDone }) {
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 2 }}>
           <span style={smallLabel}>{t('inbox.actor')}</span>
-          <select value={f.actorName} onChange={e => set({ actorName: e.target.value })} style={field}>
+          <select value={f.actorName} disabled={f.dependum} onChange={e => set({ actorName: e.target.value })} style={field}>
             <option value="">—</option>
             {names.map(n => <option key={n} value={n}>{n}</option>)}
           </select>
         </label>
       </div>
+      <label title={t('inbox.dependumHint')} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontFamily: font, cursor: 'pointer' }}>
+        <input type="checkbox" checked={f.dependum} onChange={e => set({ dependum: e.target.checked, ...(e.target.checked && { actorName: '' }) })} />
+        {t('inbox.dependum')} <span style={{ color: 'var(--text-3)' }}>— {t('inbox.dependumHint')}</span>
+      </label>
       <label style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <span style={smallLabel}>{t('inbox.text')}</span>
         <textarea rows={2} autoFocus value={f.text} onChange={e => set({ text: e.target.value })} style={{ ...field, resize: 'vertical' }} />

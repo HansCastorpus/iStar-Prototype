@@ -8,6 +8,8 @@ import { isWebUrl, isImageSrc } from '../utils/elementDetails.js'
 import PopupConnector from './PopupConnector.jsx'
 import PopoverHeader from './PopoverHeader.jsx'
 import { HEADER_H, popoverStyle } from './popupStyles.js'
+import { HIGHLIGHT_STYLES } from '../utils/linkStyles.js'
+import { LinkGlyph } from './LinkIcons.jsx'
 
 // The viewer's popup for a clicked element. The element on the graph is the recap (its text is already there, so the popup
 // doesn't repeat it); this is where the rest lives: the related actors, the text, the positive and negative aspects, links, and
@@ -29,6 +31,7 @@ export default function ElementPopup({ linkPaths }) {
   const t = useT()
   const nodes = useStore(s => s.nodes)
   const actors = useStore(s => s.actors)
+  const zones = useStore(s => s.zones)
   const selectedId = useStore(s => s.selectedId)
   const selectedIds = useStore(s => s.selectedIds)
   const selectedType = useStore(s => s.selectedType)
@@ -45,6 +48,7 @@ export default function ElementPopup({ linkPaths }) {
     anchor,
     getObstacles: () => diagramObstacles({ nodes, linkPaths, transform, weights: { [selectedId]: SEL_WEIGHT } }),
     resetKey: selectedId,
+    centered: true,
   })
   if (!node || !anchor || node.type === 'subactor') return null
 
@@ -52,6 +56,7 @@ export default function ElementPopup({ linkPaths }) {
   const own = node.actorId ? actors[node.actorId] : null
   const related = (d.connected ?? []).filter(name => name && name !== own?.name)
   const positive = lines(d.positive), negative = lines(d.negative)
+  const zoneNames = (node.zoneIds ?? []).map(id => zones[id]?.name).filter(Boolean)
   const infoText = d.description?.trim() || node.label?.trim()  // no description given: the element's own text
   const links = (d.links ?? []).filter(l => isWebUrl(l.url))
   const images = (d.images ?? []).filter(isImageSrc)
@@ -95,9 +100,31 @@ export default function ElementPopup({ linkPaths }) {
               </div>
             )}
 
+            {node.dependum && (
+              <div>
+                <div style={sectionLabel}>{t('info.actor')}</div>
+                <span style={{ ...body, fontSize: 13, display: 'inline-flex', border: '1px dashed var(--text-2)', borderRadius: 999, padding: '2px 10px', background: 'var(--node-fill)' }}>
+                  {t('info.dependum')}
+                </span>
+              </div>
+            )}
+
+            {zoneNames.length > 0 && (
+              <div>
+                <div style={sectionLabel}>{t('info.zones')}</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {zoneNames.map(name => (
+                    <span key={name} style={{ ...body, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid #e11d48', borderRadius: 999, padding: '2px 10px', background: 'rgba(225, 29, 72, 0.08)' }}>
+                      <span aria-hidden style={{ width: 8, height: 8, borderRadius: 4, background: '#e11d48' }} />{name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {related.length > 0 && (
               <div>
-                <div style={sectionLabel}>{t('info.connected')}</div>
+                <div style={sectionLabel}>{t(node.dependum ? 'info.involved' : 'info.connected')}</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {related.map(name => (
                     <span key={name} style={{ ...body, fontSize: 13, border: '1px solid var(--border)', borderRadius: 999, padding: '2px 10px' }}>{name}</span>
@@ -144,6 +171,17 @@ export default function ElementPopup({ linkPaths }) {
   )
 }
 
+// The cards are stacked with their bodies in line; only the point of each sticks out, to the right for links that leave
+// the open element and to the left for links that arrive. A card shaped like an arrow: its point is on the right when the link leaves the open element, on the left when it arrives.
+const ARROW_DEPTH = 14
+// A 1px line all the way round the arrow shape (the shape is clipped, so a normal border would be cut off or uneven)
+const OUTLINE = ['1px 0', '-1px 0', '0 1px', '0 -1px'].map(o => `drop-shadow(${o} 0 var(--border-md))`).join(' ')
+const arrowShape = (outgoing) => ({
+  clipPath: outgoing
+    ? `polygon(0 0, calc(100% - ${ARROW_DEPTH}px) 0, 100% 50%, calc(100% - ${ARROW_DEPTH}px) 100%, 0 100%)`
+    : `polygon(${ARROW_DEPTH}px 0, 100% 0, 100% 100%, ${ARROW_DEPTH}px 100%, 0 50%)`,
+})
+
 // The elements linked to the open one. Each shows its type, its text, and the link that joins them: an arrow away from this
 // element when the link leaves it, towards it when the link arrives. Pressing one opens that element instead.
 function Connections({ items, onPick }) {
@@ -151,24 +189,38 @@ function Connections({ items, onPick }) {
   return (
     <div>
       <div style={sectionLabel}>{t('info.connections')}</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: `1px ${ARROW_DEPTH + 1}px` }}>
         {items.map(c => (
           <button key={c.id} type="button" onClick={() => onPick(c.other.id)} title={t(c.outgoing ? 'info.outgoing' : 'info.incoming')}
-            style={{ textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 4, padding: '7px 9px',
-              border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--node-fill)', color: 'var(--text-1)' }}>
-            <span style={{ ...sectionLabel, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span aria-hidden style={{ width: 8, height: 8, borderRadius: 3, background: `var(--hl-${c.other.type})`, border: '1px solid var(--border-md)' }} />
-              {t(`type.${c.other.type}`)}
-            </span>
-            <span style={{ ...body, fontSize: 13, overflowWrap: 'anywhere' }}>{c.other.label || t(`type.${c.other.type}`)}</span>
-            <span style={{ alignSelf: 'flex-start', fontSize: 11, fontFamily: font, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--text-2)',
-              border: '1px solid var(--border-md)', borderRadius: 999, padding: '1px 8px' }}>
-              {c.outgoing ? '→' : '←'} {t(`type.${c.type}`)}
+            style={{ boxSizing: 'border-box', marginRight: c.outgoing ? -ARROW_DEPTH : 0, marginLeft: c.outgoing ? 0 : -ARROW_DEPTH, padding: 0, border: 'none', cursor: 'pointer', background: 'none', display: 'block', textAlign: 'left', filter: OUTLINE }}>
+            <span style={{ ...arrowShape(c.outgoing), display: 'flex', flexDirection: 'column', gap: 4, background: 'var(--node-fill)', color: 'var(--text-1)',
+              padding: c.outgoing ? `7px ${ARROW_DEPTH + 6}px 7px 9px` : `7px 9px 7px ${ARROW_DEPTH + 6}px` }}>
+              <span style={{ ...sectionLabel, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span aria-hidden style={{ width: 8, height: 8, borderRadius: 3, background: `var(--hl-${c.other.type})`, border: '1px solid var(--border-md)' }} />
+                {t(`type.${c.other.type}`)}
+              </span>
+              <span style={{ ...body, fontSize: 13, overflowWrap: 'anywhere' }}>{c.other.label || t(`type.${c.other.type}`)}</span>
+              <LinkSample type={c.type} outgoing={c.outgoing} label={t(`type.${c.type}`)} />
             </span>
           </button>
         ))}
       </div>
     </div>
+  )
+}
+
+// The link as it looks on the graph when highlighted: its colour, thickness and dashes, with an arrow showing which way it goes.
+function LinkSample({ type, outgoing, label }) {
+  const style = HIGHLIGHT_STYLES[type]
+  const color = style?.color ?? 'var(--link-def)'
+  const sw = Math.min(style?.sw ?? 1.5, 6)
+  return (
+    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ width: 64, flexShrink: 0, display: 'flex', justifyContent: 'flex-start' }}>
+        <LinkGlyph type={type} outgoing={outgoing} color={color} sw={sw} dash={style?.dash} />
+      </span>
+      <span style={{ fontSize: 11, fontFamily: font, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 700, color }}>{label}</span>
+    </span>
   )
 }
 

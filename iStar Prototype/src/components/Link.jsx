@@ -6,39 +6,15 @@ import { useZoom } from '../contexts/ZoomContext.jsx'
 import { getSideForPoint } from '../utils/ports.js'
 import { GRID } from '../utils/grid.js'
 import { pointsToPath, getPointAtT, projectOntoPath } from '../utils/routing.js'
+import { HIGHLIGHT_STYLES } from '../utils/linkStyles.js'
+import { ARROW_H, ICON_GAP, ICON_R, LARGE_ICON_R, ICON_STUB, TRIM, TRIM_LARGE, TRIM_DOUBLE, TRIM_DOUBLE_L, TRIM_NEEDED, SOURCE_DECORATED, arrowPolygon, iconPos } from '../utils/linkShapes.js'
+import { TargetIcon, SourceIcon } from './LinkIcons.jsx'
 
 const PAD_X = 10
 const PAD_Y = 3
 const FONT_SIZE = 12
 const CHAR_W = 7
 
-const ARROW_H  = 8   // triangle height
-const ARROW_HW = 5   // triangle half-base width
-const ICON_GAP = 4   // gap between triangle base and icon centre
-const ICON_R        = ARROW_HW   // default icon radius
-const LARGE_ICON_R  = 8          // larger icons for hurt/help/make/break
-const ICON_STUB     = 3
-const TRIM          = ARROW_H + ICON_GAP + ICON_R       * 2 - ICON_STUB
-const TRIM_LARGE    = ARROW_H + ICON_GAP + LARGE_ICON_R * 2 - ICON_STUB
-const TRIM_DOUBLE   = TRIM       + ICON_R       * 2 + 2
-const TRIM_DOUBLE_L = TRIM_LARGE + LARGE_ICON_R * 2 + 2
-const TRIM_NEEDED   = ARROW_H + ICON_GAP + ICON_R + ARROW_H / 2 - ICON_STUB  // inverse triangle
-
-// Types that also have a source-end decoration (triangle + icon).
-const SOURCE_DECORATED = new Set(['depends-on'])
-
-const HIGHLIGHT_STYLES = {
-  hurt:         { color: 'var(--hl-hurt)',       sw: 8 },
-  break:        { color: 'var(--hl-hurt)',        sw: 8 },
-  help:         { color: 'var(--hl-help)',        sw: 8 },
-  make:         { color: 'var(--hl-help)',        sw: 8 },
-  'needed-by':  { color: 'var(--hl-needed-by)',  sw: 6, dash: '8 4' },
-  'depends-on': { color: 'var(--hl-depends-on)', sw: 6 },
-  'or':         { color: 'var(--hl-or)',          sw: 6 },
-  'xor':        { color: 'var(--hl-xor)',         sw: 6 },
-  'and':        { color: 'var(--hl-and)',         sw: 6 },
-  'part-of':    { color: 'var(--hl-part-of)',     sw: 6 },
-}
 
 // Direction + tip at the TARGET end (last segment).
 function getEndArrow(points) {
@@ -78,156 +54,6 @@ function trimStart(points, amount) {
   if (len < amount) return trimStart(points.slice(1), amount - len)
   const dx = (p2.x - p1.x) / len, dy = (p2.y - p1.y) / len
   return [{ x: p1.x + dx * amount, y: p1.y + dy * amount }, ...points.slice(1)]
-}
-
-function arrowPolygon({ tip, dx, dy }) {
-  const bx = tip.x - dx * ARROW_H, by = tip.y - dy * ARROW_H
-  return [
-    `${tip.x},${tip.y}`,
-    `${bx - dy * ARROW_HW},${by + dx * ARROW_HW}`,
-    `${bx + dy * ARROW_HW},${by - dx * ARROW_HW}`,
-  ].join(' ')
-}
-
-function iconPos({ tip, dx, dy }, r = ICON_R) {
-  const dist = ARROW_H + ICON_GAP + r
-  return { x: tip.x - dx * dist, y: tip.y - dy * dist }
-}
-
-function MinusCircle({ x, y, color, r = ICON_R }) {
-  return (
-    <>
-      <circle cx={x} cy={y} r={r} fill={color} />
-      <rect x={x - r * 0.6} y={y - 1} width={r * 1.2} height={2} fill="white" />
-    </>
-  )
-}
-
-function PlusSign({ x, y, r = ICON_R, color = 'currentColor' }) {
-  return (
-    <>
-      <rect x={x - r * 0.6} y={y - 1} width={r * 1.2} height={2} fill={color} />
-      <rect x={x - 1} y={y - r * 0.6} width={2} height={r * 1.2} fill={color} />
-    </>
-  )
-}
-
-// Target-end icon (at the arrowhead end)
-function TargetIcon({ type, x, y, dx, dy, color, sw, andBar }) {
-  switch (type) {
-    case 'depends-on': {
-      const isw = 3
-      return <rect x={x - ICON_R + isw / 2} y={y - ICON_R + isw / 2}
-        width={(ICON_R - isw / 2) * 2} height={(ICON_R - isw / 2) * 2}
-        fill="white" stroke={color} strokeWidth={isw} style={{ pointerEvents: 'none' }} />
-    }
-    case 'hurt':
-      return <g style={{ pointerEvents: 'none' }}><MinusCircle x={x} y={y} color={color} r={LARGE_ICON_R} /></g>
-    case 'help':
-      return (
-        <g style={{ pointerEvents: 'none' }}>
-          <circle cx={x} cy={y} r={LARGE_ICON_R} fill="var(--node-fill)" stroke={color} strokeWidth={1.5} />
-          <PlusSign x={x} y={y} r={LARGE_ICON_R} color={color} />
-        </g>
-      )
-    case 'make': {
-      const gap = LARGE_ICON_R * 2 + 2
-      const x2 = x - dx * gap, y2 = y - dy * gap
-      return (
-        <g style={{ pointerEvents: 'none' }}>
-          <circle cx={x2} cy={y2} r={LARGE_ICON_R} fill="var(--node-fill)" stroke={color} strokeWidth={1.5} />
-          <PlusSign x={x2} y={y2} r={LARGE_ICON_R} color={color} />
-          <circle cx={x}  cy={y}  r={LARGE_ICON_R} fill="var(--node-fill)" stroke={color} strokeWidth={1.5} />
-          <PlusSign x={x}  y={y}  r={LARGE_ICON_R} color={color} />
-        </g>
-      )
-    }
-    case 'break': {
-      const gap = LARGE_ICON_R * 2 + 2
-      const x2 = x - dx * gap, y2 = y - dy * gap
-      return (
-        <g style={{ pointerEvents: 'none' }}>
-          <MinusCircle x={x2} y={y2} color={color} r={LARGE_ICON_R} />
-          <MinusCircle x={x}  y={y}  color={color} r={LARGE_ICON_R} />
-        </g>
-      )
-    }
-    case 'needed-by': {
-      const tipX = x - dx * (ARROW_H / 2), tipY = y - dy * (ARROW_H / 2)
-      const bx = x + dx * (ARROW_H / 2),   by   = y + dy * (ARROW_H / 2)
-      const pts = [
-        `${tipX},${tipY}`,
-        `${bx - dy * ARROW_HW},${by + dx * ARROW_HW}`,
-        `${bx + dy * ARROW_HW},${by - dx * ARROW_HW}`,
-      ].join(' ')
-      const clipId = `nb-${x|0}-${y|0}`
-      return (
-        <g style={{ pointerEvents: 'none' }}>
-          <defs><clipPath id={clipId}><polygon points={pts} /></clipPath></defs>
-          <polygon points={pts} fill="white" stroke={color} strokeWidth={sw * 2} clipPath={`url(#${clipId})`} />
-        </g>
-      )
-    }
-    case 'and': {
-      const bar = andBar ?? {
-        x1: x + dy * ICON_R, y1: y - dx * ICON_R,
-        x2: x - dy * ICON_R, y2: y + dx * ICON_R,
-      }
-      return <line x1={bar.x1} y1={bar.y1} x2={bar.x2} y2={bar.y2}
-        stroke={color} strokeWidth={1.5} strokeLinecap="round"
-        style={{ pointerEvents: 'none' }} />
-    }
-    case 'xor':
-      return <circle cx={x} cy={y} r={ICON_R} fill={color} style={{ pointerEvents: 'none' }} />
-    case 'or': {
-      const isw = Math.min(sw, 1.5)
-      return <circle cx={x} cy={y} r={ICON_R - isw / 2} fill="white" stroke={color} strokeWidth={isw} style={{ pointerEvents: 'none' }} />
-    }
-    case 'part-of': {
-      const r = ICON_R
-      const ah = 3, aw = 1.5
-      const toRad = d => d * Math.PI / 180
-      // Rotate so arc midpoints face the link direction (source → target = dx,dy)
-      const rotation = Math.atan2(-dy, -dx) * 180 / Math.PI - 265
-      return (
-        <g style={{ pointerEvents: 'none' }}>
-          {[[20, 150], [200, 330]].map(([from, to], i) => {
-            const fr = toRad(from + rotation), tr = toRad(to + rotation)
-            const sx = x + r * Math.cos(fr), sy = y + r * Math.sin(fr)
-            const ex = x + r * Math.cos(tr), ey = y + r * Math.sin(tr)
-            const tdx = -Math.sin(tr), tdy = Math.cos(tr)  // clockwise tangent at arc end
-            // Arc end is the arrowhead base; tip protrudes outward so arc never overlaps it
-            const tipX = ex + tdx * ah, tipY = ey + tdy * ah
-            const pts = [
-              `${tipX},${tipY}`,
-              `${ex - tdy * aw},${ey + tdx * aw}`,
-              `${ex + tdy * aw},${ey - tdx * aw}`,
-            ].join(' ')
-            return (
-              <g key={i}>
-                <path d={`M ${sx},${sy} A ${r},${r} 0 0 1 ${ex},${ey}`}
-                  fill="none" stroke={color} strokeWidth={sw} />
-                <polygon points={pts} fill={color} />
-              </g>
-            )
-          })}
-        </g>
-      )
-    }
-    default:
-      return <circle cx={x} cy={y} r={ICON_R - sw / 2} fill="white" stroke={color} strokeWidth={sw} style={{ pointerEvents: 'none' }} />
-  }
-}
-
-// Source-end icon (at the origin end)
-function SourceIcon({ type, x, y, color, sw }) {
-  switch (type) {
-    case 'depends-on':
-      return <rect x={x - ICON_R} y={y - ICON_R} width={ICON_R * 2} height={ICON_R * 2}
-        fill={color} style={{ pointerEvents: 'none' }} />
-    default:
-      return null
-  }
 }
 
 // Where a link crosses another, the one underneath breaks off to let the top one through; when the top

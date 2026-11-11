@@ -4,7 +4,7 @@ import Toolbar from './components/Toolbar.jsx'
 import FilterPanel from './components/FilterPanel.jsx'
 import TabBar from './components/TabBar.jsx'
 import InboxPanel from './components/InboxPanel.jsx'
-import { DependenciesCard, ActorsCard } from './components/FilterPanel.jsx'
+import { DependenciesCard, ActorsCard, ZonesCard } from './components/FilterPanel.jsx'
 import { collapseBtn } from './components/popupStyles.js'
 import useStore from './store/useStore.js'
 import { useT } from './i18n.js'
@@ -142,6 +142,7 @@ export default function App() {
               </div>
               <DependenciesCard />
               <ActorsCard />
+              <ZonesCard />
             </div>
           )}
           {viewer && cardsHidden && (

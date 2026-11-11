@@ -186,6 +186,7 @@ export default function FilterPanel() {
 
       {!viewer && <DependenciesCard />}
       {!viewer && <ActorsCard />}
+      {!viewer && <ZonesCard />}
       </>}
     </div>
     </>
@@ -355,6 +356,67 @@ export function ActorsCard({ style }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// The risk zones of the diagram: pressing a row shows or hides that zone on the diagram (shown unless switched off).
+// The editor can also delete a zone, which takes it off every element. Zones that no element carries are not listed.
+export function ZonesCard({ style }) {
+  const t = useT()
+  const zones = useStore(s => s.zones)
+  const nodes = useStore(s => s.nodes)
+  const hidden = useStore(s => s.hiddenZoneIds)
+  const toggle = useStore(s => s.toggleZoneHidden)
+  const setAllHidden = useStore(s => s.setAllZonesHidden)
+  const deleteZone = useStore(s => s.deleteZone)
+  const viewer = useStore(s => s.viewer)
+  const [open, setOpen] = useState(true)
+  const [confirming, setConfirming] = useState(null)
+
+  const list = useMemo(() => {
+    const count = {}
+    for (const n of Object.values(nodes)) for (const z of n.zoneIds ?? []) count[z] = (count[z] ?? 0) + 1
+    return Object.values(zones).filter(z => count[z.id]).map(z => ({ zone: z, count: count[z.id] }))
+      .sort((a, b) => (a.zone.name || '').localeCompare(b.zone.name || ''))
+  }, [zones, nodes])
+
+  if (viewer && list.length === 0) return null
+  const allHidden = list.length > 0 && list.every(({ zone }) => hidden.includes(zone.id))
+  return (
+    <div style={{ ...cardStyle, gap: 2, ...style }}>
+      <DropHeader open={open} onToggle={() => setOpen(o => !o)} style={{ ...cardTitle, marginBottom: open ? 6 : 0 }}>
+        {t('zones.title')}
+      </DropHeader>
+      {open && list.length === 0 && <div style={infoText}>{t('zones.none')}</div>}
+      {open && list.map(({ zone, count }) => {
+        const off = hidden.includes(zone.id)
+        return (
+          <div key={zone.id} className="actor-row" style={{ display: 'flex', alignItems: 'center', gap: 4, minHeight: 28 }}>
+            <button type="button" role="switch" aria-checked={!off} onClick={() => toggle(zone.id)} title={t(off ? 'zones.show' : 'zones.hide')}
+              style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '0 6px', minHeight: 28, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+              <span aria-hidden style={{ width: 26, flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
+                <span style={{ width: 14, height: 14, borderRadius: 7, background: off ? 'transparent' : 'rgba(225, 29, 72, 0.55)', border: '1px solid #e11d48', boxShadow: off ? 'none' : '0 0 6px 2px rgba(225, 29, 72, 0.45)' }} />
+              </span>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontFamily: 'Roboto, sans-serif', color: off ? 'var(--text-3)' : 'var(--text-1)', userSelect: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {zone.name}
+              </span>
+              <span style={{ fontSize: 12, color: 'var(--text-3)', fontFamily: 'Roboto, sans-serif' }}>{count}</span>
+            </button>
+            {!viewer && (confirming === zone.id
+              ? <button type="button" onClick={() => { deleteZone(zone.id); setConfirming(null) }} onBlur={() => setConfirming(null)} autoFocus
+                  style={{ fontSize: 12, fontFamily: 'Roboto, sans-serif', cursor: 'pointer', color: '#c00', background: 'none', border: '1px solid #c00', padding: '1px 6px' }}>{t('zones.confirmDelete')}</button>
+              : <button type="button" onClick={() => setConfirming(zone.id)} title={t('zones.delete')} aria-label={t('zones.delete')}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: '0 6px', fontSize: 16, lineHeight: 1 }}>×</button>)}
+          </div>
+        )
+      })}
+      {open && list.length > 1 && (
+        <button type="button" onClick={() => setAllHidden(!allHidden)}
+          style={{ alignSelf: 'flex-start', marginTop: 4, fontSize: 12, fontFamily: 'Roboto, sans-serif', cursor: 'pointer', background: 'none', border: 'none', color: 'var(--text-2)', textDecoration: 'underline', padding: '0 6px' }}>
+          {t(allHidden ? 'zones.showAll' : 'zones.hideAll')}
+        </button>
+      )}
     </div>
   )
 }

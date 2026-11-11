@@ -16,8 +16,8 @@ const SNAPSHOT = '_snapshot'
 const BLANK_ROWS = 200
 const MIN_CONNECTED = 3
 const CHUNK = 30000
-const FIXED = ['Key', 'Status', 'No.', 'Type', 'Actor', 'Text', 'Description', 'Relation type', 'Relations', 'Positive aspects', 'Negative aspects', 'Links', 'Images']
-const COL = { key: 1, status: 2, num: 3, type: 4, actor: 5, text: 6, description: 7, relationType: 8, relations: 9, positive: 10, negative: 11, links: 12, images: 13, connected: 14 }
+const FIXED = ['Key', 'Status', 'No.', 'Type', 'Actor', 'Dependum', 'Text', 'Description', 'Relation type', 'Relations', 'Positive aspects', 'Negative aspects', 'Links', 'Images']
+const COL = { key: 1, status: 2, num: 3, type: 4, actor: 5, dependum: 6, text: 7, description: 8, relationType: 9, relations: 10, positive: 11, negative: 12, links: 13, images: 14, connected: 15 }
 
 // Greys only. White cells are the essential ones (type, actor, text), light grey the optional extras; the darker grey
 // cells (status, number, rows already on the graph) are not for filling in. Every cell has a thin border.
@@ -28,11 +28,15 @@ const SIDE = { style: 'thin', color: { argb: 'FF8C8C8C' } }
 const BORDER = { top: SIDE, left: SIDE, bottom: SIDE, right: SIDE }
 const HEADER_ROW = 2  // row 1 holds the rules, row 2 the column headings (and the filter), the elements start on row 3
 const ESSENTIAL = ['type', 'actor', 'text']
+const YES = 'yes'
+// What a contributor may write in the Dependum column to say yes (the drop-down offers "yes")
+const isYes = (v) => ['yes', 'y', 'true', 'x', '1', 'oui'].includes((v ?? '').toString().trim().toLowerCase())
 
 const HINTS = {
   info: 'Filled in for you. Numbers can change, so do not rely on them. Do not insert, delete or sort rows.',
   type: 'Goal, task, softgoal or resource. Pick from the list.',
-  actor: 'Who this element belongs to. Pick from the list; if yours is missing, type its name.',
+  actor: 'Who this element belongs to. Pick from the list; if yours is missing, type its name. Leave empty for a dependum.',
+  dependum: 'Pick "yes" if this is a dependum: something one actor needs from another, which sits between them and belongs to neither. Then leave Actor empty and list the actors involved under Connected actor. Otherwise leave empty.',
   text: 'A short summary of the element: it is what the graph shows.',
   description: 'What it is about, in a few sentences. Shown when the element is opened in the viewer.',
   relationType: 'The kind of relation it has with other elements. Pick from the list.',
@@ -44,13 +48,13 @@ const HINTS = {
   connected: 'Another actor this element is connected to. Pick from the list.',
 }
 
-const FIELDS = ['type', 'text', 'actorName', 'description', 'relationType', 'relations', 'positive', 'negative', 'links', 'images', 'connected']
+const FIELDS = ['type', 'text', 'actorName', 'dependum', 'description', 'relationType', 'relations', 'positive', 'negative', 'links', 'images', 'connected']
 const clean = (v) => (v ?? '').toString().trim()
 const same = (a, b) => JSON.stringify(a ?? '') === JSON.stringify(b ?? '')
 
 // The editable part of an inbox item (the same shape is stored in the snapshot)
 export const fieldsOf = (item) => ({
-  type: item.type ?? 'goal', text: item.text ?? '', actorName: item.actorName ?? '', relationType: item.relationType ?? '',
+  type: item.type ?? 'goal', text: item.text ?? '', actorName: item.actorName ?? '', dependum: !!item.dependum, relationType: item.relationType ?? '',
   description: item.description ?? '', relations: item.relations ?? '', positive: item.positive ?? '', negative: item.negative ?? '',
   links: item.links ?? [], images: item.images ?? [],
   connected: item.connected ?? [],
@@ -68,10 +72,11 @@ export async function buildInboxWorkbookBlob(data) {
   ELEMENT_TYPES.forEach((t, i) => { lists.getCell(i + 1, 1).value = t })
   data.actorNames.forEach((n, i) => { lists.getCell(i + 1, 2).value = n })
   data.linkTypes.forEach((l, i) => { lists.getCell(i + 1, 3).value = l.label })
+  lists.getCell(1, 4).value = YES
   const labelOf = Object.fromEntries(data.linkTypes.map(l => [l.id, l.label]))
 
   const ws = wb.addWorksheet(SHEET)
-  const widths = [10, 16, 7, 12, 24, 50, 40, 16, 40, 32, 32, 40, 40]
+  const widths = [10, 16, 7, 12, 24, 12, 50, 40, 16, 40, 32, 32, 40, 40]
   const headers = [...FIXED, ...Array.from({ length: connectedCols }, (_, i) => `Connected actor ${i + 1}`)]
   ws.columns = headers.map((_, i) => ({ width: widths[i] ?? 24, hidden: i === 0, style: { alignment: { wrapText: true, vertical: 'top' } } }))
 
@@ -102,7 +107,7 @@ export async function buildInboxWorkbookBlob(data) {
   })
   ws.views = [{ state: 'frozen', ySplit: HEADER_ROW }]
   const head = ws.getRow(HEADER_ROW)
-  const noteOf = { [COL.type]: HINTS.type, [COL.actor]: HINTS.actor, [COL.text]: HINTS.text, [COL.description]: HINTS.description, [COL.relationType]: HINTS.relationType, [COL.relations]: HINTS.relations, [COL.positive]: HINTS.positive, [COL.negative]: HINTS.negative, [COL.links]: HINTS.links, [COL.images]: HINTS.images }
+  const noteOf = { [COL.type]: HINTS.type, [COL.actor]: HINTS.actor, [COL.dependum]: HINTS.dependum, [COL.text]: HINTS.text, [COL.description]: HINTS.description, [COL.relationType]: HINTS.relationType, [COL.relations]: HINTS.relations, [COL.positive]: HINTS.positive, [COL.negative]: HINTS.negative, [COL.links]: HINTS.links, [COL.images]: HINTS.images }
   for (let c = COL.connected; c <= lastCol; c++) noteOf[c] = HINTS.connected
   for (const [c, note] of Object.entries(noteOf)) head.getCell(Number(c)).note = note
 
@@ -110,9 +115,9 @@ export async function buildInboxWorkbookBlob(data) {
   for (const item of data.items) {
     const f = fieldsOf(item)
     base[item.id] = { ...f, images: f.images.filter(isWebUrl) }  // a picture stored in the diagram can't be written in a cell, so the sheet never changes those
-    ws.addRow([item.id, item.placed ? 'On graph' : 'In inbox', item.num, f.type, f.actorName, f.text, f.description, labelOf[f.relationType] ?? '', f.relations, f.positive, f.negative, linksToText(f.links), imagesToText(f.images), ...f.connected])
+    ws.addRow([item.id, item.placed ? 'On graph' : 'In inbox', item.num, f.type, f.actorName, f.dependum ? YES : '', f.text, f.description, labelOf[f.relationType] ?? '', f.relations, f.positive, f.negative, linksToText(f.links), imagesToText(f.images), ...f.connected])
   }
-  for (const g of data.graphRows) ws.addRow([`node:${g.key}`, `On graph${g.diagram ? ` · ${g.diagram}` : ''}`, g.num, g.type, g.actorName, g.text])
+  for (const g of data.graphRows) ws.addRow([`node:${g.key}`, `On graph${g.diagram ? ` · ${g.diagram}` : ''}`, g.num, g.type, g.actorName, g.dependum ? YES : '', g.text])
   for (let i = 0; i < BLANK_ROWS; i++) ws.addRow([])
 
   // Colours, locking and drop-downs row by row. The actor drop-downs only warn on an unknown name, so a new actor can still be typed.
@@ -131,6 +136,7 @@ export async function buildInboxWorkbookBlob(data) {
     }
     if (onGraph) continue
     row.getCell(COL.type).dataValidation = { type: 'list', allowBlank: true, formulae: [`${LISTS}!$A$1:$A$${ELEMENT_TYPES.length}`] }
+    row.getCell(COL.dependum).dataValidation = { type: 'list', allowBlank: true, formulae: [`${LISTS}!$D$1:$D$1`] }
     if (data.linkTypes.length) row.getCell(COL.relationType).dataValidation = { type: 'list', allowBlank: true, formulae: [`${LISTS}!$C$1:$C$${data.linkTypes.length}`] }
     if (!actorList) continue
     row.getCell(COL.actor).dataValidation = actorList
@@ -174,6 +180,7 @@ export async function readInboxWorkbook(buffer, labelMap = {}) {
     if (h === 'key') at.key = c
     else if (h === 'type') at.type = c
     else if (h === 'actor') at.actor = c
+    else if (h === 'dependum') at.dependum = c
     else if (h === 'text') at.text = c
     else if (h === 'description') at.description = c
     else if (h === 'links') at.links = c
@@ -204,7 +211,7 @@ export async function readInboxWorkbook(buffer, labelMap = {}) {
     const links = parseLinks(cell(row, at.links)), images = parseImages(cell(row, at.images))
     rows.push({
       line, key: cell(row, at.key), description: cell(row, at.description), links: links.links, images: images.images, dropped: links.dropped + images.dropped,
-      type: cell(row, at.type).toLowerCase(), actorName: cell(row, at.actor), text: cell(row, at.text),
+      type: cell(row, at.type).toLowerCase(), actorName: cell(row, at.actor), dependum: isYes(cell(row, at.dependum)), text: cell(row, at.text),
       relationType: relationOf(cell(row, at.relationType)), relations: cell(row, at.relations), positive: cell(row, at.positive), negative: cell(row, at.negative),
       connected,
     })
@@ -227,7 +234,7 @@ export function planInboxImport({ rows, base, items, mineOf, actorNames }) {
     plan.dropped += row.dropped ?? 0
     const theirs = fieldsOf(row)
     if (!row.key) {
-      if (FIELDS.every(k => k === 'type' || !theirs[k] || !theirs[k].length)) continue  // an empty row
+      if (FIELDS.every(k => k === 'type' || !theirs[k] || theirs[k].length === 0)) continue  // an empty row
       const reason = problem(theirs)
       if (reason) plan.errors.push({ line: row.line, reason }); else { plan.adds.push(theirs); noteActors(theirs) }
       continue
@@ -238,7 +245,7 @@ export function planInboxImport({ rows, base, items, mineOf, actorNames }) {
     const was = base[row.key] ?? mine  // no snapshot: the sheet wins
     const patch = {}
     // Only web addresses fit in a sheet: pictures stored in the diagram are left out of the comparison and kept as they are
-    const view = (field, v) => field === 'images' ? (v ?? []).filter(isWebUrl) : v
+    const view = (field, v) => field === 'images' ? (v ?? []).filter(isWebUrl) : field === 'dependum' ? !!v : v
     const result = (field, v) => field === 'images' ? [...(mine.images ?? []).filter(x => !isWebUrl(x)), ...v] : v
     for (const field of FIELDS) {
       const t = theirs[field], w = view(field, was[field]), m = view(field, mine[field])

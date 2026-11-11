@@ -77,7 +77,7 @@ const clearSlotOverrides = (links, nodeIds) => {
   return out
 }
 
-const snapshot = (s) => ({ nodes: s.nodes, links: s.links, actors: s.actors })
+const snapshot = (s) => ({ nodes: s.nodes, links: s.links, actors: s.actors, zones: s.zones })
 // Undo history of the models that aren't open (the open one's is `history`)
 const histories = {}
 
@@ -86,10 +86,10 @@ const histories = {}
 // The open model's data lives in the top-level nodes / links / actors; `models` holds the rest (its own
 // entry for the open one is stale until the next switch), so every component works unchanged.
 export const ROOT_MODEL = 'main'
-const emptyModel = (id, name, parent = null) => ({ id, name, parent, nodes: {}, links: {}, actors: {} })
+const emptyModel = (id, name, parent = null) => ({ id, name, parent, nodes: {}, links: {}, actors: {}, zones: {} })
 const withLive = (s) => ({
   ...s.models,
-  [s.activeModelId]: { ...s.models[s.activeModelId], nodes: s.nodes, links: s.links, actors: s.actors },
+  [s.activeModelId]: { ...s.models[s.activeModelId], nodes: s.nodes, links: s.links, actors: s.actors, zones: s.zones },
 })
 const rootOf = (models) => Object.values(models).find(m => !m.parent)?.id ?? Object.keys(models)[0]
 
@@ -150,12 +150,15 @@ function shareData(s) {
 }
 
 // An inbox item as it is now: once placed, its element on the graph holds the text and the extra information
-const DETAIL_FIELDS = ['description', 'relationType', 'relations', 'positive', 'negative', 'links', 'images', 'connected']
+// A dependum sits between actors and belongs to none: making an element one takes it out of its actors
+const dependumPatch = (on) => on ? { dependum: true, actorId: null, nestedActorIds: [] } : { dependum: false }
+
+const DETAIL_FIELDS =['description', 'relationType', 'relations', 'positive', 'negative', 'links', 'images', 'connected']
 const liveFields = (item, node) => {
   const f = fieldsOf(item)
   if (!node) return f
   const d = node.details ?? {}
-  return { ...f, text: node.label, ...Object.fromEntries(DETAIL_FIELDS.filter(k => k in d).map(k => [k, d[k]])) }
+  return { ...f, text: node.label, dependum: !!node.dependum, ...Object.fromEntries(DETAIL_FIELDS.filter(k => k in d).map(k => [k, d[k]])) }
 }
 
 // Opened from a share link (?view=user/gist): a read-only copy of someone's graph, nothing of it is saved in this browser
@@ -174,7 +177,7 @@ function loadProject(data) {
   }
   const active = models[activeModelId]
   return {
-    models, activeModelId, nodes: active.nodes, links: active.links, actors: active.actors,
+    models, activeModelId, nodes: active.nodes, links: active.links, actors: active.actors, zones: active.zones ?? {},
     inbox: Array.isArray(data.inbox) ? data.inbox : [], actorList: Array.isArray(data.actorList) ? data.actorList : [],
     share: data.share?.gistId ? data.share : null,
   }
@@ -232,7 +235,7 @@ const useStore = create((set, get) => ({
     history.restoring = true
     set({
       models, activeModelId: id,
-      nodes: models[id].nodes, links: models[id].links, actors: models[id].actors,
+      nodes: models[id].nodes, links: models[id].links, actors: models[id].actors, zones: models[id].zones ?? {}, hiddenZoneIds: [],
       selectedId: null, selectedType: null, selectedIds: [], selectedActorId: null,
       editingActorId: null, editingActorTag: null, focusNodeId: null, focusDeep: false, pathOn: false,
       pendingLink: null, connectSource: null, draggingNodeId: null, mode: 'select',
@@ -282,6 +285,53 @@ const useStore = create((set, get) => ({
   actors: {},
   nodes: {},
   links: {},
+
+  // ── Risk zones ───────────────────────────────────────────────────────────────
+  // A zone is a name; the elements that carry its id in `zoneIds` are what it marks. It is drawn as a blurred red area
+  // around them. Zones may overlap each other and actors, and an element can be in any number of them.
+  zones: {},                 // { id: { id, name } } of the open diagram
+  hiddenZoneIds: [],         // zones switched off in the left panel (view only)
+  toggleZoneHidden: (id) => set(s => ({ hiddenZoneIds: s.hiddenZoneIds.includes(id) ? s.hiddenZoneIds.filter(z => z !== id) : [...s.hiddenZoneIds, id] })),
+  setAllZonesHidden: (hidden) => set(s => ({ hiddenZoneIds: hidden ? Object.keys(s.zones) : [] })),
+  // Creates a zone if the name is new; returns its id either way
+  ensureZone: (raw) => {
+    const name = (raw ?? '').trim()
+    if (!name) return null
+    const existing = Object.values(get().zones).find(z => z.name === name)
+    if (existing) return existing.id
+    const id = crypto.randomUUID()
+    set(s => ({ zones: { ...s.zones, [id]: { id, name } } }))
+    return id
+  },
+  renameZone: (id, raw) => set(s => {
+    const name = (raw ?? '').trim()
+    const zone = s.zones[id]
+    if (!zone || !name || zone.name === name || Object.values(s.zones).some(z => z.id !== id && z.name === name)) return {}
+    return { zones: { ...s.zones, [id]: { ...zone, name } } }
+  }),
+  // Puts the elements in the zone (on) or takes them out of it (off); one undo step
+  setNodesInZone: (nodeIds, zoneId, on) => set(s => {
+    if (!s.zones[zoneId]) return {}
+    const nodes = { ...s.nodes }
+    let changed = false
+    for (const id of nodeIds) {
+      const n = nodes[id]
+      if (!n) continue
+      const cur = n.zoneIds ?? []
+      if (cur.includes(zoneId) === on) continue
+      nodes[id] = { ...n, zoneIds: on ? [...cur, zoneId] : cur.filter(z => z !== zoneId) }
+      changed = true
+    }
+    return changed ? { nodes } : {}
+  }),
+  // Removes the zone and takes it off every element
+  deleteZone: (id) => set(s => {
+    if (!s.zones[id]) return {}
+    const zones = { ...s.zones }
+    delete zones[id]
+    const nodes = Object.fromEntries(Object.entries(s.nodes).map(([k, n]) => [k, n.zoneIds?.includes(id) ? { ...n, zoneIds: n.zoneIds.filter(z => z !== id) } : n]))
+    return { zones, nodes, hiddenZoneIds: s.hiddenZoneIds.filter(z => z !== id) }
+  }),
 
   // ── Interaction state ────────────────────────────────────────────────────────
   // mode: 'select' | 'add-goal' | 'add-task' | 'add-softgoal' | 'add-resource' | 'connect'
@@ -486,7 +536,7 @@ const useStore = create((set, get) => ({
   setInboxFilter: (inboxFilter) => set({ inboxFilter }),
   addInboxItem: (item) => set(s => ({
     inbox: [...s.inbox, {
-      id: crypto.randomUUID(), num: Math.max(0, ...usedNumbers(s)) + 1, type: 'goal', text: '', actorName: '', relationType: '', relations: '', positive: '', negative: '',
+      id: crypto.randomUUID(), num: Math.max(0, ...usedNumbers(s)) + 1, type: 'goal', text: '', actorName: '', dependum: false, relationType: '', relations: '', positive: '', negative: '',
       description: '', links: [], images: [], connected: [], placedNodeId: null, ...item,
     }],
   })),
@@ -503,11 +553,11 @@ const useStore = create((set, get) => ({
   placeInboxItem: (itemId, x, y) => {
     const item = get().inbox.find(i => i.id === itemId)
     if (!item) return null
-    const chain = actorChainAt(get().nodes, x, y, actorNames(get().actors))
+    const chain = item.dependum ? [] : actorChainAt(get().nodes, x, y, actorNames(get().actors))  // a dependum belongs to no actor, wherever it is dropped
     const { relationType, relations, positive, negative, connected, actorName, description, links, images } = item
     const taken = Object.values(get().nodes).some(n => n.num === item.num)
     const num = item.num != null && !taken ? item.num : Math.max(0, ...Object.values(get().nodes).map(n => n.num ?? 0)) + 1
-    const id = get().addNode(item.type, x, y, { num, label: item.text, details: { description, relationType, relations, positive, negative, links, images, connected, suggestedActor: actorName } })
+    const id = get().addNode(item.type, x, y, { num, label: item.text, ...(item.dependum && { dependum: true }), details: { description, relationType, relations, positive, negative, links, images, connected, suggestedActor: actorName } })
     if (!id) return null
     if (chain.length) {
       const patch = { actorId: chain[0], nestedActorIds: chain.slice(1) }
@@ -548,7 +598,7 @@ const useStore = create((set, get) => ({
       const m = live[id]
       for (const n of Object.values(m.nodes)) {
         if (!ELEMENT_TYPES.includes(n.type) || placedIds.has(n.id)) continue
-        graphRows.push({ key: n.id, num: n.num, type: n.type, text: n.label, actorName: m.actors[n.actorId]?.name ?? '', diagram: m.name })
+        graphRows.push({ key: n.id, num: n.num, type: n.type, text: n.label, actorName: m.actors[n.actorId]?.name ?? '', dependum: !!n.dependum, diagram: m.name })
       }
     }
     const actorNames = [...s.actorList]
@@ -590,7 +640,7 @@ const useStore = create((set, get) => ({
       const details = { ...n.details }
       for (const k of ['relationType', 'relations', 'positive', 'negative', 'connected', 'description', 'links', 'images']) if (k in patch) details[k] = patch[k]
       if ('actorName' in patch) details.suggestedActor = patch.actorName
-      return { ...('text' in patch && { label: patch.text }), ...('type' in patch && { type: patch.type }), details }
+      return { ...('text' in patch && { label: patch.text }), ...('type' in patch && { type: patch.type }), ...('dependum' in patch && dependumPatch(patch.dependum)), details }
     }
     get().beginBatch()
     for (const fields of plan.adds) get().addInboxItem(fields)
@@ -665,6 +715,9 @@ const useStore = create((set, get) => ({
   updateNode: (id, updates) => set((s) => {
     const node = s.nodes[id]
     const merged = { ...node, ...updates }
+    // An element is a dependum or it has an actor, never both: whichever was set last wins
+    if (updates.dependum) { merged.actorId = null; merged.nestedActorIds = [] }
+    else if (updates.actorId && !('dependum' in updates)) merged.dependum = false
     if ('label' in updates || 'logo' in updates || 'type' in updates) {
       const { width, height } = computeNodeSize(merged.label, merged.type, merged.logo ? merged.logoAspect ?? 1 : 0)
       merged.width  = width
@@ -1023,7 +1076,7 @@ const useStore = create((set, get) => ({
   },
 
   clearDiagram: () => set({
-    actors: {}, nodes: {}, links: {},
+    actors: {}, nodes: {}, links: {}, zones: {}, hiddenZoneIds: [],
     selectedId: null, selectedType: null, selectedIds: [], selectedActorId: null,
     connectSource: null, pendingLink: null, mode: 'select', focusNodeId: null, focusDeep: false, pathOn: false,
   }),
@@ -1084,7 +1137,7 @@ function restore(from, to) {
 // Record the diagram before every change (once per batch)
 useStore.subscribe((s, prev) => {
   if (history.restoring) return
-  if (s.nodes === prev.nodes && s.links === prev.links && s.actors === prev.actors) return
+  if (s.nodes === prev.nodes && s.links === prev.links && s.actors === prev.actors && s.zones === prev.zones) return
   if (history.batch && history.batchRecorded) return
   if (history.batch) history.batchRecorded = true
   history.past.push(snapshot(prev))
@@ -1106,6 +1159,7 @@ if (viewTarget) {
     addNode: () => null, updateNode: noop, moveNode: noop, moveNodeGroup: noop, deleteNode: noop,
     updateLink: noop, reverseLink: noop, deleteLink: noop, confirmLink: noop,
     setConnectSource: noop, setPendingLink: noop, setMode: noop,
+    ensureZone: () => null, renameZone: noop, setNodesInZone: noop, deleteZone: noop,
     renameActor: noop, ungroupActor: noop, ensureActor: () => null, setActorLogo: noop, setActorLevel: noop, openActorEditor: noop,
     renameModel: noop, clearDiagram: noop, importDiagram: noop, importEdits: noop, undo: noop, redo: noop,
     placeInboxItem: () => null, applyInboxPlan: noop,

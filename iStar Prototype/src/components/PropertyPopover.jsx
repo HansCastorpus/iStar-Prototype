@@ -167,8 +167,26 @@ function NodeActorFields({ selected }) {
     )
   }
 
+  // A dependum belongs to no actor: turning it on takes the element out of its actors, and the actor boxes go away
+  const dependum = shared(n => !!n.dependum)
+  const canBeDependum = selected.every(n => n.type !== 'subactor')
+  const setDependum = (on) => {
+    const { beginBatch, endBatch } = useStore.getState()
+    beginBatch()
+    for (const n of selected) updateNode(n.id, { dependum: on })
+    endBatch()
+  }
+
   return (
     <>
+      {canBeDependum && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontFamily: 'Roboto, sans-serif', cursor: 'pointer' }}>
+          <input type="checkbox" checked={dependum === true} ref={el => { if (el) el.indeterminate = dependum === undefined }}
+            onChange={e => setDependum(e.target.checked)} />
+          {t('popup.dependum')}
+        </label>
+      )}
+      {dependum === true ? <div style={{ ...blockedStyle, color: 'var(--text-3)' }}>{t('popup.dependumHint')}</div> : <>
       {field('p', 'popup.primaryActor', undefined, 'popup.existingPrimary', primary, primaryPatch, primaryOptions)}
       {allHavePrimary && Array.from({ length: count }, (_, i) => (
         <div key={i} style={{ display: 'contents' }}>
@@ -180,6 +198,61 @@ function NodeActorFields({ selected }) {
           + {t('popup.addNested')}
         </button>
       )}
+      </>}
+    </>
+  )
+}
+
+// Risk zones of the selected element(s): a chip per zone of the diagram, pressed to put every selected element in it or take
+// them out, and a box that makes a new zone and puts them in it. A zone is drawn as a soft red area around its elements.
+function ZoneFields({ selected }) {
+  const t = useT()
+  const zones = useStore(s => s.zones)
+  const setNodesInZone = useStore(s => s.setNodesInZone)
+  const ensureZone = useStore(s => s.ensureZone)
+  const [text, setText] = useState('')
+  const ids = selected.map(n => n.id)
+  const list = Object.values(zones).sort((a, b) => a.name.localeCompare(b.name))
+  const stateOf = (zoneId) => {
+    const n = selected.filter(x => x.zoneIds?.includes(zoneId)).length
+    return n === 0 ? 'none' : n === selected.length ? 'all' : 'some'
+  }
+  const press = (zoneId) => {
+    const { beginBatch, endBatch } = useStore.getState()
+    beginBatch()
+    setNodesInZone(ids, zoneId, stateOf(zoneId) !== 'all')
+    endBatch()
+  }
+  const add = (e) => {
+    e.preventDefault()
+    const { beginBatch, endBatch } = useStore.getState()
+    beginBatch()  // creating the zone and putting the elements in it is one undo step
+    const id = ensureZone(text)
+    if (id) { setNodesInZone(ids, id, true); setText('') }
+    endBatch()
+  }
+  return (
+    <>
+      <label style={labelStyle}>{t('popup.zones')}</label>
+      {list.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {list.map(z => {
+            const st = stateOf(z.id)
+            return (
+              <button key={z.id} type="button" onClick={() => press(z.id)} title={st === 'some' ? t('popup.zoneSome') : z.name}
+                style={{
+                  fontSize: 12, fontFamily: 'Roboto, sans-serif', padding: '2px 8px', cursor: 'pointer', borderRadius: 10,
+                  color: st === 'all' ? '#fff' : 'var(--text-1)', background: st === 'all' ? '#e11d48' : st === 'some' ? 'rgba(225, 29, 72, 0.2)' : 'var(--node-fill)',
+                  border: '1px solid #e11d48',
+                }}>{z.name}</button>
+            )
+          })}
+        </div>
+      )}
+      <form onSubmit={add}>
+        <input value={text} onChange={e => setText(e.target.value)} placeholder={t('popup.zonePlaceholder')} aria-label={t('popup.zoneAdd')}
+          style={inputStyle} />
+      </form>
     </>
   )
 }
@@ -237,6 +310,7 @@ export default function PropertyPopover({ linkPaths = {} }) {
         </div>
         {!collapsed && <>
         <NodeActorFields key={selectedIds.join(',')} selected={selectedNodes} />
+        {selectedNodes.every(n => n.type !== 'subactor') && <ZoneFields selected={selectedNodes} />}
         </>}
     </>)
   }
@@ -350,6 +424,7 @@ export default function PropertyPopover({ linkPaths = {} }) {
       </>}
 
       <NodeActorFields key={node.id} selected={[node]} />
+      {!isSub && <ZoneFields selected={[node]} />}
 
       {!isSub && <button onClick={() => setShowDetails(true)} style={{ ...btnStyle('var(--text-1)'), marginTop: 4 }}>{t('details.open')} ›</button>}
       {showDetails && <DetailsEditor nodeId={node.id} onClose={() => setShowDetails(false)} />}

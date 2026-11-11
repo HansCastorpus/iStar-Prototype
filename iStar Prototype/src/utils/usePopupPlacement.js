@@ -53,7 +53,8 @@ export function diagramObstacles({ nodes, linkPaths, transform, weights = {} }) 
 //   anchor:       screen rect the popup belongs to (or null)
 //   getObstacles: () => obstacles, only called while auto-placing
 //   resetKey:     a change drops any manual (dragged) position
-export function usePopupPlacement({ id, avoid = [], anchor, getObstacles, resetKey }) {
+//   centered:     sit as near the middle of the view as possible without covering the anchor (other things may be covered)
+export function usePopupPlacement({ id, avoid = [], anchor, getObstacles, resetKey, centered = false }) {
   // Offset from the anchor set by dragging; overrides auto placement. Kept relative to the anchor so a
   // dragged popup travels with its element when the diagram is panned or zoomed.
   const [pinned, setPinned] = useState(null)
@@ -86,8 +87,8 @@ export function usePopupPlacement({ id, avoid = [], anchor, getObstacles, resetK
   const setRect = usePopupRects(s => s.setRect)
 
   const pos = anchor && (pinned ? { x: anchor.x + pinned.dx, y: anchor.y + pinned.dy } : placePopup({
-    anchor, size, viewport,
-    obstacles: [
+    anchor, size, viewport, centered,
+    obstacles: centered ? [] : [
       ...getObstacles(),
       ...otherRects.filter(Boolean).map(r => ({ ...inflate(r, 8), weight: POPUP_WEIGHT })),
     ],
