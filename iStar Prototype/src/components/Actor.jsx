@@ -5,6 +5,8 @@ import {
   HEADER_H, HEADER_FONT, HEADER_LOGO, HEADER_GAP, actorTintVar,
 } from '../utils/actorTree.js'
 import { focusView } from '../utils/dependencies.js'
+import { computeActorCrossings } from '../utils/crossings.js'
+import { GAP, DIAGONAL_GAP, SHADOW_REACH, SHADOW_LAYERS, squareness, segment, linkLooks, parseLooks } from '../utils/linkEffects.js'
 
 function buildHullPath(verts, r = 15) {
   const n = verts.length
@@ -48,7 +50,7 @@ function backgroundShade({ depth, levels }, tint) {
 
 // extras / offset come from barLayout (actorBars.js): how much wider the name bar is made and how far the name
 // slides along it so that no link crosses the name
-export default function Actor({ actor, extras, offset = 0 }) {
+export default function Actor({ actor, extras, offset = 0, linkPaths }) {
   const nodes = useStore(s => s.nodes)
   const actors = useStore(s => s.actors)
   const names = useMemo(() => actorNames(actors), [actors])
@@ -72,7 +74,7 @@ export default function Actor({ actor, extras, offset = 0 }) {
 
   // The outline, and the name bar at its top: its box (x1..x2 across the whole outline, clipped to it when drawn) and
   // the middle of the bar at the height of the logo and name, where they are centred
-  const { d, memberIds, shade, bar } = useMemo(() => {
+  const { d, verts, memberIds, shade, bar } = useMemo(() => {
     const layout = actorLayout(nodes, names, extras)
     const members = layout.members[actor.id] ?? []
     if (!members.length) return {}
@@ -83,11 +85,16 @@ export default function Actor({ actor, extras, offset = 0 }) {
     const { lo, hi } = barSpan(verts, topY)
     return {
       d: buildHullPath(verts, 15),
+      verts,
       shade: layout.shade[actor.id],
       memberIds: members.map(m => m.id),
       bar: { x1: Math.min(...xs), x2: Math.max(...xs), y1: topY, y2: topY + HEADER_H, cx: (lo + hi) / 2, lo, hi },
     }
   }, [nodes, names, extras, actor.id])
+
+  // Where links pass over this actor's outline: a plain link makes a gap in it, a highlighted one casts a shadow on it
+  const crossings = useMemo(() => verts && linkPaths ? computeActorCrossings(verts, linkPaths) : [], [verts, linkPaths])
+  const crossLooks = useStore(s => linkLooks(s, [...new Set(crossings.map(c => c.linkId))]))
 
   // While this actor's edit popup is open, report where its name bar is so the popup can anchor to it
   const tagX = bar?.lo, tagY = bar?.y1, tagW = bar && bar.hi - bar.lo
@@ -96,6 +103,13 @@ export default function Actor({ actor, extras, offset = 0 }) {
   }, [isEditing, isHidden, tagX, tagY, tagW]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!d || isHidden) return null
+
+  const looks = parseLooks(crossLooks)
+  const gaps = crossings.filter(c => looks[c.linkId] && !looks[c.linkId].hidden && !looks[c.linkId].active)
+  const shadows = crossings.filter(c => looks[c.linkId]?.active)
+  const gapMaskId = `actor-gap-${actor.id}`, shadowMaskId = `actor-shadow-${actor.id}`
+  const xs = verts.map(v => v.x), ys = verts.map(v => v.y)
+  const bounds = { x: Math.min(...xs) - 60, y: Math.min(...ys) - 60, width: Math.max(...xs) - Math.min(...xs) + 120, height: Math.max(...ys) - Math.min(...ys) + 120 }
 
   const name = actor.name || ''
   const logoAspect = actor.logo ? actor.logoAspect ?? 1 : 0
@@ -210,7 +224,23 @@ export default function Actor({ actor, extras, offset = 0 }) {
       onPointerUp={onGroupPointerUp}
       onPointerCancel={onGroupPointerUp}
     >
-      <defs><clipPath id={clipId}><path d={d} /></clipPath></defs>
+      <defs>
+        <clipPath id={clipId}><path d={d} /></clipPath>
+        {gaps.length > 0 && (
+          <mask id={gapMaskId} maskUnits="userSpaceOnUse" {...bounds}>
+            <rect {...bounds} fill="white" />
+            {gaps.map((c, i) => (
+              <path key={i} d={segment(c, c.otherDir, looks[c.linkId].sw / 2 / squareness(c) + 1)} stroke="black" fill="none"
+                strokeWidth={looks[c.linkId].sw + (GAP + DIAGONAL_GAP * (1 - squareness(c))) * 2} />
+            ))}
+          </mask>
+        )}
+        {shadows.length > 0 && (
+          <mask id={shadowMaskId} maskUnits="userSpaceOnUse" {...bounds}>
+            <path d={d} fill="none" stroke="white" style={{ strokeWidth: hullStrokeW }} />
+          </mask>
+        )}
+      </defs>
       {/* Light grey background. With nesting it gets darker towards the primary actor: the deepest
           nested actor is the lightest, each level out is darker (see backgroundShade) */}
       <path d={d} stroke="none" style={{ fill: bg, pointerEvents: 'none' }} />
@@ -228,10 +258,20 @@ export default function Actor({ actor, extras, offset = 0 }) {
           onPointerDown={e => onPointerDown(e, true)}
         />
         <line x1={bar.x1} x2={bar.x2} y1={bar.y2} y2={bar.y2}
-          stroke={hullStroke} style={{ strokeWidth: hullStrokeW, pointerEvents: 'none' }} />
+          stroke={hullStroke} style={{ strokeWidth: hullStrokeW, pointerEvents: 'none' }}
+          mask={gaps.length > 0 ? `url(#${gapMaskId})` : undefined} />
       </g>
       <path d={d} fill="none" stroke={hullStroke}
-        style={{ strokeWidth: hullStrokeW, strokeDasharray: isHighlighted ? 'none' : 'var(--actor-dash, 6 3)', pointerEvents: 'none' }} />
+        style={{ strokeWidth: hullStrokeW, strokeDasharray: isHighlighted ? 'none' : 'var(--actor-dash, 6 3)', pointerEvents: 'none' }}
+        mask={gaps.length > 0 ? `url(#${gapMaskId})` : undefined} />
+      {shadows.length > 0 && (
+        <g mask={`url(#${shadowMaskId})`} style={{ pointerEvents: 'none' }}>
+          {shadows.map((c, i) => SHADOW_LAYERS.map(({ grow, opacity }) => (
+            <path key={`${i}-${grow}`} d={segment(c, c.otherDir, SHADOW_REACH)} stroke="black" strokeOpacity={opacity} fill="none"
+              strokeWidth={looks[c.linkId].sw + grow * 2} />
+          )))}
+        </g>
+      )}
       {/* Logo on the left of the name; its shorter side is HEADER_LOGO */}
       {logo && (
         <image

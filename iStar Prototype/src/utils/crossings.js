@@ -41,3 +41,24 @@ export function computeCrossings(links, paths) {
   }
   return result
 }
+
+// Where links cross the outline of an actor (a polygon): [{ linkId, x, y, selfDir, otherDir }].
+// selfDir runs along the outline's edge, otherDir along the link, as in computeCrossings. Links are drawn on top of actors.
+export function computeActorCrossings(verts, paths) {
+  const out = []
+  for (const [linkId, pts] of Object.entries(paths)) {
+    if (!pts || pts.length < 2) continue
+    const nearEnd = (x, y) => {
+      const first = pts[0], last = pts[pts.length - 1]
+      return Math.hypot(x - first.x, y - first.y) < END_CLEARANCE || Math.hypot(x - last.x, y - last.y) < END_CLEARANCE
+    }
+    for (let a = 0; a < pts.length - 1; a++) {
+      for (let e = 0; e < verts.length; e++) {
+        const c = segmentCrossing(verts[e], verts[(e + 1) % verts.length], pts[a], pts[a + 1])
+        if (!c || nearEnd(c.x, c.y)) continue
+        out.push({ linkId, x: c.x, y: c.y, selfDir: c.dirA, otherDir: c.dirB })
+      }
+    }
+  }
+  return out
+}

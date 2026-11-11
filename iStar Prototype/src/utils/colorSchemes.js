@@ -24,7 +24,10 @@ const tagVars = (prefix, theme) => ({
   ...Object.fromEntries(Object.entries(LINK_TAG_FILL).flatMap(([t, c]) =>
     [[`${prefix}-link-${t}`, `var(--hl-${c})`], [`${prefix}-text-link-${t}`, WHITE_TAGS.includes(t) ? '#fff' : LINK_TAG_TEXT[theme][t]]])),
 })
-const primaryTags = (theme) => ({
+// Actor colours, in order (the 9th actor starts over)
+const ACTOR_COLORS = ['#6fb4db', '#ea8b77', '#ffce2f', '#a9d049', '#a4a487', '#5f8393', '#82bc79', '#fec988']
+const actorColors = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`--actor-tint-${i}`, ACTOR_COLORS[i % ACTOR_COLORS.length]]))
+const primaryTags = (theme, extra = {}) => ({
   '--fw': '500',   // medium weight for all the text
   '--hl-goal': 'var(--node-fill)', '--hl-task': 'var(--node-fill)', '--hl-softgoal': 'var(--node-fill)', '--hl-resource': 'var(--node-fill)', '--hl-subactor': 'var(--node-fill)',
   '--node-text-hl': 'var(--node-text)',
@@ -32,9 +35,11 @@ const primaryTags = (theme) => ({
   ...Object.fromEntries(Object.entries(tagVars('--tag', theme)).filter(([v]) => !v.includes('-link-'))),
   // actors: very light grey body; when highlighted, the outline takes the actor's own colour
   '--actor-bg': 'color-mix(in srgb, var(--node-fill) 96%, black)', '--actor-bg-light': 'color-mix(in srgb, var(--node-fill) 96%, black)', '--actor-bg-deep': 'color-mix(in srgb, var(--node-fill) 96%, black)',
+  ...actorColors,
   '--actor-tint-pct': '0%', '--actor-stroke-tint': '100%', '--actor-hl-sw': '6', '--actor-bar-tint': '0%', '--actor-dash': 'none', '--actor-dash-legend': 'none',   // unhighlighted actors: a full outline, not dashed
  
-  '--node-stroke': '#000', '--hl-stroke': '#000', '--link-line': '#000',   // black outlines on every element, in both themes
+  '--node-stroke': '#000', '--hl-stroke': '#000', '--link-line': '#000',
+  ...extra,   // black outlines on every element, in both themes
 })
 
 export const COLOR_SCHEMES = [
@@ -49,6 +54,13 @@ export const COLOR_SCHEMES = [
     name: { en: 'Primary tags', fr: 'Pastilles primaires' },
     light: primaryTags('light'),
     dark: primaryTags('dark'),
+  },
+  {
+    // the same, and a highlighted actor's body is filled with a light version of its outline colour
+    id: 'primary-fill',
+    name: { en: 'Primary tags, tinted actors', fr: 'Pastilles primaires, acteurs teintés' },
+    light: primaryTags('light', { '--actor-tint-pct': '28%' }),
+    dark: primaryTags('dark', { '--actor-tint-pct': '28%' }),
   },
 ]
 

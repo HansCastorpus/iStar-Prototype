@@ -7,6 +7,7 @@ import { getSideForPoint } from '../utils/ports.js'
 import { GRID } from '../utils/grid.js'
 import { pointsToPath, getPointAtT, projectOntoPath } from '../utils/routing.js'
 import { HIGHLIGHT_STYLES } from '../utils/linkStyles.js'
+import { GAP, DIAGONAL_GAP, SHADOW_REACH, SHADOW_LAYERS, BASE_SW, SELECTED_SW, squareness, segment, linkLooks, parseLooks } from '../utils/linkEffects.js'
 import { ARROW_H, ICON_GAP, ICON_R, LARGE_ICON_R, ICON_STUB, TRIM, TRIM_LARGE, TRIM_DOUBLE, TRIM_DOUBLE_L, TRIM_NEEDED, SOURCE_DECORATED, arrowPolygon, iconPos } from '../utils/linkShapes.js'
 import { TargetIcon, SourceIcon } from './LinkIcons.jsx'
 
@@ -56,17 +57,6 @@ function trimStart(points, amount) {
   return [{ x: p1.x + dx * amount, y: p1.y + dy * amount }, ...points.slice(1)]
 }
 
-// Where a link crosses another, the one underneath breaks off to let the top one through; when the top
-// one is highlighted it casts a shadow onto the one underneath instead.
-const GAP = 5             // clear space either side of a top link that is not highlighted (at a right-angle crossing)
-const DIAGONAL_GAP = 4    // extra clear space when the two links cross at a shallow angle, so they stay readable
-// How square-on a crossing is: 1 = perpendicular, → 0 = the links run nearly alongside each other
-const squareness = (c) => Math.max(0.3, Math.abs(c.selfDir.x * c.otherDir.y - c.selfDir.y * c.otherDir.x))
-const SHADOW_REACH = 14   // how far along the top link its shadow extends from the crossing
-const SHADOW_LAYERS = [{ grow: 12, opacity: 0.05 }, { grow: 9, opacity: 0.07 }, { grow: 6, opacity: 0.1 }, { grow: 3, opacity: 0.14 }]
-const BASE_SW = 1.5
-const SELECTED_SW = 2
-
 export default function Link({ link, points, andBar, allPaths = {}, crossings = [] }) {
   const labelRef   = useRef(null)
   const pathRef    = useRef(null)
@@ -82,19 +72,8 @@ export default function Link({ link, points, andBar, allPaths = {}, crossings = 
   const colorTags      = useStore(s => s.colorTags)
   const tr             = useT()  // translate (t is the tag's position along the link)
 
-  // What each crossing link looks like right now: 'h' hidden, 'n<width>' plain, 'a<width>' highlighted
-  const otherLooks = useStore(s => {
-    if (!crossings.length) return ''
-    const view = focusView(s)
-    return [...new Set(crossings.map(c => c.otherId))].map(id => {
-      const o = s.links[id]
-      if (!o || !s.isolateTypes.includes(o.type)) return `${id}:h`
-      const active = (s.highlightTypes.length > 0 && s.highlightTypes.includes(o.type)) ||
-        !!view?.links.has(id)
-      const sw = active ? HIGHLIGHT_STYLES[o.type]?.sw ?? BASE_SW : s.selectedId === id ? SELECTED_SW : BASE_SW
-      return `${id}:${active ? 'a' : 'n'}${sw}`
-    }).join('|')
-  })
+  // What each crossing link looks like right now (see linkLooks)
+  const otherLooks = useStore(s => linkLooks(s, [...new Set(crossings.map(c => c.otherId))]))
 
   const isHidden   = !isolateTypes.includes(link.type)
   // A link is part of the view (dependency view or path) when it is in its link set
@@ -128,10 +107,7 @@ export default function Link({ link, points, andBar, allPaths = {}, crossings = 
   const sw             = hlStyle?.sw    ?? (isSelected ? SELECTED_SW : BASE_SW)
 
   // Gaps in this link where a plain link passes over it; shadows from this link onto ones beneath it
-  const looks = Object.fromEntries(otherLooks.split('|').filter(Boolean).map(e => {
-    const [id, v] = e.split(':')
-    return [id, { hidden: v === 'h', active: v[0] === 'a', sw: parseFloat(v.slice(1)) }]
-  }))
+  const looks = parseLooks(otherLooks)
   const gaps = crossings.filter(c => c.above && looks[c.otherId] && !looks[c.otherId].hidden && !looks[c.otherId].active)
   const shadows = isFilterActive ? crossings.filter(c => !c.above && looks[c.otherId] && !looks[c.otherId].hidden) : []
   const gapMaskId = `gap-${link.id}`, shadowMaskId = `shadow-${link.id}`
@@ -140,9 +116,6 @@ export default function Link({ link, points, andBar, allPaths = {}, crossings = 
     const m = 60
     return { x: Math.min(...xs) - m, y: Math.min(...ys) - m, width: Math.max(...xs) - Math.min(...xs) + m * 2, height: Math.max(...ys) - Math.min(...ys) + m * 2 }
   })()
-  const segment = (c, dir, reach) =>
-    `M${c.x - dir.x * reach},${c.y - dir.y * reach} L${c.x + dir.x * reach},${c.y + dir.y * reach}`
-
   const clientToWorld = (cx, cy) => {
     const rect = labelRef.current.ownerSVGElement.getBoundingClientRect()
     const tr   = transformRef.current

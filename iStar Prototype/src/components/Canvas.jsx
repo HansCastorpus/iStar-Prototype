@@ -288,7 +288,7 @@ export default function Canvas() {
             const { shade } = actorLayout(nodes)
             return Object.values(actors).sort((a, b) => (shade[a.id]?.depth ?? 0) - (shade[b.id]?.depth ?? 0))
           })().map((actor) => (
-            <Actor key={actor.id} actor={actor} extras={bars.extras} offset={bars.offsets[actor.id] ?? 0} />
+            <Actor key={actor.id} actor={actor} extras={bars.extras} offset={bars.offsets[actor.id] ?? 0} linkPaths={linkPaths} />
           ))}
 
           {/* Risk zones: soft red areas around the elements marked with them, above the actors and below the links */}
