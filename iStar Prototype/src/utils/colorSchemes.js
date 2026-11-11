@@ -3,7 +3,7 @@
 // the CSS variables it overrides (anything left out keeps the stylesheet's value in src/index.css).
 //   elements: --hl-goal --hl-task --hl-softgoal --hl-resource --hl-subactor   (fill of a highlighted element)
 //   actors:   --actor-tint-0 … --actor-tint-11 (one per actor, in order)  --actor-bg --actor-bg-light --actor-bg-deep
-// 'default' overrides nothing: it is the current look.
+// 'default' (shown as Variant) is the original look.
 
 // "Primary tags": elements stay white and only the tag on the bottom edge (GOAL, TASK…) takes the colour when the element is
 // highlighted; every link's label is filled with its link colour. --tag-* is the fill, --tag-text-* the text on it.
@@ -42,12 +42,17 @@ const primaryTags = (theme, extra = {}) => ({
   ...extra,   // black outlines on every element, in both themes
 })
 
+// Tags filled with the element's own highlight colour
+const elementColoredTags = () => Object.fromEntries(['goal', 'task', 'softgoal', 'resource'].flatMap(t =>
+  ['--tag', '--ctag'].flatMap(p => [[`${p}-${t}`, `var(--hl-${t})`], [`${p}-text-${t}`, 'var(--node-text-hl)']])))
+
 export const COLOR_SCHEMES = [
   {
     id: 'default',
-    name: { en: 'Current', fr: 'Actuel' },
-    light: {},
-    dark: {},
+    name: { en: 'Variant', fr: 'Variante' },
+    // the original look; the tags of the elements take the colour of the element itself (the Color tags button too)
+    light: elementColoredTags(),
+    dark: elementColoredTags(),
   },
   {
     id: 'primary',
