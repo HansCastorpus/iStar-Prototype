@@ -8,6 +8,7 @@ import { DependenciesCard, ActorsCard, ZonesCard } from './components/FilterPane
 import { collapseBtn } from './components/popupStyles.js'
 import useStore from './store/useStore.js'
 import { useT } from './i18n.js'
+import { applyColorScheme } from './utils/colorSchemes.js'
 
 // The logo container and the toolbar / tab bar to its right are separated by a diagonal: it leaves the logo
 // container's top-right corner and runs down and to the right, so the tabs (lower) start further right than the
@@ -56,6 +57,9 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light')
   }, [darkMode])
+
+  const colorScheme = useStore(s => s.colorScheme)
+  useEffect(() => { applyColorScheme(colorScheme, darkMode) }, [colorScheme, darkMode])
 
   // Load the saved project once (not per diagram: the canvas is remounted when another diagram opens).
   // Opened from a share link, the shared graph is loaded instead and the saved project is left alone.

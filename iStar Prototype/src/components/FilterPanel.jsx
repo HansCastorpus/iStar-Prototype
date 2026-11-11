@@ -8,7 +8,7 @@ import { useT } from '../i18n.js'
 import { collapseBtn } from './popupStyles.js'
 import { actorLayout, actorTintVar } from '../utils/actorTree.js'
 
-const NODE_TYPES = ['goal', 'task', 'softgoal', 'resource', 'subactor']
+const NODE_TYPES = ['goal', 'softgoal', 'task', 'resource', 'subactor']
 const LINK_TYPES = ['depends-on', 'or', 'xor', 'and', 'help', 'hurt', 'make', 'break', 'needed-by', 'part-of']
 
 // Each header column holds one toggle button that is as wide as the longer of its two labels in the current language.
@@ -37,7 +37,7 @@ function useColumns() {
   const t = useT()
   return useMemo(() => {
     const widest = (keys) => Math.max(...keys.map(k => buttonTextW(t(k)))) + BTN_CHROME
-    const label = widest(['filter.showTags', 'filter.hideTags']) + 16  // the name column keeps its original width
+    const label = widest(['filter.showTags', 'filter.hideTags', 'filter.colorTags', 'filter.plainTags']) + 16  // the name column keeps its original width
     const i = widest(['filter.showAll', 'filter.hideAll'])
     const h = widest(['filter.highlightAll', 'filter.clearAll'])
     const iW = (legend) => legend ? Math.max(i, LEGEND_W + 2 * CELL_PAD) : i
@@ -66,12 +66,14 @@ export default function FilterPanel() {
   const legendOpen   = useStore(s => s.legendOpen)
   const hideTags     = useStore(s => s.hideTags)
   const setHideTags    = useStore(s => s.setHideTags)
+  const colorTags    = useStore(s => s.colorTags)
+  const setColorTags = useStore(s => s.setColorTags)
 
 
 
   const [filterOpen, setFilterOpen] = useState(true)
   // Kept here (not in Section) so the choices survive the whole panel being minimised
-  const [sectionOpen, setSectionOpen] = useState({ elements: true, links: true })
+  const [sectionOpen, setSectionOpen] = useState({ elements: true, links: true, actors: true })
   const sectionProps = (key) => ({ open: sectionOpen[key], onToggle: () => setSectionOpen(o => ({ ...o, [key]: !o[key] })) })
 
   // Track whether the panel's content is taller than the panel (i.e. a scrollbar is showing)
@@ -156,9 +158,12 @@ export default function FilterPanel() {
         {/* Column headers */}
         <div style={{ display: 'flex', alignItems: 'flex-end' }}>
           {/* One toggle per column: dark while on (labelled with what a click undoes), light while off */}
-          <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
             <button onClick={() => setHideTags(!hideTags)} className="tbtn" data-on={!hideTags} style={filterBtnStyle}>
               {t(hideTags ? 'filter.showTags' : 'filter.hideTags')}
+            </button>
+            <button onClick={() => setColorTags(!colorTags)} className="tbtn" data-on={colorTags} disabled={hideTags} style={filterBtnStyle}>
+              {t(colorTags ? 'filter.plainTags' : 'filter.colorTags')}
             </button>
           </div>
           <div style={{ ...colI(legendOpen), ...cellColumn, display: 'flex' }}>
@@ -178,6 +183,10 @@ export default function FilterPanel() {
           onToggleH={toggleHighlightType} onToggleI={toggleIsolateType} />
 
         <Section label={t('filter.links')} types={typesFor(language, LINK_TYPES)} legend={legendOpen} {...sectionProps('links')}
+          highlightTypes={highlightTypes} isolateTypes={isolateTypes}
+          onToggleH={toggleHighlightType} onToggleI={toggleIsolateType} />
+
+        <Section label={t('filter.actors')} types={['actor']} legend={legendOpen} {...sectionProps('actors')}
           highlightTypes={highlightTypes} isolateTypes={isolateTypes}
           onToggleH={toggleHighlightType} onToggleI={toggleIsolateType} />
 

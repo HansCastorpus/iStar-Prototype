@@ -36,14 +36,14 @@ function buildHullPath(verts, r = 15) {
 // level steps by 75%; deeper trees spread up to a full 100% over their levels.
 const SHADE_STEP = 75
 // A highlighted actor also leans towards its own colour (tint), so neighbouring actors are told apart at a glance.
-const TINT_PCT = 30
+const TINT_PCT = 'var(--actor-tint-pct, 30%)'   // a colour set can set it to 0% (no tint in the body)
 function backgroundShade({ depth, levels }, tint) {
   let base = 'var(--actor-bg)'
   if (levels) {
     const pct = ((levels - depth) / levels) * Math.min(100, SHADE_STEP * levels)
     base = `color-mix(in srgb, var(--actor-bg-deep) ${pct}%, var(--actor-bg-light))`
   }
-  return tint ? `color-mix(in srgb, ${tint} ${TINT_PCT}%, ${base})` : base
+  return tint ? `color-mix(in srgb, ${tint} ${TINT_PCT}, ${base})` : base
 }
 
 // extras / offset come from barLayout (actorBars.js): how much wider the name bar is made and how far the name
@@ -199,8 +199,9 @@ export default function Actor({ actor, extras, offset = 0 }) {
   // Highlighted (incl. selected): solid, thicker outline and a tinted body; the name bar keeps its plain fill
   const tint = actorTintVar(actors, actor.id)
   const bg = backgroundShade(shade, isHighlighted ? tint : null)
-  const hullStroke = isHighlighted ? 'var(--node-stroke)' : 'var(--text-3)'
-  const hullStrokeW = isHighlighted ? 2 : 1
+  const hullStroke = isHighlighted ? `color-mix(in srgb, ${tint} var(--actor-stroke-tint, 0%), var(--node-stroke))` : 'var(--text-3)'  // a colour set can make the outline the actor's own colour
+  const hullStrokeW = isHighlighted ? 'var(--actor-hl-sw, 2)' : 1  // a colour set can thicken the highlight (set through style: CSS variables don't work in the attribute)
+  const barFill = isHighlighted ? `color-mix(in srgb, ${tint} var(--actor-bar-tint, 0%), var(--node-fill))` : 'var(--node-fill)'
 
   return (
     <g ref={gRef}
@@ -223,14 +224,14 @@ export default function Actor({ actor, extras, offset = 0 }) {
       <g clipPath={`url(#${clipId})`}>
         <rect
           x={bar.x1} y={bar.y1} width={bar.x2 - bar.x1} height={HEADER_H}
-          fill="var(--node-fill)" style={{ cursor: 'pointer' }}
+          fill={barFill} style={{ cursor: 'pointer' }}
           onPointerDown={e => onPointerDown(e, true)}
         />
         <line x1={bar.x1} x2={bar.x2} y1={bar.y2} y2={bar.y2}
-          stroke={hullStroke} strokeWidth={hullStrokeW} style={{ pointerEvents: 'none' }} />
+          stroke={hullStroke} style={{ strokeWidth: hullStrokeW, pointerEvents: 'none' }} />
       </g>
-      <path d={d} fill="none" stroke={hullStroke} strokeWidth={hullStrokeW}
-        strokeDasharray={isHighlighted ? undefined : '6 3'} style={{ pointerEvents: 'none' }} />
+      <path d={d} fill="none" stroke={hullStroke}
+        style={{ strokeWidth: hullStrokeW, strokeDasharray: isHighlighted ? 'none' : 'var(--actor-dash, 6 3)', pointerEvents: 'none' }} />
       {/* Logo on the left of the name; its shorter side is HEADER_LOGO */}
       {logo && (
         <image

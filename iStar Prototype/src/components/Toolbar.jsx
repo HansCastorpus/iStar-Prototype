@@ -5,6 +5,7 @@ import { useT, LANGS, STRINGS } from '../i18n.js'
 import SharePopup from './SharePopup.jsx'
 import { shareLink } from '../utils/share.js'
 import { typesFor, LINK_TYPES } from '../utils/language.js'
+import { COLOR_SCHEMES, schemeSwatches } from '../utils/colorSchemes.js'
 
 const MODES = [
   { id: 'select',         label: 'toolbar.select' },
@@ -325,6 +326,8 @@ export default function Toolbar({ inset = 0 }) {
   const { mode, setMode, exportDiagram, exportInboxTemplate, importEdits, importDiagram, clearDiagram, exportAsImage, darkMode, toggleDarkMode } = useStore()
   const lang = useStore(s => s.lang)
   const setLang = useStore(s => s.setLang)
+  const colorScheme = useStore(s => s.colorScheme)
+  const setColorScheme = useStore(s => s.setColorScheme)
   const viewer = useStore(s => s.viewer)  // opened from a share link: only the menus that make sense for looking at a graph
   const diagramName = useStore(s => s.models[s.activeModelId]?.name ?? '')  // the viewer shows it here, at the right of the header
   const language = useStore(s => s.language)
@@ -530,6 +533,21 @@ export default function Toolbar({ inset = 0 }) {
           <MenuLabel>{t('toolbar.theme')}</MenuLabel>
           <MenuItem checked={!darkMode} onClick={() => { if (darkMode) toggleDarkMode(); close() }}>{t('toolbar.themeLight')}</MenuItem>
           <MenuItem checked={darkMode} onClick={() => { if (!darkMode) toggleDarkMode(); close() }}>{t('toolbar.themeDark')}</MenuItem>
+          <MenuDivider />
+          <MenuLabel>{t('toolbar.colors')}</MenuLabel>
+          {COLOR_SCHEMES.map(sc => {
+            const sw = schemeSwatches(sc, darkMode)
+            return (
+              <MenuItem key={sc.id} checked={colorScheme === sc.id} onClick={() => { setColorScheme(sc.id); close() }}>
+                <span>{sc.name[lang] ?? sc.name.en}</span>
+                <span aria-hidden style={{ marginLeft: 'auto', display: 'flex', gap: 3, alignItems: 'center' }}>
+                  {sw.els.map((c, i) => <span key={i} style={{ width: 12, height: 12, borderRadius: 3, background: c, border: '1px solid var(--border-md)' }} />)}
+                  <span style={{ width: 6 }} />
+                  {sw.actors.map((c, i) => <span key={i} style={{ width: 12, height: 12, borderRadius: 6, background: c, border: '1px solid var(--border-md)' }} />)}
+                </span>
+              </MenuItem>
+            )
+          })}
           <MenuDivider />
           <MenuLabel>{t('toolbar.view')}</MenuLabel>
           <MenuItem checked={showGrid} onClick={() => setViewAid('showGrid', !showGrid)}>{t('toolbar.showGrid')}</MenuItem>

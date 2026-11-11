@@ -121,7 +121,7 @@ function LinkIcon({ type, color, sw, dash, id }) {
 const NW = 40, NH = 18, NP = 8
 
 function NodeIcon({ type, fill }) {
-  const stroke = 'var(--node-stroke)'
+  const stroke = 'var(--legend-stroke)'
   const rx = (NH - 1) / 2
 
   if (type === 'goal')
@@ -202,10 +202,10 @@ function ActorIcon({ highlighted }) {
     <svg width={AW} height={AH_} viewBox={`0 0 ${AW} ${AH_}`} style={{ flexShrink: 0, overflow: 'visible' }}>
       <rect x={8.5} y={5.5} width={AW - 9} height={AH_ - 6} rx={4}
         fill="none"
-        stroke={highlighted ? 'var(--node-stroke)' : 'var(--text-3)'} strokeWidth={highlighted ? 1.5 : 1}
-        strokeDasharray={highlighted ? undefined : '3 2'} />
+        stroke={highlighted ? 'var(--legend-stroke)' : 'var(--text-3)'} strokeWidth={highlighted ? 1.5 : 1}
+        style={{ strokeDasharray: highlighted ? 'none' : 'var(--actor-dash-legend, 3 2)' }} />
       <rect x={0.5} y={0.5} width={18} height={9} rx={3}
-        fill="var(--node-fill)" stroke="var(--node-stroke)" strokeWidth={highlighted ? 1.5 : 1} />
+        fill="var(--node-fill)" stroke="var(--legend-stroke)" strokeWidth={highlighted ? 1.5 : 1} />
     </svg>
   )
 }
@@ -214,7 +214,8 @@ function ActorIcon({ highlighted }) {
 export function LegendIcon({ type, highlighted }) {
   if (type === 'actor') return <ActorIcon highlighted={highlighted} />
   if (NODE_TYPES.includes(type))
-    return <NodeIcon type={type} fill={highlighted ? `var(--hl-${type})` : 'var(--node-fill)'} />
+    // a colour set with coloured tags shows that colour
+    return <NodeIcon type={type} fill={highlighted ? `var(--tag-${type}, var(--hl-${type}))` : 'var(--node-fill)'} />
 
   const def = LINK_DEFS.find(l => l.type === type)
   if (!def) return null

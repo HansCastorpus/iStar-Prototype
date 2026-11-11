@@ -79,6 +79,7 @@ export default function Link({ link, points, andBar, allPaths = {}, crossings = 
   const highlightTypes = useStore(s => s.highlightTypes)
   const isolateTypes   = useStore(s => s.isolateTypes)
   const hideTags       = useStore(s => s.hideTags)
+  const colorTags      = useStore(s => s.colorTags)
   const tr             = useT()  // translate (t is the tag's position along the link)
 
   // What each crossing link looks like right now: 'h' hidden, 'n<width>' plain, 'a<width>' highlighted
@@ -123,7 +124,7 @@ export default function Link({ link, points, andBar, allPaths = {}, crossings = 
   const isSelected     = selectedId === link.id
   const isFilterActive = (highlightTypes.length > 0 && highlightTypes.includes(link.type)) || isFocused
   const hlStyle        = isFilterActive ? HIGHLIGHT_STYLES[link.type] : null
-  const color          = hlStyle?.color ?? (isSelected ? '#0070f3' : 'var(--link-def)')
+  const color          = hlStyle?.color ?? (isSelected ? '#0070f3' : 'var(--link-line)')
   const sw             = hlStyle?.sw    ?? (isSelected ? SELECTED_SW : BASE_SW)
 
   // Gaps in this link where a plain link passes over it; shadows from this link onto ones beneath it
@@ -310,13 +311,13 @@ export default function Link({ link, points, andBar, allPaths = {}, crossings = 
         <rect
           x={-boxW / 2} y={-boxH / 2}
           width={boxW} height={boxH}
-          rx={boxH / 2} fill="var(--node-fill)"
+          rx={boxH / 2} fill={`var(${colorTags ? '--ctag-link-' : '--tag-link-'}${link.type}, var(--node-fill))`}
           stroke={color}
           strokeWidth={1}
         />
         <text
-          textAnchor="middle" dominantBaseline="central"
-          fontSize={FONT_SIZE} fontFamily="sans-serif" fill="var(--node-text)"
+          textAnchor="middle" dominantBaseline="central" y={1}
+          fontSize={FONT_SIZE} fontFamily="sans-serif" fill={`var(${colorTags ? '--ctag-text-link-' : '--tag-text-link-'}${link.type}, var(--node-text))`}
           style={{ pointerEvents: 'none', userSelect: 'none' }}
         >
           {labelText}

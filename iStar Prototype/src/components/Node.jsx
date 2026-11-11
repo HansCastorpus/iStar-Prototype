@@ -88,6 +88,7 @@ export default function Node({ node, strayActors }) {
   const highlightTypes = useStore(s => s.highlightTypes)
   const isolateTypes = useStore(s => s.isolateTypes)
   const hideTags = useStore(s => s.hideTags)
+  const colorTags = useStore(s => s.colorTags)
   const showNumbers = useStore(s => s.showNumbers)
   const actors = useStore(s => s.actors)
   const t = useT()
@@ -204,7 +205,7 @@ export default function Node({ node, strayActors }) {
 
   const { stroke } = NODE_TYPES[node.type] ?? NODE_TYPES.goal
   // Highlighted body: slightly thicker outline in a darker shade of its own fill
-  const hlStroke = `color-mix(in srgb, ${hlFill} 75%, black)`
+  const hlStroke = `var(--hl-stroke, color-mix(in srgb, ${hlFill} 75%, black))`  // a colour set can fix it
   const bodyStroke = accent ?? (isFillHighlighted ? hlStroke : stroke)
   const bodyStrokeW = (base) => accent ? 2 : isFillHighlighted ? 2 : base
 
@@ -329,7 +330,7 @@ export default function Node({ node, strayActors }) {
             <textarea {...editorProps} placeholder={`[${typeName}]`} rows={lines.length} style={{
               width: '100%', height: lines.length * NODE_LINE_H, border: 'none', outline: 'none', resize: 'none',
               overflow: 'hidden', background: 'transparent', textAlign: 'center', padding: 0, display: 'block',
-              font: `${NODE_FONT}px sans-serif`, lineHeight: `${NODE_LINE_H}px`, color: 'var(--node-text)',
+              font: `${NODE_FONT}px sans-serif`, fontWeight: 'var(--fw, 400)', lineHeight: `${NODE_LINE_H}px`, color: 'var(--node-text)',
             }} />
           </div>
         </foreignObject>
@@ -362,19 +363,19 @@ export default function Node({ node, strayActors }) {
         width={badgeW}
         height={NODE_BADGE_H}
         rx={NODE_BADGE_H / 2}
-        fill="var(--node-fill)"
+        fill={colorTags ? `var(--ctag-${node.type}, var(--node-fill))` : isFillHighlighted ? `var(--tag-${node.type}, var(--node-fill))` : 'var(--node-fill)'}
         stroke={bodyStroke}
         strokeWidth={bodyStrokeW(1)}
         style={{ pointerEvents: 'none' }}
       />
       <text
         x={cx}
-        y={badgeCY}
+        y={badgeCY + 1}
         textAnchor="middle"
         dominantBaseline="central"
         fontSize={12}
         fontFamily="sans-serif"
-        fill="var(--node-text)"
+        fill={colorTags ? `var(--ctag-text-${node.type}, var(--node-text))` : isFillHighlighted ? `var(--tag-text-${node.type}, var(--node-text))` : 'var(--node-text)'}
         style={{ pointerEvents: 'none', userSelect: 'none' }}
       >
         {typeName.toUpperCase()}

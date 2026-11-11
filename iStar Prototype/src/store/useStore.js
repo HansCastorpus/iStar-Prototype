@@ -384,6 +384,15 @@ const useStore = create((set, get) => ({
   },
   toggleDarkMode: () => set(s => ({ darkMode: !s.darkMode })),
 
+  // Colour combination for the elements and actors (see utils/colorSchemes.js): remembered between visits
+  colorScheme: (() => {
+    try { return localStorage.getItem('istar-colors') || 'default' } catch { return 'default' }
+  })(),
+  setColorScheme: (id) => {
+    try { localStorage.setItem('istar-colors', id) } catch { /* storage unavailable */ }
+    set({ colorScheme: id })
+  },
+
   // ── Modeling language: 'istar2' (pure iStar 2.0) or 'custom' (the modified version under development).
   // Remembered between visits. No tool behaviour depends on it yet.
   language: (() => {
@@ -428,6 +437,12 @@ const useStore = create((set, get) => ({
   hideTags: false,
   toggleHideTags: () => set(s => ({ hideTags: !s.hideTags })),
   setHideTags: (hide) => set({ hideTags: hide }),
+  // "Color tags": the tags of elements and links are always coloured by type (not only on highlight); remembered between visits
+  colorTags: (() => { try { return localStorage.getItem('istar-color-tags') === '1' } catch { return false } })(),
+  setColorTags: (on) => {
+    try { localStorage.setItem('istar-color-tags', on ? '1' : '0') } catch { /* storage unavailable */ }
+    set({ colorTags: on })
+  },
   filterPanelRight: null,  // x of the filter panel's right edge (scrollbar included), so the header can continue its border
   setFilterPanelRight: (x) => set(s => s.filterPanelRight === x ? s : { filterPanelRight: x }),
   filterCardBox: null,   // { left, width } of the Filter card on screen, so the toolbar can centre the logo over it
@@ -1116,7 +1131,7 @@ const useStore = create((set, get) => ({
       '--bg-canvas', '--bg-panel', '--bg-popup',
       '--text-1', '--text-2', '--text-3', '--text-node',
       '--border', '--border-lt', '--border-md', '--border-ck',
-      '--node-fill', '--node-stroke', '--node-text', '--node-text-hl', '--link-def',
+      '--node-fill', '--node-stroke', '--node-text', '--node-text-hl', '--link-def', '--link-line',
       '--hl-goal', '--hl-task', '--hl-softgoal', '--hl-resource',
       '--hl-hurt', '--hl-help', '--hl-needed-by', '--hl-depends-on',
       '--hl-or', '--hl-xor', '--hl-and', '--hl-part-of',

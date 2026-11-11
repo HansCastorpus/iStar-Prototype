@@ -212,7 +212,7 @@ function Connections({ items, onPick }) {
 // The link as it looks on the graph when highlighted: its colour, thickness and dashes, with an arrow showing which way it goes.
 function LinkSample({ type, outgoing, label }) {
   const style = HIGHLIGHT_STYLES[type]
-  const color = style?.color ?? 'var(--link-def)'
+  const color = style?.color ?? 'var(--link-line)'
   const sw = Math.min(style?.sw ?? 1.5, 6)
   return (
     <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

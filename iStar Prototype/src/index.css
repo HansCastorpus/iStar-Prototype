@@ -1,6 +1,6 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body, #root { width: 100%; height: 100%; overflow: hidden; }
-body { font-family: 'Roboto', sans-serif; font-size: 12px; }
+body { font-family: 'Roboto', sans-serif; font-size: 12px; font-weight: var(--fw, 400); }
 
 /* Hover feedback for every button: tint with the button's own text colour so it
    works on light, dark and filled (active) buttons alike */
@@ -34,9 +34,11 @@ button:hover:not(:disabled) {
   --border-ck:  #888;
   --node-fill:  white;
   --node-stroke:#333;
+  --legend-stroke:#333;   /* outline of the sample shapes in the side panel (a colour set cannot change it) */
   --node-text:  #222;
   --node-text-hl: #222;  /* label on a highlighted (filled) element */
   --link-def:   #555;
+  --link-line:  var(--link-def);   /* plain links on the diagram (a colour set can change it) */
   --grid-line:  #e9e9e9;  /* light grid behind the diagram */
   /* node highlight fills */
   --hl-goal:      #c0d5a5;
@@ -99,6 +101,7 @@ button:hover:not(:disabled) {
   --border-md:  #5c5c5c;
   --border-ck:  #7a7a7a;
   --node-fill:  #3c3c3c;
+  --legend-stroke:#888;
   --node-stroke:#888;
   --node-text:  #ddd;
   --node-text-hl: #1e1e1e;  /* dark on the lighter, pastel highlight fills */
