@@ -116,6 +116,9 @@ export function modelPath(models, id) {
 
 // Element numbers are per diagram, but inbox items keep one project-wide sequence, so a number is never offered twice
 // to the contributors. When an item is placed it keeps its number if the diagram has it free, else it gets the next one.
+// Numbers are never given twice, across the whole project and for good: `numberFloor` is the highest one ever given out, so
+// a number freed by deleting an element is not used again. `reservedNumbers` are the ones set aside for empty sheets that were
+// sent out; a row filled in on one of them becomes the element with that number.
 const usedNumbers = (s) => {
   const out = new Set(s.inbox.map(i => i.num).filter(n => n != null))
   for (const m of Object.values(withLive(s))) for (const n of Object.values(m.nodes)) if (n.num != null) out.add(n.num)
@@ -132,11 +135,17 @@ const resizeNodes = (nodes) => {
 }
 
 // What gets saved / exported: every reachable model, with the open one's live data
+function nodeNumbers(s) {
+  const out = new Set()
+  for (const m of Object.values(withLive(s))) for (const n of Object.values(m.nodes)) if (n.num != null) out.add(n.num)
+  return out
+}
+
 function projectData(s) {
   const live = withLive(s)
   const models = {}
   for (const { id } of reachableModels(live)) models[id] = live[id]
-  return { version: 2, activeModelId: models[s.activeModelId] ? s.activeModelId : rootOf(models), models, inbox: s.inbox, actorList: s.actorList, share: s.share }
+  return { version: 2, activeModelId: models[s.activeModelId] ? s.activeModelId : rootOf(models), models, inbox: s.inbox, actorList: s.actorList, share: s.share, numberFloor: s.numberFloor, reservedNumbers: s.reservedNumbers }
 }
 
 // What a share link shows: the diagrams, with the public part of each element's information. The inbox and the actor list stay private.
@@ -153,7 +162,16 @@ function shareData(s) {
 // A dependum sits between actors and belongs to none: making an element one takes it out of its actors
 const dependumPatch = (on) => on ? { dependum: true, actorId: null, nestedActorIds: [] } : { dependum: false }
 
-const DETAIL_FIELDS =['description', 'relationType', 'relations', 'positive', 'negative', 'links', 'images', 'connected']
+// What changing an inbox item's fields does to its element on the graph
+const DETAIL_KEYS = ['relationType', 'relations', 'positive', 'negative', 'connected', 'description', 'links', 'images']
+const nodePatch = (n, patch) => {
+  const details = { ...n.details }
+  for (const k of DETAIL_KEYS) if (k in patch) details[k] = patch[k]
+  if ('actorName' in patch) details.suggestedActor = patch.actorName
+  return { ...('text' in patch && { label: patch.text }), ...('type' in patch && { type: patch.type }), ...('dependum' in patch && dependumPatch(patch.dependum)), details }
+}
+
+const DETAIL_FIELDS = ['description', 'relationType', 'relations', 'positive', 'negative', 'links', 'images', 'connected']
 const liveFields = (item, node) => {
   const f = fieldsOf(item)
   if (!node) return f
@@ -180,6 +198,10 @@ function loadProject(data) {
     models, activeModelId, nodes: active.nodes, links: active.links, actors: active.actors, zones: active.zones ?? {},
     inbox: Array.isArray(data.inbox) ? data.inbox : [], actorList: Array.isArray(data.actorList) ? data.actorList : [],
     share: data.share?.gistId ? data.share : null,
+    reservedNumbers: Array.isArray(data.reservedNumbers) ? data.reservedNumbers : [],
+    // never lower than any number already in the project, so a number is not given again
+    numberFloor: Math.max(Number(data.numberFloor) || 0, ...Object.values(models).flatMap(m => Object.values(m.nodes).map(n => n.num ?? 0)),
+      ...(Array.isArray(data.inbox) ? data.inbox.map(i => i.num ?? 0) : []), ...(Array.isArray(data.reservedNumbers) ? data.reservedNumbers : [])),
   }
 }
 
@@ -538,18 +560,31 @@ const useStore = create((set, get) => ({
   // ── Inbox: elements that came in (from the spreadsheet) and wait for the designer to place them on the graph.
   // Project-wide, not per diagram. An item's actor is only a suggestion: the real one is where it is dropped.
   // actorList: the actor names offered to contributors (dropdowns in the spreadsheet), drawn on the graph or not.
+  numberFloor: 0,        // the highest element number ever given out
+  reservedNumbers: [],   // numbers set aside for empty sheets that were sent out and not filled in yet
+  // Gives out `count` new numbers, higher than any given before. `reserve`: they go onto an empty sheet.
+  takeNumbers: (count = 1, reserve = false) => {
+    const s = get()
+    const start = Math.max(s.numberFloor ?? 0, 0, ...usedNumbers(s), ...(s.reservedNumbers ?? [])) + 1
+    const nums = Array.from({ length: count }, (_, i) => start + i)
+    set({ numberFloor: start + count - 1, ...(reserve && { reservedNumbers: [...(s.reservedNumbers ?? []), ...nums] }) })
+    return nums
+  },
   inbox: [],       // { id, type, text, actorName, relations, positive, negative, connected: [names], placedNodeId }
   actorList: [],
   inboxOpen: false,
   inboxFilter: 'greyed',  // how placed items show in the list: 'shown' | 'greyed' | 'hidden'
   setInboxOpen: (inboxOpen) => set({ inboxOpen }),
   setInboxFilter: (inboxFilter) => set({ inboxFilter }),
-  addInboxItem: (item) => set(s => ({
+  addInboxItem: (item) => set(s => {
+    const num = item.num ?? Math.max(s.numberFloor ?? 0, 0, ...usedNumbers(s), ...(s.reservedNumbers ?? [])) + 1
+    return {
+    numberFloor: Math.max(s.numberFloor ?? 0, num),
     inbox: [...s.inbox, {
-      id: crypto.randomUUID(), num: Math.max(0, ...usedNumbers(s)) + 1, type: 'goal', text: '', actorName: '', dependum: false, relationType: '', relations: '', positive: '', negative: '',
-      description: '', links: [], images: [], connected: [], placedNodeId: null, ...item,
+      id: crypto.randomUUID(), type: 'goal', text: '', actorName: '', dependum: false, relationType: '', relations: '', positive: '', negative: '',
+      description: '', links: [], images: [], connected: [], placedNodeId: null, ...item, num,
     }],
-  })),
+  }}),
   updateInboxItem: (id, patch) => set(s => ({ inbox: s.inbox.map(i => i.id === id ? { ...i, ...patch } : i) })),
   removeInboxItem: (id) => set(s => ({ inbox: s.inbox.filter(i => i.id !== id) })),
   addActorName: (raw) => set(s => {
@@ -565,8 +600,7 @@ const useStore = create((set, get) => ({
     if (!item) return null
     const chain = item.dependum ? [] : actorChainAt(get().nodes, x, y, actorNames(get().actors))  // a dependum belongs to no actor, wherever it is dropped
     const { relationType, relations, positive, negative, connected, actorName, description, links, images } = item
-    const taken = Object.values(get().nodes).some(n => n.num === item.num)
-    const num = item.num != null && !taken ? item.num : Math.max(0, ...Object.values(get().nodes).map(n => n.num ?? 0)) + 1
+    const num = item.num != null && !nodeNumbers(get()).has(item.num) ? item.num : get().takeNumbers(1)[0]
     const id = get().addNode(item.type, x, y, { num, label: item.text, ...(item.dependum && { dependum: true }), details: { description, relationType, relations, positive, negative, links, images, connected, suggestedActor: actorName } })
     if (!id) return null
     if (chain.length) {
@@ -589,12 +623,11 @@ const useStore = create((set, get) => ({
     // Waiting items whose number has since been given to an element on the graph (or to another item) are renumbered
     const taken = new Set()
     for (const { id } of reach) for (const n of Object.values(live[id].nodes)) if (n.num != null) taken.add(n.num)
-    let next = Math.max(0, ...taken, ...inbox.map(i => i.num ?? 0)) + 1
     const seen = new Set()
     const nums = {}
     for (const i of inbox) {
       if (i.placedNodeId && nodeOf(i.placedNodeId)) continue
-      nums[i.id] = i.num != null && !taken.has(i.num) && !seen.has(i.num) ? i.num : next++
+      nums[i.id] = i.num != null && !taken.has(i.num) && !seen.has(i.num) ? i.num : get().takeNumbers(1)[0]
       seen.add(nums[i.id])
     }
     if (!blank) set(st => ({ inbox: st.inbox.map(i => i.id in nums && nums[i.id] !== i.num ? { ...i, num: nums[i.id] } : i) }))
@@ -614,7 +647,10 @@ const useStore = create((set, get) => ({
     const actorNames = [...s.actorList]
     for (const { id } of reach) for (const a of Object.values(live[id].actors)) if (a.name && !actorNames.includes(a.name)) actorNames.push(a.name)
     const { buildInboxWorkbookBlob } = await import('../utils/inboxExcel.js')
-    const url = URL.createObjectURL(await buildInboxWorkbookBlob({ modelName: live[ROOT_MODEL]?.name ?? '', linkTypes, actorNames, items, graphRows }))
+    // an empty sheet goes out with numbers already on its first rows; they are set aside for it and not given to anything else
+    const { BLANK_NUMBERED } = await import('../utils/inboxExcel.js')
+    const blankNumbers = blank ? get().takeNumbers(BLANK_NUMBERED, true) : []
+    const url = URL.createObjectURL(await buildInboxWorkbookBlob({ modelName: live[ROOT_MODEL]?.name ?? '', linkTypes, actorNames, items, graphRows, blankNumbers }))
     const a = document.createElement('a')
     a.href = url
     const base = (live[ROOT_MODEL]?.name ?? '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '').trim()
@@ -638,6 +674,8 @@ const useStore = create((set, get) => ({
   },
 
   // Carries out a plan. `takeConflicts`: for fields changed both in the sheet and in the app, use the sheet's value.
+  // Changes to an item still waiting in the inbox go straight in. Changes to an item that is already on the graph do NOT touch the
+  // element: they wait on the item (`pending`, flagged `updated`) until the designer presses Update in the inbox.
   applyInboxPlan: (plan, takeConflicts) => {
     const s = get()
     const updates = plan.updates.map(u => ({ id: u.id, patch: { ...u.patch } }))
@@ -646,35 +684,65 @@ const useStore = create((set, get) => ({
       if (!u) updates.push(u = { id: c.id, patch: {} })
       u.patch[c.field] = c.theirs
     }
-    const nodePatch = (n, patch) => {
-      const details = { ...n.details }
-      for (const k of ['relationType', 'relations', 'positive', 'negative', 'connected', 'description', 'links', 'images']) if (k in patch) details[k] = patch[k]
-      if ('actorName' in patch) details.suggestedActor = patch.actorName
-      return { ...('text' in patch && { label: patch.text }), ...('type' in patch && { type: patch.type }), ...('dependum' in patch && dependumPatch(patch.dependum)), details }
-    }
+    const live = withLive(s)
+    const nodeOf = (id) => { for (const m of Object.values(live)) if (m.nodes[id]) return m.nodes[id] }
+    const same = (x, y) => JSON.stringify(x ?? '') === JSON.stringify(y ?? '')
     get().beginBatch()
-    for (const fields of plan.adds) get().addInboxItem(fields)
+    // A new row keeps the number it came with if it was set aside for an empty sheet (or is simply free); otherwise it gets the next one
+    const taken = new Set([...usedNumbers(s)])
+    for (const fields of plan.adds) {
+      const { num: wanted, ...rest } = fields
+      const reserved = get().reservedNumbers ?? []
+      const keep = Number.isInteger(wanted) && reserved.includes(wanted) && !taken.has(wanted)
+      const num = keep ? wanted : get().takeNumbers(1)[0]
+      if (keep) set(st => ({ reservedNumbers: st.reservedNumbers.filter(n => n !== wanted) }))
+      taken.add(num)
+      get().addInboxItem({ ...rest, num })
+    }
+    let flagged = 0, direct = 0
     for (const { id, patch } of updates) {
       const item = s.inbox.find(i => i.id === id)
-      get().updateInboxItem(id, patch)
-      const nodeId = item?.placedNodeId
-      if (!nodeId) continue
-      const cur = get()
-      if (cur.nodes[nodeId]) { cur.updateNode(nodeId, nodePatch(cur.nodes[nodeId], patch)); continue }
-      const modelId = Object.keys(cur.models).find(m => cur.models[m].nodes[nodeId])
-      if (!modelId) continue
-      history.restoring = true  // other diagrams aren't part of the open diagram's undo history
-      set(st => {
-        const m = st.models[modelId]
-        const merged = { ...m.nodes[nodeId], ...nodePatch(m.nodes[nodeId], patch) }
-        const { width, height } = computeNodeSize(merged.label, merged.type, merged.logo ? merged.logoAspect ?? 1 : 0)
-        return { models: { ...st.models, [modelId]: { ...m, nodes: { ...m.nodes, [nodeId]: { ...merged, width, height } } } } }
-      })
-      history.restoring = false
+      if (!item) continue
+      const node = item.placedNodeId && nodeOf(item.placedNodeId)
+      if (!node) { get().updateInboxItem(id, patch); direct++; continue }
+      // already on the graph: keep what differs from the element as it is now
+      const current = liveFields(item, node)
+      const pending = { ...(item.pending ?? {}) }
+      for (const [k, v] of Object.entries(patch)) { if (same(v, current[k])) delete pending[k]; else pending[k] = v }
+      if (Object.keys(pending).length) { get().updateInboxItem(id, { pending, updated: true }); flagged++ }
+      else if (item.updated) get().updateInboxItem(id, { pending: null, updated: false })
     }
     get().endBatch()
-    return { added: plan.adds.length, updated: updates.length }
+    return { added: plan.adds.length, updated: direct, flagged }
   },
+
+  // The Update button on an inbox item that was re-imported: puts the new information into the element already on the graph
+  applyInboxUpdate: (itemId) => {
+    const s = get()
+    const item = s.inbox.find(i => i.id === itemId)
+    if (!item?.pending) return
+    const patch = item.pending
+    get().beginBatch()
+    const open = item.placedNodeId && s.nodes[item.placedNodeId]
+    if (open) get().updateNode(item.placedNodeId, nodePatch(open, patch))
+    else {
+      const modelId = Object.keys(s.models).find(m => s.models[m].nodes[item.placedNodeId])
+      if (modelId) {
+        history.restoring = true  // other diagrams aren't part of the open diagram's undo history
+        set(st => {
+          const m = st.models[modelId]
+          const merged = { ...m.nodes[item.placedNodeId], ...nodePatch(m.nodes[item.placedNodeId], patch) }
+          const { width, height } = computeNodeSize(merged.label, merged.type, merged.logo ? merged.logoAspect ?? 1 : 0)
+          return { models: { ...st.models, [modelId]: { ...m, nodes: { ...m.nodes, [item.placedNodeId]: { ...merged, width, height } } } } }
+        })
+        history.restoring = false
+      }
+    }
+    get().updateInboxItem(itemId, { ...patch, pending: null, updated: false })
+    get().endBatch()
+  },
+  // Keeps the element as it is on the graph and drops the re-imported changes
+  dismissInboxUpdate: (itemId) => get().updateInboxItem(itemId, { pending: null, updated: false }),
 
   // ── Nodes ────────────────────────────────────────────────────────────────────
   addNode: (type, x, y, extra = {}) => {
@@ -709,10 +777,12 @@ const useStore = create((set, get) => ({
     nx = aligned.x
     ny = aligned.y
 
+    const num = extra.num ?? get().takeNumbers(1)[0]
     set((s) => ({
+      numberFloor: Math.max(s.numberFloor ?? 0, num),
       nodes: {
         ...s.nodes,
-        [id]: { id, num: Math.max(0, ...Object.values(s.nodes).map(n => n.num ?? 0)) + 1, type, label: '', actorId: null, x: nx, y: ny, width, height, ...(type === 'subactor' && { linkedModelId: null }), ...extra },
+        [id]: { id, num, type, label: '', actorId: null, x: nx, y: ny, width, height, ...(type === 'subactor' && { linkedModelId: null }), ...extra },
       },
       selectedId: id,
       selectedType: 'node',
@@ -1172,7 +1242,7 @@ if (viewTarget) {
     ensureZone: () => null, renameZone: noop, setNodesInZone: noop, deleteZone: noop,
     renameActor: noop, ungroupActor: noop, ensureActor: () => null, setActorLogo: noop, setActorLevel: noop, openActorEditor: noop,
     renameModel: noop, clearDiagram: noop, importDiagram: noop, importEdits: noop, undo: noop, redo: noop,
-    placeInboxItem: () => null, applyInboxPlan: noop,
+    placeInboxItem: () => null, applyInboxPlan: noop, applyInboxUpdate: noop, dismissInboxUpdate: noop, takeNumbers: () => [],
     // a sub-actor box only opens a diagram that exists; it never creates one
     openSubactor: (nodeId) => {
       const { nodes, models, switchModel } = useStore.getState()

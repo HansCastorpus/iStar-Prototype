@@ -14,6 +14,8 @@ const SHEET = 'Elements'
 const LISTS = 'Lists'
 const SNAPSHOT = '_snapshot'
 const BLANK_ROWS = 200
+// How many of the blank rows of an empty sheet come with a number already on them (the numbers are set aside for that sheet)
+export const BLANK_NUMBERED = 30
 const MIN_CONNECTED = 3
 const CHUNK = 30000
 const FIXED = ['Key', 'Status', 'No.', 'Type', 'Actor', 'Dependum', 'Text', 'Description', 'Relation type', 'Relations', 'Positive aspects', 'Negative aspects', 'Links', 'Images']
@@ -33,7 +35,7 @@ const YES = 'yes'
 const isYes = (v) => ['yes', 'y', 'true', 'x', '1', 'oui'].includes((v ?? '').toString().trim().toLowerCase())
 
 const HINTS = {
-  info: 'Filled in for you. Numbers can change, so do not rely on them. Do not insert, delete or sort rows.',
+  info: 'Filled in for you. An element keeps its number for good: send the row back and it updates the same element. Do not change numbers, and do not insert, delete or sort rows.',
   type: 'Goal, task, softgoal or resource. Pick from the list.',
   actor: 'Who this element belongs to. Pick from the list; if yours is missing, type its name. Leave empty for a dependum.',
   dependum: 'Pick "yes" for a dependum: something one actor needs from another, sitting between them and belonging to neither. Leave Actor empty and list the actors involved under Connected actor.',
@@ -118,7 +120,9 @@ export async function buildInboxWorkbookBlob(data) {
     ws.addRow([item.id, item.placed ? 'On graph' : 'In inbox', item.num, f.type, f.actorName, f.dependum ? YES : '', f.text, f.description, labelOf[f.relationType] ?? '', f.relations, f.positive, f.negative, linksToText(f.links), imagesToText(f.images), ...f.connected])
   }
   for (const g of data.graphRows) ws.addRow([`node:${g.key}`, `On graph${g.diagram ? ` · ${g.diagram}` : ''}`, g.num, g.type, g.actorName, g.dependum ? YES : '', g.text])
-  for (let i = 0; i < BLANK_ROWS; i++) ws.addRow([])
+  // The first blank rows of an empty sheet carry numbers that were set aside for it: the row filled in on one of them becomes that element
+  const blankNumbers = data.blankNumbers ?? []
+  for (let i = 0; i < BLANK_ROWS; i++) ws.addRow(i < blankNumbers.length ? [null, null, blankNumbers[i]] : [])
 
   // Colours, locking and drop-downs row by row. The actor drop-downs only warn on an unknown name, so a new actor can still be typed.
   const total = ws.rowCount
@@ -178,6 +182,7 @@ export async function readInboxWorkbook(buffer, labelMap = {}) {
   for (let c = 1; c <= ws.columnCount; c++) {
     const h = clean(headerRow.getCell(c).text).toLowerCase()
     if (h === 'key') at.key = c
+    else if (h === 'no.') at.num = c
     else if (h === 'type') at.type = c
     else if (h === 'actor') at.actor = c
     else if (h === 'dependum') at.dependum = c
@@ -210,7 +215,7 @@ export async function readInboxWorkbook(buffer, labelMap = {}) {
     for (const c of at.connected) { const v = cell(row, c); if (v && !connected.includes(v)) connected.push(v) }
     const links = parseLinks(cell(row, at.links)), images = parseImages(cell(row, at.images))
     rows.push({
-      line, key: cell(row, at.key), description: cell(row, at.description), links: links.links, images: images.images, dropped: links.dropped + images.dropped,
+      line, key: cell(row, at.key), num: Number.isInteger(Number(cell(row, at.num))) && cell(row, at.num) !== '' ? Number(cell(row, at.num)) : null, description: cell(row, at.description), links: links.links, images: images.images, dropped: links.dropped + images.dropped,
       type: cell(row, at.type).toLowerCase(), actorName: cell(row, at.actor), dependum: isYes(cell(row, at.dependum)), text: cell(row, at.text),
       relationType: relationOf(cell(row, at.relationType)), relations: cell(row, at.relations), positive: cell(row, at.positive), negative: cell(row, at.negative),
       connected,
@@ -229,14 +234,20 @@ export function planInboxImport({ rows, base, items, mineOf, actorNames }) {
   const noteActors = (f) => { for (const n of [f.actorName, ...f.connected]) if (n && !actorNames.includes(n)) unlisted.add(n) }
   const problem = (f) => !f.text ? 'missingText' : !ELEMENT_TYPES.includes(f.type) ? 'badType' : f.relationType?.startsWith('!') ? 'badRelation' : null
 
-  for (const row of rows) {
+  for (let row of rows) {
     if (row.key.startsWith('node:')) continue  // on the graph already: shown for context only
     plan.dropped += row.dropped ?? 0
     const theirs = fieldsOf(row)
+    // A row without a key (a sheet that started out empty) is matched by its number: the same number is always the same element
+    // A row with neither a key nor a number that says what an item already says (same type and text) is that item, not a new one
+    const norm = (v) => (v ?? '').toString().trim().toLowerCase()
+    const hit = row.key ? null
+      : (row.num != null ? items.find(i => i.num === row.num) : null) ?? (theirs.text ? items.find(i => i.type === theirs.type && norm(i.text) === norm(theirs.text)) : null)
+    if (hit) row = { ...row, key: hit.id }
     if (!row.key) {
       if (FIELDS.every(k => k === 'type' || !theirs[k] || theirs[k].length === 0)) continue  // an empty row
       const reason = problem(theirs)
-      if (reason) plan.errors.push({ line: row.line, reason }); else { plan.adds.push(theirs); noteActors(theirs) }
+      if (reason) plan.errors.push({ line: row.line, reason }); else { plan.adds.push({ ...theirs, num: row.num }); noteActors(theirs) }
       continue
     }
     const item = items.find(i => i.id === row.key)

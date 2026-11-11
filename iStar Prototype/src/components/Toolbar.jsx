@@ -339,6 +339,7 @@ export default function Toolbar({ inset = 0 }) {
   const inboxOpen = useStore(s => s.inboxOpen)
   const setInboxOpen = useStore(s => s.setInboxOpen)
   const waiting = useStore(s => s.inbox.filter(i => !i.placedNodeId).length)
+  const updatedCount = useStore(s => s.inbox.filter(i => i.updated).length)
   const showGrid = useStore(s => s.showGrid)
   const showClearance = useStore(s => s.showClearance)
   const setViewAid = useStore(s => s.setViewAid)
@@ -439,6 +440,7 @@ export default function Toolbar({ inset = 0 }) {
     }
     const r = useStore.getState().applyInboxPlan(plan, takeConflicts)
     const lines = [t('toolbar.contribDone', { a: r.added, u: r.updated })]
+    if (r.flagged) lines.push(t('toolbar.contribFlagged', { n: r.flagged }))
     if (plan.errors.length) lines.push(t('toolbar.importEditsIgnored'), ...plan.errors.map(x => `• ${t('toolbar.contribRow', { n: x.line })}: ${t(`toolbar.contribErr.${x.reason}`)}`))
     if (plan.removed) lines.push(t('toolbar.contribRemoved', { n: plan.removed }))
     if (plan.dropped) lines.push(t('toolbar.contribDropped', { n: plan.dropped }))
@@ -559,6 +561,7 @@ export default function Toolbar({ inset = 0 }) {
         >
           {t('inbox.button')}{' '}
           {waiting > 0 && <span style={{ fontWeight: 700, color: '#dc2626' }}>{waiting}</span>}
+          {updatedCount > 0 && <span title={t('inbox.updatedHint')} style={{ fontWeight: 700, color: '#d97706' }}>↻{updatedCount}</span>}
         </button>
         <div ref={helpRef} style={{ position: 'relative' }}>
           <button

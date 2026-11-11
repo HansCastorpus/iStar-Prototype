@@ -202,7 +202,7 @@ The designer exports an Excel file from the tool and fills or imports it. This i
 |---|---|---|---|
 | A | Key | hidden, tool-only | **Leave empty for new rows.** It identifies existing rows when the sheet is re-imported. |
 | B | Status | info only | "In inbox" or "On graph". Leave alone. |
-| C | No. | info only | Element number. It can change; do not rely on it. Leave alone. |
+| C | No. | info only | The element's number. **A number belongs to one element for good and is never given to another**, even if that element is deleted. An empty sheet comes with numbers already on its first rows: fill in the row and you create the element with that number. Never change, move or copy numbers. |
 | D | **Type** | **ESSENTIAL** | One of `goal`, `task`, `softgoal`, `resource` (dropdown). |
 | E | **Actor** | **ESSENTIAL** (except for dependums) | The owning actor, from the dropdown. If yours is missing you may type a new name (Excel only warns). Spell it exactly as in the actor list. **Leave empty when the element is a dependum.** |
 | F | Dependum | optional | Pick `yes` from the dropdown if the element is a dependum; otherwise leave empty. A dependum has no Actor: list the actors it sits between in the Connected actor columns. |
@@ -224,6 +224,7 @@ Rules worth remembering:
 - **Dependum** (column F) is either `yes` or empty. A row with `yes` must have an empty Actor and should list, in Connected actor 1, 2..., the actors that depend on it or provide it.
 - Dependum column and the rest of the sheet: older sheets without a Dependum column still import; every row is then treated as not a dependum.
 - Rows already marked "On graph" are locked: don't write to them.
+- **Numbers and updates.** If a row is sent again with changes, the number tells the tool which element it is, so the same element is updated and no duplicate appears. If the element is already on the graph, the changes wait in the inbox, flagged "Updated", until the designer presses **Update**. Rows below the numbered ones have no number; they get one when imported.
 - When the designer re-imports a sheet, only cells that were actually changed are merged in, so unfilled optional cells never overwrite existing information.
 
 ### Example rows

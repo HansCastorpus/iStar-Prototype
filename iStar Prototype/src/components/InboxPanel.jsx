@@ -52,7 +52,7 @@ export default function InboxPanel() {
   }, [actorList, actors])
 
   const groups = useMemo(() => {
-    const visible = inbox.filter(i => filter !== 'hidden' || !isPlaced(i))
+    const visible = inbox.filter(i => filter !== 'hidden' || !isPlaced(i) || i.updated)
     // Dependums belong to no actor, so they get a group of their own, after the actors'
     const byActor = visible.filter(i => !i.dependum)
     const keys = [...names]
@@ -108,7 +108,7 @@ export default function InboxPanel() {
             style={{ fontSize: 12, fontWeight: 'bold', fontFamily: font, color: 'var(--text-1)' }}>
             {g.dependum ? t('inbox.dependums') : g.key || t('inbox.noActor')} <span style={{ fontWeight: 'normal', color: 'var(--text-3)' }}>({g.items.length})</span>
           </DropHeader>
-          {!closed[g.key] && g.items.map(item => <Item key={item.id} item={item} placed={isPlaced(item)} dim={isPlaced(item) && filter === 'greyed'} />)}
+          {!closed[g.key] && g.items.map(item => <Item key={item.id} item={item} placed={isPlaced(item)} dim={isPlaced(item) && filter === 'greyed' && !item.updated} />)}
         </div>
       ))}
 
@@ -116,9 +116,21 @@ export default function InboxPanel() {
   )
 }
 
+// Names of the fields in a re-imported update, and how their new values read
+const PENDING_LABELS = { text: 'inbox.text', type: 'inbox.type', actorName: 'inbox.actor', dependum: 'inbox.dependum', links: 'inbox.links', images: 'inbox.images' }
+function showValue(key, v, t) {
+  if (key === 'dependum') return t(v ? 'inbox.yes' : 'inbox.no')
+  if (key === 'relationType') return v ? t(`type.${v}`) : '—'
+  if (key === 'links') return (v ?? []).map(l => l.label ? `${l.label} | ${l.url}` : l.url).join('\n') || '—'
+  if (Array.isArray(v)) return v.join('\n') || '—'
+  return String(v ?? '') || '—'
+}
+
 function Item({ item, placed, dim }) {
   const t = useT()
   const remove = useStore(s => s.removeInboxItem)
+  const applyUpdate = useStore(s => s.applyInboxUpdate)
+  const dismissUpdate = useStore(s => s.dismissInboxUpdate)
   const [open, setOpen] = useState(false)
   const info = [['description', item.description], ['relationType', item.relationType && t(`type.${item.relationType}`)], ['relations', item.relations], ['positive', item.positive], ['negative', item.negative]].filter(([, v]) => v)
   const hasMore = info.length > 0 || item.connected?.length > 0
@@ -147,6 +159,18 @@ function Item({ item, placed, dim }) {
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: '0 2px' }}>×</button>
         )}
       </div>
+      {item.updated && item.pending && (
+        <div style={{ marginTop: 6, padding: '6px 8px', borderLeft: '4px solid #d97706', background: 'rgba(217, 119, 6, 0.1)', display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11 }}>
+          <div><b style={{ color: '#b45309', textTransform: 'uppercase', letterSpacing: 0.4 }}>↻ {t('inbox.updated')}</b> <span style={{ color: 'var(--text-2)' }}>{t('inbox.updatedHint')}</span></div>
+          {Object.entries(item.pending).map(([key, v]) => (
+            <div key={key}><span style={smallLabel}>{t(PENDING_LABELS[key] ?? `inbox.${key}`)}</span><div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{showValue(key, v, t)}</div></div>
+          ))}
+          <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
+            <button onClick={() => applyUpdate(item.id)} title={t('inbox.updateHint')} className="tbtn" data-on style={{ padding: '3px 10px', fontSize: 12, cursor: 'pointer', fontFamily: font }}>{t('inbox.update')}</button>
+            <button onClick={() => dismissUpdate(item.id)} className="tbtn" style={{ padding: '3px 10px', fontSize: 12, cursor: 'pointer', fontFamily: font }}>{t('inbox.ignore')}</button>
+          </div>
+        </div>
+      )}
       {open && (
         <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11 }}>
           {info.map(([key, v]) => (
