@@ -146,7 +146,7 @@ function shareData(s) {
     // the viewer shows an element's description, aspects, links, pictures and related actors; the designer's notes stay private
     ...m, nodes: Object.fromEntries(Object.entries(m.nodes).map(([k, n]) => [k, { ...n, details: publicDetails(n.details) }])),
   }]))
-  return { ...data, models, inbox: [], actorList: [], share: null }
+  return { ...data, models, inbox: [], actorList: [], share: null, istarLanguage: s.language }
 }
 
 // An inbox item as it is now: once placed, its element on the graph holds the text and the extra information
@@ -208,9 +208,11 @@ const useStore = create((set, get) => ({
   setCardsHidden: (cardsHidden) => set({ cardsHidden }),
   loadShared: async () => {
     try {
-      const project = loadProject(JSON.parse(await fetchShared(viewTarget)))
+      const raw = JSON.parse(await fetchShared(viewTarget))
+      const project = loadProject(raw)
       history.restoring = true
-      set({ ...project, fitRequest: get().fitRequest + 1, viewStatus: 'ready' })
+      // the viewer uses the designer's version of the language (without remembering it as this browser's own setting)
+      set({ ...project, ...(['istar2', 'custom'].includes(raw.istarLanguage) && { language: raw.istarLanguage }), fitRequest: get().fitRequest + 1, viewStatus: 'ready' })
       history.restoring = false
     } catch (e) {
       console.error('Shared graph failed to load', e)
@@ -372,6 +374,14 @@ const useStore = create((set, get) => ({
   setLanguage: (language) => {
     try { localStorage.setItem('istar-language', language) } catch { /* storage unavailable */ }
     set({ language })
+  },
+  // In iStar 2.0 mode, offer only the links the guide allows between the two element types (see utils/linkRules.js). On unless switched off.
+  strictLinks: (() => {
+    try { return localStorage.getItem('istar-strict-links') !== 'off' } catch { return true }
+  })(),
+  setStrictLinks: (on) => {
+    try { localStorage.setItem('istar-strict-links', on ? 'on' : 'off') } catch { /* storage unavailable */ }
+    set({ strictLinks: on })
   },
 
   // ── View aids (remembered between visits): a light grid, and the zone around each element that others can't enter

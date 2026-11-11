@@ -19,6 +19,8 @@ export const STRINGS = {
     'type.and': 'and',
     'type.help': 'help',
     'type.hurt': 'hurt',
+    'type.hurt.custom': 'risk',
+    'type.break.custom': 'high risk',
     'type.make': 'make',
     'type.break': 'break',
     'type.needed-by': 'needed-by',
@@ -310,6 +312,11 @@ export const STRINGS = {
 
     // Link type list (after picking two elements)
     'linkType.title': 'Link type',
+    'linkType.none': 'The iStar 2.0 guide has no link between these two element types in this direction.',
+    'linkType.swap': 'Try the other direction',
+    'menu.strictLinks': 'Only links allowed by iStar 2.0',
+    'menu.strictLinksDesc': 'Offers just the links the iStar 2.0 guide allows between the two element types.',
+    'popup.reverseBlocked': 'The iStar 2.0 guide does not allow this link the other way round',
     'linkType.cancel': 'cancel',
 
     // Actor edit popup
@@ -347,6 +354,8 @@ export const STRINGS = {
     'type.and': 'et',
     'type.help': 'aide',
     'type.hurt': 'nuit',
+    'type.hurt.custom': 'risque',
+    'type.break.custom': 'risque élevé',
     'type.make': 'réalise',
     'type.break': 'brise',
     'type.needed-by': 'requis par',
@@ -632,6 +641,11 @@ export const STRINGS = {
     'popup.confirmDelete': 'confirmer la suppression',
 
     'linkType.title': 'Type de lien',
+    'linkType.none': 'Le guide iStar 2.0 ne prévoit aucun lien entre ces deux types d\'éléments dans ce sens.',
+    'linkType.swap': 'Essayer dans l\'autre sens',
+    'menu.strictLinks': 'Seulement les liens permis par iStar 2.0',
+    'menu.strictLinksDesc': 'Ne propose que les liens que le guide iStar 2.0 permet entre ces deux types d\'éléments.',
+    'popup.reverseBlocked': 'Le guide iStar 2.0 ne permet pas ce lien dans l\'autre sens',
     'linkType.cancel': 'annuler',
 
     'actorPopup.title': 'Acteur',
@@ -664,7 +678,10 @@ export function translate(lang, key, vars) {
 }
 
 // t(key, vars) for the current language; re-renders the component when the language changes
+// In the designer's modified iStar, the negative contributions "hurt" and "break" are called "risk" and "high risk"; iStar 2.0 keeps the original names.
+const CUSTOM_NAMES = { 'type.hurt': 'type.hurt.custom', 'type.break': 'type.break.custom' }
 export function useT() {
   const lang = useStore(s => s.lang)
-  return useCallback((key, vars) => translate(lang, key, vars), [lang])
+  const custom = useStore(s => s.language === 'custom')
+  return useCallback((key, vars) => translate(lang, (custom && CUSTOM_NAMES[key]) || key, vars), [lang, custom])
 }

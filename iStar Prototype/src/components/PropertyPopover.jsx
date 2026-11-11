@@ -9,6 +9,7 @@ import PopupConnector from './PopupConnector.jsx'
 import { typesFor } from '../utils/language.js'
 import PopoverHeader from './PopoverHeader.jsx'
 import DetailsEditor from './DetailsEditor.jsx'
+import { allowedLinkTypes } from '../utils/linkRules.js'
 import { HEADER_H, popoverStyle, labelStyle, inputStyle, summaryStyle, btnStyle, confirmOnEnter } from './popupStyles.js'
 
 const NODE_TYPES = ['goal', 'task', 'softgoal', 'resource']
@@ -264,6 +265,7 @@ export default function PropertyPopover({ linkPaths = {} }) {
   const { transform } = useZoom()
   const t = useT()
   const language = useStore(s => s.language)
+  const strictLinks = useStore(s => s.strictLinks)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showDetails, setShowDetails] = useState(false)  // the form for the element's extra information
   const [collapsed, setCollapsed] = useState(false)  // kept across selections so a minimized popup stays out of the way
@@ -318,6 +320,14 @@ export default function PropertyPopover({ linkPaths = {} }) {
   if (selectedType === 'link') {
     const link = links[selectedId]
     if (!link) return null
+    // iStar 2.0 mode: only the types the guide allows between the two elements (the link's current type stays on the list), and no turning
+    // the link round when that would make it one the guide does not allow
+    const ends = nodes[link.sourceId] && nodes[link.targetId] ? [nodes[link.sourceId], nodes[link.targetId]] : null
+    const strict = language === 'istar2' && strictLinks && ends
+    const typeOptions = strict
+      ? typesFor(language, LINK_TYPES, link.type).filter(type => type === link.type || allowedLinkTypes(ends[0], ends[1], language).includes(type))
+      : typesFor(language, LINK_TYPES, link.type)
+    const canReverse = !strict || allowedLinkTypes(ends[1], ends[0], language).includes(link.type)
     return frame(<>
         {header()}
         {collapsed ? (
@@ -329,12 +339,14 @@ export default function PropertyPopover({ linkPaths = {} }) {
           onChange={e => updateLink(selectedId, { type: e.target.value })}
           style={inputStyle}
         >
-          {typesFor(language, LINK_TYPES, link.type).map(type => <option key={type} value={type}>{t(`type.${type}`)}</option>)}
+          {typeOptions.map(type => <option key={type} value={type}>{t(`type.${type}`)}</option>)}
         </select>
 
         <button
           onClick={() => reverseLink(selectedId)}
-          style={{ ...btnStyle('#555'), marginTop: 4 }}
+          disabled={!canReverse}
+          title={canReverse ? undefined : t('popup.reverseBlocked')}
+          style={{ ...btnStyle('#555'), marginTop: 4, ...(!canReverse && { opacity: 0.4, cursor: 'default' }) }}
         >
           {t('popup.reverse')}
         </button>

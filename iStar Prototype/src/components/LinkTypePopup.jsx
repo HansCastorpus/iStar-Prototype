@@ -5,6 +5,7 @@ import { computePendingPath } from '../utils/routing.js'
 import { useT } from '../i18n.js'
 import PopupConnector, { POPUP_Z } from './PopupConnector.jsx'
 import { typesFor } from '../utils/language.js'
+import { allowedLinkTypes } from '../utils/linkRules.js'
 
 const LINK_TYPES = [
   'depends-on',
@@ -32,7 +33,8 @@ function pendingSegments(pendingLink, src, tgt) {
 }
 
 export default function LinkTypePopup({ linkPaths = {} }) {
-  const { pendingLink, nodes, confirmLink, clearConnect } = useStore()
+  const { pendingLink, nodes, confirmLink, clearConnect, setPendingLink } = useStore()
+  const strictLinks = useStore(s => s.strictLinks)
   const { transform } = useZoom()
   const t = useT()
   const language = useStore(s => s.language)
@@ -53,6 +55,12 @@ export default function LinkTypePopup({ linkPaths = {} }) {
   })
 
   if (!pendingLink || !anchor) return null
+
+  // iStar 2.0 mode: only the links the guide allows between these two element types, in this direction
+  const strict = language === 'istar2' && strictLinks && src && tgt
+  const types = strict ? allowedLinkTypes(src, tgt, language) : typesFor(language, LINK_TYPES)
+  const reverseWorks = strict && types.length === 0 && allowedLinkTypes(tgt, src, language).length > 0
+  const swap = () => setPendingLink(pendingLink.targetId, pendingLink.targetSide, pendingLink.sourceId, pendingLink.sourceSide)
 
   return (
     <>
@@ -87,7 +95,7 @@ export default function LinkTypePopup({ linkPaths = {} }) {
       </div>
 
       <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-title)', marginBottom: 4 }}>{t('linkType.title')}</div>
-      {typesFor(language, LINK_TYPES).map((type) => (
+      {types.map((type) => (
         <button
           key={type}
           onClick={() => confirmLink(type)}
@@ -105,6 +113,14 @@ export default function LinkTypePopup({ linkPaths = {} }) {
           {t(`type.${type}`)}
         </button>
       ))}
+      {types.length === 0 && (
+        <div style={{ maxWidth: 220, fontSize: 12, lineHeight: 1.4, color: 'var(--text-2)', fontFamily: 'Roboto, sans-serif' }}>{t('linkType.none')}</div>
+      )}
+      {reverseWorks && (
+        <button onClick={swap} onPointerDown={e => e.stopPropagation()} style={{ background: 'none', border: '1px solid var(--border-md)', color: 'var(--text-1)', padding: '5px 10px', cursor: 'pointer', fontSize: 13, textAlign: 'left', fontFamily: 'Roboto, sans-serif' }}>
+          {t('linkType.swap')}
+        </button>
+      )}
       <button
         onClick={clearConnect}
         onPointerDown={e => e.stopPropagation()}

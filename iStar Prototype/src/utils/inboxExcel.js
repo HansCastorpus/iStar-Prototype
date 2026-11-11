@@ -36,7 +36,7 @@ const HINTS = {
   info: 'Filled in for you. Numbers can change, so do not rely on them. Do not insert, delete or sort rows.',
   type: 'Goal, task, softgoal or resource. Pick from the list.',
   actor: 'Who this element belongs to. Pick from the list; if yours is missing, type its name. Leave empty for a dependum.',
-  dependum: 'Pick "yes" if this is a dependum: something one actor needs from another, which sits between them and belongs to neither. Then leave Actor empty and list the actors involved under Connected actor. Otherwise leave empty.',
+  dependum: 'Pick "yes" for a dependum: something one actor needs from another, sitting between them and belonging to neither. Leave Actor empty and list the actors involved under Connected actor.',
   text: 'A short summary of the element: it is what the graph shows.',
   description: 'What it is about, in a few sentences. Shown when the element is opened in the viewer.',
   relationType: 'The kind of relation it has with other elements. Pick from the list.',
@@ -76,7 +76,7 @@ export async function buildInboxWorkbookBlob(data) {
   const labelOf = Object.fromEntries(data.linkTypes.map(l => [l.id, l.label]))
 
   const ws = wb.addWorksheet(SHEET)
-  const widths = [10, 16, 7, 12, 24, 12, 50, 40, 16, 40, 32, 32, 40, 40]
+  const widths = [10, 16, 7, 12, 24, 40, 50, 40, 16, 40, 32, 32, 40, 40]
   const headers = [...FIXED, ...Array.from({ length: connectedCols }, (_, i) => `Connected actor ${i + 1}`)]
   ws.columns = headers.map((_, i) => ({ width: widths[i] ?? 24, hidden: i === 0, style: { alignment: { wrapText: true, vertical: 'top' } } }))
 

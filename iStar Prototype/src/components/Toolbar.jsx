@@ -329,6 +329,8 @@ export default function Toolbar({ inset = 0 }) {
   const diagramName = useStore(s => s.models[s.activeModelId]?.name ?? '')  // the viewer shows it here, at the right of the header
   const language = useStore(s => s.language)
   const setLanguage = useStore(s => s.setLanguage)
+  const strictLinks = useStore(s => s.strictLinks)
+  const setStrictLinks = useStore(s => s.setStrictLinks)
   const t = useT()
   const canUndo = useStore(s => s.canUndo)
   const canRedo = useStore(s => s.canRedo)
@@ -420,7 +422,7 @@ export default function Toolbar({ inset = 0 }) {
     const map = {}
     for (const id of LINK_TYPES) {
       map[id] = id
-      for (const strings of Object.values(STRINGS)) if (strings[`type.${id}`]) map[strings[`type.${id}`].toLowerCase()] = id
+      for (const strings of Object.values(STRINGS)) for (const key of [`type.${id}`, `type.${id}.custom`]) if (strings[key]) map[strings[key].toLowerCase()] = id
     }
     return map
   }
@@ -468,6 +470,7 @@ export default function Toolbar({ inset = 0 }) {
           <MenuLabel>{t('menu.language')}</MenuLabel>
           <MenuItem current={language === 'istar2'} faded={language !== 'istar2'} desc={t('menu.langIstar2Desc')} onClick={() => { setLanguage('istar2'); close() }}>{t('menu.langIstar2')}</MenuItem>
           <MenuItem current={language === 'custom'} faded={language !== 'custom'} desc={t('menu.langCustomDesc')} onClick={() => { setLanguage('custom'); close() }}>{t('menu.langCustom')}</MenuItem>
+          {language === 'istar2' && <MenuItem checked={strictLinks} desc={t('menu.strictLinksDesc')} onClick={() => setStrictLinks(!strictLinks)}>{t('menu.strictLinks')}</MenuItem>}
           <MenuDivider />
           </>}
           <MenuLabel>{t('toolbar.export')}</MenuLabel>
