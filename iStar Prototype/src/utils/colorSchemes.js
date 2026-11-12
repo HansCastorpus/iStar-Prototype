@@ -22,7 +22,8 @@ const WHITE_TAGS = ['help', 'hurt', 'make', 'break']
 const tagVars = (prefix, theme) => ({
   ...Object.fromEntries(Object.entries(ELEMENT_TAGS).flatMap(([t, [bg, fg]]) => [[`${prefix}-${t}`, bg], [`${prefix}-text-${t}`, fg]])),
   ...Object.fromEntries(Object.entries(LINK_TAG_FILL).flatMap(([t, c]) =>
-    [[`${prefix}-link-${t}`, `var(--hl-${c})`], [`${prefix}-text-link-${t}`, WHITE_TAGS.includes(t) ? '#fff' : LINK_TAG_TEXT[theme][t]]])),
+    t === 'depends-on' ? [[`${prefix}-link-${t}`, '#fff'], [`${prefix}-text-link-${t}`, '#222']]   // depends-on: white label, dark text
+    : [[`${prefix}-link-${t}`, `var(--hl-${c})`], [`${prefix}-text-link-${t}`, WHITE_TAGS.includes(t) ? '#fff' : LINK_TAG_TEXT[theme][t]]])),
 })
 // Actor colours, in order (the 9th actor starts over)
 const ACTOR_COLORS = ['#6fb4db', '#ea8b77', '#ffce2f', '#a9d049', '#a4a487', '#5f8393', '#82bc79', '#fec988']
