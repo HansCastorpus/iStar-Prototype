@@ -53,8 +53,8 @@ There are several versions in circulation. In short (this is general background,
 
 The tool has a **language setting** with two modes:
 
-- **iStar 2.0 mode:** the standard-style set of element and link types, with the original names (**hurt** and **break** for the negative contributions). It leaves out the **sub-actor box** (an element that opens its own diagram), and it has an option to offer only the links the iStar 2.0 guide allows between two element types.
-- **Modified iStar mode:** the designer's own version. It adds the **sub-actor box and layers**, calls the negative contributions **risk** and **high risk**, and does not restrict which links can join which elements.
+- **iStar 2.0 mode:** the standard-style set of element and link types, with the original names (**hurt** and **break** for the negative contributions). It leaves out the **sub-model box** (an element that opens its own diagram), and it has an option to offer only the links the iStar 2.0 guide allows between two element types.
+- **Modified iStar mode:** the designer's own version. It adds the **sub-model box and layers**, calls the negative contributions **risk** and **high risk**, and does not restrict which links can join which elements.
 
 Everything else the designer has built on top of iStar is available in both modes: **dependums** as an explicit flag, **risk zones**, the **xor** and **part-of** links, **nested actors**, **numbered elements**, the **Inbox** and spreadsheet, and the read-only **viewer**. The ten link types and four element types listed in section 3 are the ones the spreadsheet accepts in both modes.
 
@@ -99,7 +99,7 @@ This is the order in which the designer builds a diagram, and it explains the pi
 2. **Elements go inside actors.** Each element belongs to one actor (or to a nested chain of actors). The element's own text is short and is what is printed in its box. Every element has a **number** shown in its corner, used to refer to it in discussion.
 3. **Dependums sit between actors.** Something one actor needs from another belongs to neither, so it is drawn outside every actor area and flagged as a dependum.
 4. **Links connect elements.** Links are directed arrows with a type (dependency, decomposition, contribution...). They carry the logic of the model: what depends on what, what is part of what, what helps or harms what.
-5. **Layers.** An actor can be a **sub-actor box that opens its own, more detailed diagram**. The project is a tree of diagrams: a top-level overview and the detail underneath. The viewer lets the reader move between them.
+5. **Layers.** A **sub-model box opens its own, more detailed diagram**; its name says which actor or project is inside. The project is a tree of diagrams: a top-level overview and the detail underneath. The viewer lets the reader move between them.
 6. **Risk zones.** An element can be marked with one or more **risk zones**: soft red areas drawn around all the elements that share the zone, so a cluster of related risks is visible from a distance. Zones can overlap each other and cut across actors. They are an overlay on the diagram and do not change who owns what.
 7. **Information.** Each element carries extra information that does **not** appear in its box but in a popup when it is clicked: a description, positive and negative aspects, web links, pictures and connected actors.
 8. **Filters and tools.** The reader can highlight or isolate element types and link types, list and zoom to actors, see the dependency layers upstream of an element, and trace the path between two goals. Risk zones can be switched on and off.
@@ -119,7 +119,7 @@ This is the order in which the designer builds a diagram, and it explains the pi
 | **Element** | One item inside an actor. Four types (below). |
 | **Link** | A relation between two elements (dependency, decomposition, contribution...). Drawn by the designer, never by you. |
 | **Dependum** | An element that sits **between** actors and belongs to none of them: the thing one actor needs from another (a service, a report, a permit, a decision). It is flagged with the **Dependum** column, has no actor, and the actors it sits between are listed as its connected actors. |
-| **Sub-actor / layers** | An actor can open into its own, more detailed diagram (a "layer"). |
+| **Sub-model / layers** | A box that opens its own, more detailed diagram (a "layer"). Its name says which actor or project is inside. |
 | **Risk zone** | A named, blurred red area around all the elements marked with it. Zones overlap freely and can cut across actors. Elements are put in zones in the editor (not in the spreadsheet). |
 
 ### The four element types (these are the only types the spreadsheet accepts)

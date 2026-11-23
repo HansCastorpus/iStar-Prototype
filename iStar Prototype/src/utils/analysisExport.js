@@ -5,7 +5,7 @@ const ELEMENT_TYPES = {
   task: 'A task an actor carries out',
   softgoal: 'A quality goal, with no clear-cut satisfaction criterion',
   resource: 'A physical or informational entity',
-  subactor: "An actor with its own diagram (see 'opensDiagram')",
+  subactor: "A sub-model: a box that opens its own diagram, named after the actor or project inside it (see 'opensDiagram')",
 }
 
 const DEPENDUM = 'dependum'

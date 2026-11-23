@@ -92,7 +92,7 @@ export function computeNodeSize(label, type = '', logoAspect = 0) {
 
   if (type === 'subactor') {
     ctx.font = `600 ${SUB_FONT}px sans-serif`
-    const textW = ctx.measureText(text || '[sub-actor]').width
+    const textW = ctx.measureText(text || '[sub-model]').width
     ctx.font = `${NODE_FONT}px sans-serif`
     const logoW = logoAspect ? SUB_LOGO_GAP + subLogoWidth(logoAspect) : 0
     const width = Math.min(Math.max(Math.ceil((textW + logoW + SUB_PAD_X * 2) / GRID) * GRID, GRID * 7), GRID * 13)

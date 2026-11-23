@@ -276,7 +276,7 @@ const useStore = create((set, get) => ({
     if (node.linkedModelId && s.models[node.linkedModelId]) return get().switchModel(node.linkedModelId)
     const id = crypto.randomUUID()
     set(st => ({
-      models: { ...st.models, [id]: emptyModel(id, node.label.trim() || 'Sub-actor', { modelId: st.activeModelId, nodeId }) },
+      models: { ...st.models, [id]: emptyModel(id, node.label.trim() || 'Sub-model', { modelId: st.activeModelId, nodeId }) },
       nodes: { ...st.nodes, [nodeId]: { ...st.nodes[nodeId], linkedModelId: id } },
     }))
     get().switchModel(id)
@@ -943,7 +943,11 @@ const useStore = create((set, get) => ({
     const existing = Object.values(get().actors).find((a) => a.name === name)
     if (existing) return existing.id
     const id = crypto.randomUUID()
-    set((s) => ({ actors: { ...s.actors, [id]: { id, name, type, level: 1, colorIdx: nextTintIndex(s.actors) } } }))
+    // An actor with this name in another diagram brings its logo along
+    const logoFrom = Object.entries(get().models).filter(([mid]) => mid !== get().activeModelId)
+      .flatMap(([, m]) => Object.values(m.actors ?? {})).find(a => a.name === name && a.logo)
+    set((s) => ({ actors: { ...s.actors, [id]: { id, name, type, level: 1, colorIdx: nextTintIndex(s.actors),
+      ...(logoFrom && { logo: logoFrom.logo, logoAspect: logoFrom.logoAspect ?? 1 }) } } }))
     return id
   },
 
@@ -952,10 +956,16 @@ const useStore = create((set, get) => ({
   setActorLogo: (id, logo, logoAspect = 1) => set(s => {
     const actor = s.actors[id]
     if (!actor) return {}
-    const next = { ...actor }
-    delete next.logo
-    delete next.logoAspect
-    return { actors: { ...s.actors, [id]: logo ? { ...next, logo, logoAspect } : next } }
+    const withLogo = (a) => {
+      const next = { ...a }
+      delete next.logo
+      delete next.logoAspect
+      return logo ? { ...next, logo, logoAspect } : next
+    }
+    // The logo follows the actor's name into every other diagram (the sub-actor layers above, below and beside this one)
+    const models = Object.fromEntries(Object.entries(s.models).map(([mid, m]) => [mid, mid === s.activeModelId ? m
+      : { ...m, actors: Object.fromEntries(Object.entries(m.actors ?? {}).map(([aid, a]) => [aid, a.name === actor.name ? withLogo(a) : a])) }]))
+    return { models, actors: { ...s.actors, [id]: withLogo(actor) } }
   }),
 
   // Tier of the actor: 1 is the highest
