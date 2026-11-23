@@ -10,6 +10,18 @@ const REACH = 30     // how far the area extends beyond the elements it surround
 const BLUR = 24      // how soft its edge is
 const FILL = 0.16
 
+// The middle of the area (its centre of gravity, which is always inside it), where the name goes
+function centroid(poly) {
+  let a = 0, cx = 0, cy = 0
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i], q = poly[(i + 1) % poly.length]
+    const cross = p.x * q.y - q.x * p.y
+    a += cross; cx += (p.x + q.x) * cross; cy += (p.y + q.y) * cross
+  }
+  if (Math.abs(a) < 1e-6) return { x: poly.reduce((s, p) => s + p.x, 0) / poly.length, y: poly.reduce((s, p) => s + p.y, 0) / poly.length }
+  return { x: cx / (3 * a), y: cy / (3 * a) }
+}
+
 export default function ZoneLayer() {
   const zones = useStore(s => s.zones)
   const nodes = useStore(s => s.nodes)
@@ -30,7 +42,7 @@ export default function ZoneLayer() {
       out.push({
         id: zone.id, name: zone.name,
         d: `M${hull.map(p => `${p.x},${p.y}`).join(' L')} Z`,
-        label: { x: Math.min(...corners.map(p => p.x)) + REACH + 4, y: Math.min(...corners.map(p => p.y)) + REACH - 6 },
+        label: centroid(hull),
       })
     }
     return out
@@ -51,7 +63,7 @@ export default function ZoneLayer() {
           strokeLinejoin="round" filter="url(#zone-blur)" />
       ))}
       {shown.map(z => (
-        <text key={`t-${z.id}`} x={z.label.x} y={z.label.y} fontSize={12} fontWeight="bold" fontFamily="Roboto, sans-serif"
+        <text key={`t-${z.id}`} x={z.label.x} y={z.label.y} textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight="bold" fontFamily="Roboto, sans-serif"
           fill="#9f1239" stroke="var(--bg-canvas)" strokeWidth={3} paintOrder="stroke" strokeLinejoin="round">{z.name}</text>
       ))}
     </g>

@@ -674,7 +674,7 @@ export default function Toolbar({ inset = 0 }) {
             onClick={() => setMode(mode === id ? 'select' : id)}
             className="tbtn" data-rest data-on={mode === id}
             style={{
-              '--btn-glow': id === 'add-subactor' ? undefined : `var(--hl-${id.replace('add-', '')})`,  // the element's own colour, as in the filter panel (sub-actor's is white: it keeps the default)
+              '--btn-glow': id === 'add-subactor' ? undefined : `var(--tag-${id.replace('add-', '')}, var(--hl-${id.replace('add-', '')}))`,  // the element's own colour (its tag colour in the Primary tags sets), as in the filter panel (sub-actor's is white: it keeps the default)
               padding: '5px 14px',
               cursor: 'pointer',
               fontSize: 15, textTransform: 'uppercase', letterSpacing: 0.5,
