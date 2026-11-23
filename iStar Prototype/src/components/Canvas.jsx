@@ -50,7 +50,7 @@ export default function Canvas() {
       .filter((event) => {
         if (event.type === 'wheel') return true
         if (event.type === 'mousedown' && event.button === 0)
-          return modeRef.current === 'select' &&
+          return modeRef.current === 'select' && !event.shiftKey &&   // Shift + drag is the area-select tool, not a pan
                  event.target.classList.contains('canvas-bg')
         return false
       })
@@ -124,7 +124,79 @@ export default function Canvas() {
     setCursorWorld(screenToWorld(e.clientX - rect.left, e.clientY - rect.top))
   }
 
+  // ── Area select: hold Shift and drag on the empty canvas; every element the rectangle touches is selected.
+  // Letting go of Shift ends it (what is selected stays).
+  const [marquee, setMarquee] = useState(null)   // the rectangle, in diagram coordinates
+  const marqueeRef = useRef(null)                // { pointerId, start } while dragging
+  const justMarqueed = useRef(false)             // the click that follows the drag must not clear the selection
+
+  const worldAt = (e) => {
+    const rect = svgRef.current.getBoundingClientRect()
+    return screenToWorld(e.clientX - rect.left, e.clientY - rect.top)
+  }
+  const handlePointerDown = (e) => {
+    if (viewer || e.button !== 0 || !e.shiftKey || modeRef.current !== 'select') return
+    if (!e.target.classList.contains('canvas-bg')) return
+    e.preventDefault()
+    const p = worldAt(e)
+    marqueeRef.current = { pointerId: e.pointerId, start: p }
+    svgRef.current.setPointerCapture(e.pointerId)
+    setMarquee({ x1: p.x, y1: p.y, x2: p.x, y2: p.y })
+    useStore.getState().selectNodes([])
+  }
+  const handlePointerMove = (e) => {
+    const m = marqueeRef.current
+    if (!m) return
+    const p = worldAt(e)
+    setMarquee({ x1: m.start.x, y1: m.start.y, x2: p.x, y2: p.y })
+    const left = Math.min(m.start.x, p.x), right = Math.max(m.start.x, p.x)
+    const top = Math.min(m.start.y, p.y), bottom = Math.max(m.start.y, p.y)
+    const { nodes: all, isolateTypes } = useStore.getState()
+    const ids = Object.values(all)
+      .filter(n => isolateTypes.includes(n.type) &&   // elements hidden by the filter are not picked up
+         n.x <= right && n.x + n.width >= left && n.y <= bottom && n.y + n.height >= top)  // touching counts
+      .map(n => n.id)
+    const cur = useStore.getState().selectedIds
+    if (ids.length !== cur.length || ids.some((id, i) => id !== cur[i])) useStore.getState().selectNodes(ids)
+  }
+  const endMarquee = useCallback(() => {
+    const m = marqueeRef.current
+    if (!m) return
+    marqueeRef.current = null
+    try { svgRef.current?.releasePointerCapture(m.pointerId) } catch { /* already released */ }
+    justMarqueed.current = true
+    setTimeout(() => { justMarqueed.current = false }, 50)
+    setMarquee(null)
+  }, [])
+  useEffect(() => {
+    const onKeyUp = (e) => { if (e.key === 'Shift') endMarquee() }
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', endMarquee)
+    return () => { window.removeEventListener('keyup', onKeyUp); window.removeEventListener('blur', endMarquee) }
+  }, [endMarquee])
+
+  // ── Copy and paste of the selected elements (Ctrl/⌘+C, Ctrl/⌘+V; also in the Options menu)
+  useEffect(() => {
+    if (viewer) return
+    const typing = (t) => t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))
+    const onCopy = (e) => {
+      if (typing(e.target) || window.getSelection()?.toString()) return
+      const text = useStore.getState().copySelection()
+      if (!text) return
+      e.clipboardData.setData('text/plain', text)
+      e.preventDefault()
+    }
+    const onPaste = (e) => {
+      if (typing(e.target)) return
+      if (useStore.getState().pasteClipboard(e.clipboardData.getData('text/plain'))) e.preventDefault()
+    }
+    document.addEventListener('copy', onCopy)
+    document.addEventListener('paste', onPaste)
+    return () => { document.removeEventListener('copy', onCopy); document.removeEventListener('paste', onPaste) }
+  }, [viewer])
+
   const handleCanvasClick = (e) => {
+    if (justMarqueed.current) { justMarqueed.current = false; return }
     if (!e.target.classList.contains('canvas-bg')) return
     const rect = svgRef.current.getBoundingClientRect()
     const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top)
@@ -230,6 +302,10 @@ export default function Canvas() {
         id="diagram-canvas"
         style={{ width: '100%', height: '100%', display: 'block', background: 'var(--bg-canvas)' }}
         onMouseMove={handleMouseMove}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={endMarquee}
+        onPointerCancel={endMarquee}
         onClick={handleCanvasClick}
         onDoubleClick={handleCanvasDoubleClick}
         onDragOver={handleDragOver}
@@ -324,6 +400,14 @@ export default function Canvas() {
           {Object.values(nodes).map((node) => (
             <Node key={node.id} node={node} strayActors={strays[node.id]} />
           ))}
+
+          {/* The area-select rectangle */}
+          {marquee && (
+            <rect data-view-aid style={{ pointerEvents: 'none' }}
+              x={Math.min(marquee.x1, marquee.x2)} y={Math.min(marquee.y1, marquee.y2)}
+              width={Math.abs(marquee.x2 - marquee.x1)} height={Math.abs(marquee.y2 - marquee.y1)}
+              fill="rgba(0, 112, 243, 0.08)" stroke="#0070f3" strokeWidth={1 / k} strokeDasharray={`${4 / k} ${3 / k}`} />
+          )}
 
           {/* Rubber-band preview while connecting */}
           <LinkPreview cursorWorld={cursorWorld} />

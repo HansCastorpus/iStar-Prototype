@@ -107,6 +107,8 @@ export const STRINGS = {
     'toolbar.edit': 'Edit',
     'toolbar.undoItem': 'Undo',
     'toolbar.redoItem': 'Redo',
+    'toolbar.copyItem': 'Copy elements',
+    'toolbar.pasteItem': 'Paste elements',
     'toolbar.file': 'File',
     'toolbar.export': 'Export',
     'toolbar.theme': 'Theme',
@@ -320,6 +322,9 @@ export const STRINGS = {
     'popup.cancel': 'cancel',
     'popup.deleteLink': 'delete link',
     'popup.deleteElement': 'delete element',
+    'popup.deleteMany': 'delete {n} elements',
+    'popup.confirmDeleteMany': 'confirm: delete {n} elements',
+    'popup.deleteManyWarning': 'The links between them go too, and so do the diagrams of any sub-model boxes selected, with everything inside.',
     'popup.confirmDelete': 'confirm delete',
 
     // Link type list (after picking two elements)
@@ -453,6 +458,8 @@ export const STRINGS = {
     'toolbar.edit': 'Édition',
     'toolbar.undoItem': 'Annuler',
     'toolbar.redoItem': 'Rétablir',
+    'toolbar.copyItem': 'Copier les éléments',
+    'toolbar.pasteItem': 'Coller les éléments',
     'toolbar.file': 'Fichier',
     'toolbar.export': 'Exporter',
     'toolbar.theme': 'Thème',
@@ -662,6 +669,9 @@ export const STRINGS = {
     'popup.cancel': 'annuler',
     'popup.deleteLink': 'supprimer le lien',
     'popup.deleteElement': "supprimer l'élément",
+    'popup.deleteMany': 'supprimer {n} éléments',
+    'popup.confirmDeleteMany': 'confirmer : supprimer {n} éléments',
+    'popup.deleteManyWarning': 'Les liens entre eux sont supprimés aussi, ainsi que les diagrammes des sous-modèles sélectionnés, avec tout leur contenu.',
     'popup.confirmDelete': 'confirmer la suppression',
 
     'linkType.title': 'Type de lien',

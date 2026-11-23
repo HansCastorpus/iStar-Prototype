@@ -326,6 +326,7 @@ export default function Toolbar({ inset = 0 }) {
   const { mode, setMode, exportDiagram, exportInboxTemplate, importEdits, importDiagram, clearDiagram, exportAsImage, darkMode, toggleDarkMode } = useStore()
   const lang = useStore(s => s.lang)
   const setLang = useStore(s => s.setLang)
+  const canCopy = useStore(s => (s.selectedIds.length ? s.selectedIds : s.selectedType === 'node' && s.selectedId ? [s.selectedId] : []).some(id => s.nodes[id] && s.nodes[id].type !== 'subactor'))
   const colorScheme = useStore(s => s.colorScheme)
   const setColorScheme = useStore(s => s.setColorScheme)
   const viewer = useStore(s => s.viewer)  // opened from a share link: only the menus that make sense for looking at a graph
@@ -523,6 +524,17 @@ export default function Toolbar({ inset = 0 }) {
           <MenuLabel>{t('toolbar.edit')}</MenuLabel>
           <MenuItem disabled={!canUndo} onClick={() => { undo(); close() }}>{t('toolbar.undoItem')}<Hint>Ctrl/⌘+Z</Hint></MenuItem>
           <MenuItem disabled={!canRedo} onClick={() => { redo(); close() }}>{t('toolbar.redoItem')}<Hint>Shift+Ctrl/⌘+Z</Hint></MenuItem>
+          <MenuItem disabled={!canCopy} onClick={async () => {
+            const text = useStore.getState().copySelection()
+            try { if (text) await navigator.clipboard.writeText(text) } catch { /* the copy is still kept in the app */ }
+            close()
+          }}>{t('toolbar.copyItem')}<Hint>Ctrl/⌘+C</Hint></MenuItem>
+          <MenuItem onClick={async () => {
+            let text = ''
+            try { text = await navigator.clipboard.readText() } catch { /* not allowed: paste the last copy made in the app */ }
+            useStore.getState().pasteClipboard(text)
+            close()
+          }}>{t('toolbar.pasteItem')}<Hint>Ctrl/⌘+V</Hint></MenuItem>
           <MenuDivider />
           </>}
           <MenuLabel>{t('toolbar.language')}</MenuLabel>

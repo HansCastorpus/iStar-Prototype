@@ -272,13 +272,14 @@ function ZoneFields({ selected }) {
 
 export default function PropertyPopover({ linkPaths = {} }) {
   const { selectedId, selectedType, nodes, links,
-    updateNode, updateLink, deleteNode, deleteLink, reverseLink, deselect } = useStore()
+    updateNode, updateLink, deleteNode, deleteNodes, deleteLink, reverseLink, deselect } = useStore()
   const selectedIds = useStore(s => s.selectedIds)
   const { transform } = useZoom()
   const t = useT()
   const language = useStore(s => s.language)
   const strictLinks = useStore(s => s.strictLinks)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmMany, setConfirmMany] = useState(null)  // the selection (as its ids) whose deletion awaits confirmation
   const [showDetails, setShowDetails] = useState(false)  // the form for the element's extra information
   const [collapsed, setCollapsed] = useState(false)  // kept across selections so a minimized popup stays out of the way
 
@@ -325,6 +326,21 @@ export default function PropertyPopover({ linkPaths = {} }) {
         {!collapsed && <>
         <NodeActorFields key={selectedIds.join(',')} selected={selectedNodes} />
         {selectedNodes.every(n => n.type !== 'subactor') && <ZoneFields selected={selectedNodes} />}
+        <div style={{ marginTop: 6 }}>
+          {confirmMany === selectedIds.join(',') && selectedNodes.some(n => n.linkedModelId) && (
+            <div style={{ ...blockedStyle, marginBottom: 6 }}>{t('popup.deleteManyWarning')}</div>
+          )}
+          {confirmMany === selectedIds.join(',') ? (
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button onClick={() => { deleteNodes(selectedNodes.map(n => n.id)); setConfirmMany(null) }} style={btnStyle('#c00')}>
+                {t('popup.confirmDeleteMany', { n: selectedNodes.length })}
+              </button>
+              <button onClick={() => setConfirmMany(null)} style={btnStyle('#888')}>{t('popup.cancel')}</button>
+            </div>
+          ) : (
+            <button onClick={() => setConfirmMany(selectedIds.join(','))} style={btnStyle('#c00')}>{t('popup.deleteMany', { n: selectedNodes.length })}</button>
+          )}
+        </div>
         </>}
     </>)
   }

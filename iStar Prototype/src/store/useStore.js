@@ -565,6 +565,105 @@ const useStore = create((set, get) => ({
     }
   }),
 
+  // Selects exactly these elements (the area-select tool)
+  selectNodes: (ids) => set({
+    selectedIds: ids, selectedActorId: null,
+    selectedId: ids.length ? ids[ids.length - 1] : null, selectedType: ids.length ? 'node' : null,
+  }),
+
+  // ── Copy and paste ─────────────────────────────────────────────────────────────
+  // The selected elements with everything attached to them (text, details, images, logo, dependum, risk zones, actors by name),
+  // and the links that join two of them; a link to an element that wasn't selected is left out. Sub-model boxes are skipped.
+  // Returns the text to put on the clipboard (null if nothing is selected); also kept here for pasting without the system clipboard.
+  clipboardText: '',
+  copySelection: () => {
+    const s = get()
+    const picked = s.selectedIds.length ? s.selectedIds : s.selectedType === 'node' && s.selectedId ? [s.selectedId] : []
+    const ids = picked.filter(id => s.nodes[id] && s.nodes[id].type !== 'subactor')
+    if (!ids.length) return null
+    const index = Object.fromEntries(ids.map((id, i) => [id, i]))
+    const actorsOut = {}
+    const nodes = ids.map(id => {
+      const src = s.nodes[id]
+      const n = JSON.parse(JSON.stringify(src))
+      for (const k of ['id', 'num', 'actorId', 'nestedActorIds', 'zoneIds', 'linkedModelId']) delete n[k]
+      n.actorChain = chainOf(src).map(a => s.actors[a]?.name).filter(Boolean)
+      for (const a of chainOf(src)) {
+        const actor = s.actors[a]
+        if (actor?.name) actorsOut[actor.name] = { type: actor.type, ...(actor.logo && { logo: actor.logo, logoAspect: actor.logoAspect ?? 1 }) }
+      }
+      n.zoneNames = (src.zoneIds ?? []).map(z => s.zones[z]?.name).filter(Boolean)
+      return n
+    })
+    const links = Object.values(s.links).filter(l => l.sourceId in index && l.targetId in index).map(l => {
+      const c = JSON.parse(JSON.stringify(l))
+      for (const k of ['id', 'sourceId', 'targetId', 'sourceAnchor', 'targetAnchor']) delete c[k]  // dragged arrowheads go back to automatic placement
+      return { ...c, source: index[l.sourceId], target: index[l.targetId] }
+    })
+    const text = JSON.stringify({ format: 'istar-clipboard', version: 1, modelId: s.activeModelId, nodes, links, actors: actorsOut })
+    set({ clipboardText: text })
+    return text
+  },
+  // Puts copied elements (text from copySelection, or the last copy) on the open diagram: new numbers, new ids, in free space
+  // next to the originals (the same place if the copy came from another diagram and it is free). Returns how many were pasted.
+  pasteClipboard: (text) => {
+    let data
+    try { data = JSON.parse(text || get().clipboardText) } catch { return 0 }
+    if (data?.format !== 'istar-clipboard' || !Array.isArray(data.nodes) || !data.nodes.length) return 0
+    const s = get()
+    const minX = Math.min(...data.nodes.map(n => n.x)), maxX = Math.max(...data.nodes.map(n => n.x + n.width))
+    const minY = Math.min(...data.nodes.map(n => n.y)), maxY = Math.max(...data.nodes.map(n => n.y + n.height))
+    const W = maxX - minX, H = maxY - minY
+    const fits = (dx, dy) => data.nodes.every(n => !tooClose(n.x + dx, n.y + dy, n.width, n.height, s.nodes))
+    const candidates = data.modelId !== s.activeModelId ? [[0, 0]] : []
+    for (let k = 0; k < 40; k++) {
+      const gap = MIN_CLEARANCE * 2 + k * GRID * 2
+      candidates.push([snap(W + gap), 0], [0, snap(H + gap)], [-snap(W + gap), 0], [0, -snap(H + gap)])
+    }
+    const [dx, dy] = candidates.find(([x, y]) => fits(x, y)) ?? candidates[0]
+
+    const { beginBatch, endBatch } = get()
+    beginBatch()  // the whole paste is one undo step
+    const nums = get().takeNumbers(data.nodes.length)
+    const ids = data.nodes.map(() => crypto.randomUUID())
+    set(st => ({
+      nodes: {
+        ...st.nodes,
+        ...Object.fromEntries(data.nodes.map((n, i) => {
+          const node = { ...n, id: ids[i], num: nums[i], x: n.x + dx, y: n.y + dy, actorId: null }
+          delete node.actorChain; delete node.zoneNames
+          return [ids[i], node]
+        })),
+      },
+      links: {
+        ...st.links,
+        ...Object.fromEntries((data.links ?? []).filter(l => ids[l.source] && ids[l.target]).map(l => {
+          const id = crypto.randomUUID()
+          const link = { ...l, id, sourceId: ids[l.source], targetId: ids[l.target] }
+          delete link.source; delete link.target
+          return [id, link]
+        })),
+      },
+    }))
+    // Risk zones and actors are matched by name, and created here when the diagram doesn't have them yet
+    data.nodes.forEach((n, i) => {
+      if (n.zoneNames?.length) get().updateNode(ids[i], { zoneIds: n.zoneNames.map(name => get().ensureZone(name)).filter(Boolean) })
+      if (n.dependum || !n.actorChain?.length) return
+      const chain = n.actorChain.map(name => {
+        const id = get().ensureActor(name, data.actors?.[name]?.type)
+        const logo = data.actors?.[name]
+        if (logo?.logo && !get().actors[id]?.logo) get().setActorLogo(id, logo.logo, logo.logoAspect ?? 1)
+        return id
+      })
+      const patch = { actorId: chain[0], nestedActorIds: chain.slice(1) }
+      if (!get().checkActorChange([ids[i]], patch)) get().updateNode(ids[i], patch)  // refused (areas would overlap): the copy keeps no actor
+    })
+    set(st => ({ numberFloor: Math.max(st.numberFloor ?? 0, ...nums), mode: 'select' }))
+    get().selectNodes(ids)
+    endBatch()
+    return ids.length
+  },
+
   selectActorNodes: (actorId) => set(s => {
     const ids = Object.values(s.nodes)
       .filter(n => chainOf(n).includes(actorId))
@@ -885,6 +984,14 @@ const useStore = create((set, get) => ({
     const names = actorNames(s.actors)
     if (addsIssue(layoutIssues(s.nodes, names), layoutIssues(newNodes, names))) return {}
     return { nodes: newNodes, links: clearSlotOverrides(s.links, groupIds) }
+  }),
+
+  // Deletes several elements and every link that touches them: one undo step
+  deleteNodes: (ids) => set((s) => {
+    const gone = new Set(ids)
+    const nodes = Object.fromEntries(Object.entries(s.nodes).filter(([id]) => !gone.has(id)))
+    const links = Object.fromEntries(Object.entries(s.links).filter(([, l]) => !gone.has(l.sourceId) && !gone.has(l.targetId)))
+    return { nodes, links, selectedId: null, selectedType: null, selectedIds: [], selectedActorId: null }
   }),
 
   deleteNode: (id) => set((s) => {
@@ -1261,10 +1368,10 @@ useStore.subscribe((s) => {
 if (viewTarget) {
   const noop = () => {}
   useStore.setState({
-    addNode: () => null, updateNode: noop, moveNode: noop, moveNodeGroup: noop, deleteNode: noop,
+    addNode: () => null, updateNode: noop, moveNode: noop, moveNodeGroup: noop, deleteNode: noop, deleteNodes: noop,
     updateLink: noop, reverseLink: noop, deleteLink: noop, confirmLink: noop,
     setConnectSource: noop, setPendingLink: noop, setMode: noop,
-    ensureZone: () => null, renameZone: noop, setNodesInZone: noop, deleteZone: noop,
+    pasteClipboard: () => 0, ensureZone: () => null, renameZone: noop, setNodesInZone: noop, deleteZone: noop,
     renameActor: noop, ungroupActor: noop, ensureActor: () => null, setActorLogo: noop, setActorLevel: noop, openActorEditor: noop,
     renameModel: noop, clearDiagram: noop, importDiagram: noop, importEdits: noop, undo: noop, redo: noop,
     placeInboxItem: () => null, applyInboxPlan: noop, applyInboxUpdate: noop, dismissInboxUpdate: noop, takeNumbers: () => [],
