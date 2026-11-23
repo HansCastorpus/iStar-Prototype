@@ -79,7 +79,19 @@ function NodeActorFields({ selected }) {
   const ids = selected.map(n => n.id)
   // Names on the inbox's actor list that aren't drawn yet: offered too, and chosen like a new name typed in the box
   const actorList = useStore(s => s.actorList)
-  const listed = actorList.filter(name => !list.some(a => a.name === name))
+  // In a diagram opened from a sub-actor box, the actors drawn in the diagrams above it are offered too
+  const models = useStore(s => s.models)
+  const activeModelId = useStore(s => s.activeModelId)
+  const inherited = useMemo(() => {
+    const out = []
+    const seen = new Set([activeModelId])
+    for (let m = models[activeModelId]?.parent; m && models[m.modelId] && !seen.has(m.modelId); m = models[m.modelId].parent) {
+      seen.add(m.modelId)
+      for (const a of Object.values(models[m.modelId].actors ?? {})) if (a.name && !out.includes(a.name)) out.push(a.name)
+    }
+    return out
+  }, [models, activeModelId])
+  const listed = [...new Set([...actorList, ...inherited])].filter(name => !list.some(a => a.name === name))
 
   // Value of a slot across the selection: the shared id, null if none has one, undefined if mixed
   const shared = (get) => {
