@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import useStore from '../store/useStore.js'
+import useStore, { reachableModels } from '../store/useStore.js'
 import { useZoom, worldToScreen } from '../contexts/ZoomContext.jsx'
 import { usePopupPlacement, screenBounds, diagramObstacles } from '../utils/usePopupPlacement.js'
 import { useT } from '../i18n.js'
@@ -79,15 +79,15 @@ function NodeActorFields({ selected }) {
   const ids = selected.map(n => n.id)
   // Names on the inbox's actor list that aren't drawn yet: offered too, and chosen like a new name typed in the box
   const actorList = useStore(s => s.actorList)
-  // In a diagram opened from a sub-actor box, the actors drawn in the diagrams above it are offered too
+  // The actors drawn in the project's other diagrams (above, below or beside this one) are offered too, by name:
+  // choosing one draws it here; the other diagrams are not touched. Only diagrams reachable through sub-actor boxes count.
   const models = useStore(s => s.models)
   const activeModelId = useStore(s => s.activeModelId)
   const inherited = useMemo(() => {
     const out = []
-    const seen = new Set([activeModelId])
-    for (let m = models[activeModelId]?.parent; m && models[m.modelId] && !seen.has(m.modelId); m = models[m.modelId].parent) {
-      seen.add(m.modelId)
-      for (const a of Object.values(models[m.modelId].actors ?? {})) if (a.name && !out.includes(a.name)) out.push(a.name)
+    for (const { id } of reachableModels(models)) {
+      if (id === activeModelId) continue
+      for (const a of Object.values(models[id].actors ?? {})) if (a.name && !out.includes(a.name)) out.push(a.name)
     }
     return out
   }, [models, activeModelId])

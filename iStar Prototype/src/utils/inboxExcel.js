@@ -160,12 +160,32 @@ export async function buildInboxWorkbookBlob(data) {
   return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
 }
 
+// The same file without the notes (cell comments). Reading never needs them, and the reader only understands notes stored
+// under its own file names: files saved by other tools (openpyxl, used by an AI agent's script) name them differently.
+async function withoutNotes(buffer) {
+  const JSZip = (await import('jszip')).default
+  const zip = await JSZip.loadAsync(buffer)
+  for (const name of Object.keys(zip.files)) {
+    if (/^xl\/worksheets\/_rels\/[^/]+\.rels$/.test(name)) {
+      const xml = await zip.file(name).async('string')
+      zip.file(name, xml.replace(/<Relationship\b[^>]*\/(comments|vmlDrawing)"[^>]*\/>/g, ''))
+    } else if (/^xl\/worksheets\/[^/]+\.xml$/.test(name)) {
+      const xml = await zip.file(name).async('string')
+      zip.file(name, xml.replace(/<legacyDrawing\b[^>]*\/>/g, ''))
+    }
+  }
+  return zip.generateAsync({ type: 'uint8array' })
+}
+
 // → { rows: [{ line, key, ...fields }], base } or { error: 'notJson' | 'notInbox' }
 // labelMap: lower-case link type names (any language) and ids → id
 export async function readInboxWorkbook(buffer, labelMap = {}) {
   const ExcelJS = (await import('exceljs')).default
   const wb = new ExcelJS.Workbook()
-  try { await wb.xlsx.load(buffer) } catch { return { error: 'notJson' } }
+  try { await wb.xlsx.load(buffer) } catch {
+    // A file saved by another tool (openpyxl, in an AI agent's script) can have notes the reader can't follow: try again without them
+    try { await wb.xlsx.load(await withoutNotes(buffer)) } catch { return { error: 'notJson' } }
+  }
   const ws = wb.getWorksheet(SHEET)
   if (!ws) return { error: 'notInbox' }
   // Columns are found by their header, so sheets from earlier versions of the template (with other columns) still load
